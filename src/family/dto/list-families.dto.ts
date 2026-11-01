@@ -7,7 +7,7 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListFamiliesDto {
@@ -42,4 +42,18 @@ export class ListFamiliesDto {
   @IsBoolean()
   @IsOptional()
   archived?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Sort field',
+    enum: ['name', 'createdAt', 'memberCount'],
+    default: 'name',
+  })
+  @IsOptional()
+  @IsIn(['name', 'createdAt', 'memberCount'])
+  sortBy?: 'name' | 'createdAt' | 'memberCount';
+
+  @ApiPropertyOptional({ description: 'Sort order', enum: ['asc', 'desc'], default: 'asc' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }

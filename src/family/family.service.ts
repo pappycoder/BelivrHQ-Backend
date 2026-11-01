@@ -102,10 +102,18 @@ export class FamilyService {
       where.name = { contains: query.search, mode: 'insensitive' };
     }
 
+    const order = query.sortOrder ?? 'asc';
+    const orderBy: Prisma.FamilyOrderByWithRelationInput[] =
+      query.sortBy === 'memberCount'
+        ? [{ family_members: { _count: order } }, { name: 'asc' }]
+        : query.sortBy === 'createdAt'
+          ? [{ created_at: order }, { name: 'asc' }]
+          : [{ name: order }];
+
     const [families, total] = await Promise.all([
       this.prisma.family.findMany({
         where,
-        orderBy: { name: 'asc' },
+        orderBy,
         skip,
         take: limit,
         include: {

@@ -38,7 +38,9 @@ describe('FamilyService', () => {
     auditLog = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [RequestContextService, BranchScopeService,
+      providers: [
+        RequestContextService,
+        BranchScopeService,
         FamilyService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLoggingService, useValue: { log: auditLog } },
@@ -72,6 +74,41 @@ describe('FamilyService', () => {
         expect.objectContaining({ where: expect.objectContaining({ archived_at: { not: null } }) }),
       );
       expect(result.data[0].archivedAt).toBe('2026-08-28T10:00:00.000Z');
+    });
+
+    it('should default to sorting by name ascending', async () => {
+      prisma.family.findMany.mockResolvedValue([]);
+      prisma.family.count.mockResolvedValue(0);
+
+      await service.listFamilies(churchId, {});
+
+      expect(prisma.family.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ name: 'asc' }] }),
+      );
+    });
+
+    it('should sort by created date with a name tie-break', async () => {
+      prisma.family.findMany.mockResolvedValue([]);
+      prisma.family.count.mockResolvedValue(0);
+
+      await service.listFamilies(churchId, { sortBy: 'createdAt', sortOrder: 'desc' });
+
+      expect(prisma.family.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ created_at: 'desc' }, { name: 'asc' }] }),
+      );
+    });
+
+    it('should sort by member count via the family_members relation count', async () => {
+      prisma.family.findMany.mockResolvedValue([]);
+      prisma.family.count.mockResolvedValue(0);
+
+      await service.listFamilies(churchId, { sortBy: 'memberCount', sortOrder: 'asc' });
+
+      expect(prisma.family.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ family_members: { _count: 'asc' } }, { name: 'asc' }],
+        }),
+      );
     });
   });
 

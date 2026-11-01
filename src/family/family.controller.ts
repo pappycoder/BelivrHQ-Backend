@@ -87,7 +87,8 @@ export class FamilyController {
   @ApiPaginatedResponse(FamilyResponseDto)
   @ApiOperation({
     summary: 'List families',
-    description: 'List families with pagination and search.',
+    description:
+      'List families with pagination, search, branch filter and sorting (name, createdAt, memberCount).',
   })
   async findAll(@Query() query: ListFamiliesDto, @Request() req: AuthenticatedRequest) {
     const churchId = req.profile?.church_id || '';
