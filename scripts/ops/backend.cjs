@@ -478,6 +478,113 @@ async function destructive(context, db, action, fields) {
     );
   else throw new ConsoleError('Unknown destructive action.');
 }
+const SUBSCRIPTION_PLANS = ['essentials', 'community', 'network', 'enterprise'];
+const BILLING_CYCLES = ['monthly', 'annual'];
+
+/** Mirrors src/billing/plans.ts subscriptionEnd (month-add clamped to the day). */
+function subscriptionEnd(start, cycle) {
+  const end = new Date(start);
+  const day = end.getUTCDate();
+  end.setUTCDate(1);
+  end.setUTCMonth(end.getUTCMonth() + (cycle === 'annual' ? 12 : 1));
+  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  end.setUTCDate(Math.min(day, last));
+  return end;
+}
+
+function validateSubscriptionSwitch(input) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email || ''))
+    throw new ConsoleError('Enter the user email exactly.');
+  if (!SUBSCRIPTION_PLANS.includes(input.plan))
+    throw new ConsoleError('Choose one of: essentials, community, network, enterprise.');
+  if (!BILLING_CYCLES.includes(input.cycle)) throw new ConsoleError('Choose monthly or annual.');
+  if (input.plan === 'enterprise') {
+    for (const [name, value] of [
+      ['member', input.members],
+      ['staff', input.staff],
+      ['location', input.locations],
+    ]) {
+      if (!/^\d+$/.test(value || ''))
+        throw new ConsoleError(`Enterprise ${name} limit must be a non-negative whole number.`);
+    }
+  }
+}
+
+/**
+ * Points the church behind a user's email at a new plan, reusing the exact
+ * write semantics of scripts/set-test-subscription.ts (church row lock,
+ * scheduled changes cleared, people/roles/payment history untouched).
+ */
+async function switchSubscriptionByEmail(db, input) {
+  validateSubscriptionSwitch(input);
+  const profiles = await db.profile.findMany({
+    where: { email: { equals: input.email.trim(), mode: 'insensitive' } },
+    select: { church_id: true },
+  });
+  const churchIds = [...new Set(profiles.map((profile) => profile.church_id))];
+  if (churchIds.length === 0)
+    throw new ConsoleError('No account was found for that email. Nothing changed.');
+  if (churchIds.length > 1)
+    throw new ConsoleError(
+      'That email spans multiple churches; run scripts/set-test-subscription.ts with an exact church ID instead.',
+    );
+  const churchId = churchIds[0];
+  const { Prisma } = require('@prisma/client');
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
+    const church = await tx.church.findFirst({
+      where: { id: churchId, archived_at: null },
+      select: { id: true, name: true, subscription: true },
+    });
+    if (!church)
+      throw new ConsoleError(
+        'That account belongs to an archived or missing church. Nothing changed.',
+      );
+    const now = new Date();
+    const data = {
+      plan: input.plan,
+      cycle: input.cycle,
+      period_started_at: now,
+      paid_until: subscriptionEnd(now, input.cycle),
+      scheduled_plan: null,
+      scheduled_cycle: null,
+      enterprise_limits:
+        input.plan === 'enterprise'
+          ? {
+              members: Number(input.members),
+              staff: Number(input.staff),
+              locations: Number(input.locations),
+            }
+          : Prisma.DbNull,
+    };
+    const pendingPayments = await tx.subscriptionPayment.count({
+      where: { church_id: church.id, status: 'pending' },
+    });
+    await tx.platformSubscription.upsert({
+      where: { church_id: church.id },
+      create: { church_id: church.id, ...data },
+      update: data,
+    });
+    const before = church.subscription
+      ? `${church.subscription.plan}/${church.subscription.cycle} until ${new Date(
+          church.subscription.paid_until || 0,
+        ).toISOString().slice(0, 10)}`
+      : 'no subscription';
+    const limits =
+      input.plan === 'enterprise'
+        ? ` (limits ${data.enterprise_limits.members}/${data.enterprise_limits.staff}/${data.enterprise_limits.locations})`
+        : '';
+    return (
+      `Switched ${church.name}: ${before} -> ${input.plan}/${input.cycle}, ` +
+      `active until ${data.paid_until.toISOString().slice(0, 10)}${limits}. ` +
+      'Scheduled changes cleared; people, roles and payment history untouched.' +
+      (pendingPayments
+        ? ' Pending checkouts remain and may override this when verified.'
+        : '')
+    );
+  });
+}
+
 module.exports = {
   openDatabase,
   openAuth,
@@ -491,6 +598,8 @@ module.exports = {
   verifyBackup,
   validateAdmin,
   provisionAdmin,
+  validateSubscriptionSwitch,
+  switchSubscriptionByEmail,
   listDemoUsers,
   retireDemoUsers,
   clearPermissionCache,

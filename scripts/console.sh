@@ -87,12 +87,39 @@ ops_admin() {
   ops_confirm "$token" || return $?
   printf '%s\0' "$OPS_CONFIRM" "$email" "$password" "$first" "$last" "$phone" "$church_mode" "$church_id" "$church_name" "$auth_mode" "$auth_id" | ops_helper run "$action"
 }
+ops_subscription() {
+  local action=$1 email plan cycle members='' staff='' locations='' choice token limits
+  ops_helper preview "$action" || return $?
+  ops_read 'User email: ' || return 130; email=$OPS_ANSWER
+  printf '\nPlan: 1) essentials  2) community  3) network  4) enterprise\n'
+  ops_read 'Choice: ' || return 130
+  case "$OPS_ANSWER" in
+    1) plan=essentials ;; 2) plan=community ;; 3) plan=network ;; 4) plan=enterprise ;;
+    *) printf 'Invalid plan.\n' >&2; return 2 ;;
+  esac
+  printf '\nCycle: 1) monthly (default)  2) annual\n'
+  ops_read 'Choice [1]: ' || return 130
+  case "$OPS_ANSWER" in ''|1) cycle=monthly ;; 2) cycle=annual ;; *) printf 'Invalid cycle.\n' >&2; return 2 ;; esac
+  if [[ "$plan" == enterprise ]]; then
+    ops_read 'Enterprise member limit: ' || return 130; members=$OPS_ANSWER
+    ops_read 'Enterprise staff limit: ' || return 130; staff=$OPS_ANSWER
+    ops_read 'Enterprise location limit: ' || return 130; locations=$OPS_ANSWER
+    limits=", members=$members staff=$staff locations=$locations"
+  else
+    limits=''
+  fi
+  printf '\nReview: email=%s, plan=%s/%s%s\nThis immediately replaces that church'\''s subscription; scheduled changes are cleared.\n' "$email" "$plan" "$cycle" "$limits"
+  token=$(ops_helper token "$action") || return $?
+  ops_confirm "$token" || return $?
+  printf '%s\0' "$OPS_CONFIRM" "$email" "$plan" "$cycle" "$members" "$staff" "$locations" | ops_helper run "$action"
+}
 ops_dispatch() {
   local action=$1 input token
   input=$(ops_helper input "$action") || return $?
   if ((OPS_DRY_RUN)); then ops_helper plan "$action"; return $?; fi
   case "$input" in
     admin) ops_admin "$action" ;;
+    subscription) ops_subscription "$action" ;;
     confirm)
       ops_helper preview "$action" || return $?
       token=$(ops_helper token "$action") || return $?
@@ -137,6 +164,7 @@ while true; do
   [4] Deploy migrations
   [5] Create super user
   [6] Create church admin
+  [7] Switch subscription
   [q] Quit
 MENU
   ops_read '> ' || exit 0
@@ -147,6 +175,7 @@ MENU
     4) ops_dispatch migration-deploy ;;
     5) ops_dispatch admin-super ;;
     6) ops_dispatch admin-church ;;
+    7) ops_dispatch subscription-switch ;;
     q|Q|0) printf 'Bye!\n'; exit 0 ;;
     *) printf 'Choose a listed number.\n'; continue ;;
   esac

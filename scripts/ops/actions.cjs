@@ -7,4 +7,5 @@ module.exports = [
   { id: 'migration-deploy', label: 'Deploy migrations (backs up first)', input: 'confirm' },
   { id: 'admin-super', label: 'Create super user', input: 'admin' },
   { id: 'admin-church', label: 'Create church admin', input: 'admin' },
+  { id: 'subscription-switch', label: 'Switch subscription', input: 'subscription' },
 ];

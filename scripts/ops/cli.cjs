@@ -57,6 +57,10 @@ async function main() {
       console.log('Requires target confirmation and a verified database backup before migrations.');
     if (item.input === 'admin')
       console.log('Requires target confirmation and hidden password input.');
+    if (item.input === 'subscription')
+      console.log(
+        'Prompts for the user email, plan and cycle, then requires target confirmation before writing.',
+      );
     return;
   }
   if (mode === 'preview') {
@@ -73,7 +77,7 @@ async function main() {
     (!/^\d+$/.test(fields[0] || '') || Number(fields[0]) < 1 || Number(fields[0]) > 65535)
   )
     throw new core.ConsoleError('Port must be between 1 and 65535.');
-  if (['confirm', 'admin'].includes(item.input))
+  if (['confirm', 'admin', 'subscription'].includes(item.input))
     core.assertConfirmation(action, ctx.env, fields[0]);
   if (item.input === 'admin') {
     const backend = require('./backend.cjs');
@@ -109,6 +113,19 @@ async function main() {
     try {
       console.log(await backend.provisionAdmin(db, auth, input));
       console.log('Account created. Password was not printed or saved.');
+    } finally {
+      await db.$disconnect();
+    }
+    return;
+  }
+  if (item.input === 'subscription') {
+    const backend = require('./backend.cjs');
+    const [, email, plan, cycle, members, staff, locations] = fields;
+    const input = { email, plan, cycle, members, staff, locations };
+    backend.validateSubscriptionSwitch(input);
+    const db = backend.openDatabase(ctx.env);
+    try {
+      console.log(await backend.switchSubscriptionByEmail(db, input));
     } finally {
       await db.$disconnect();
     }

@@ -49,7 +49,7 @@ test('help, exact action inventory and EOF work from another directory', () => {
       .map((line) => line.split('\t')[0]),
     web
       ? ['dev', 'build', 'test']
-      : ['dev', 'build', 'test', 'migration-deploy', 'admin-super', 'admin-church'],
+      : ['dev', 'build', 'test', 'migration-deploy', 'admin-super', 'admin-church', 'subscription-switch'],
   );
   assert.equal(consoleRun([]).status, 0);
 });
@@ -77,7 +77,7 @@ test('removed commands and invalid arguments are rejected', () => {
     'worker',
     'open-backend',
     'cache-clean',
-    ...(web ? ['migration-deploy', 'admin-super', 'admin-church'] : []),
+    ...(web ? ['migration-deploy', 'admin-super', 'admin-church', 'subscription-switch'] : []),
   ]) {
     assert.notEqual(consoleRun(['--action', action]).status, 0, action);
   }
@@ -123,7 +123,7 @@ test('build/test/dev dispatch correctly; failures return to the menu', () => {
 });
 if (!web)
   test('migrations and account creation cancel before touching services', () => {
-    for (const action of ['migration-deploy', 'admin-super', 'admin-church'])
+    for (const action of ['migration-deploy', 'admin-super', 'admin-church', 'subscription-switch'])
       assert.equal(consoleRun(['--action', action], '').status, 130);
     assert.equal(consoleRun(['--action', 'migration-deploy'], 'wrong\n').status, 130);
   });
