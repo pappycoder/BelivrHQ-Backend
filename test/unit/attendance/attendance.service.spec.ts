@@ -268,7 +268,7 @@ describe('AttendanceService — categories & visitors', () => {
       });
       expect(
         await service.recordBulkAttendance(
-          { ...input, attendanceDate: '2026-10-19' },
+          { ...input, attendanceDate: '2026-10-25' },
           churchId,
           userId,
         ),
@@ -315,7 +315,11 @@ describe('AttendanceService — categories & visitors', () => {
       model('attendance').findUnique.mockResolvedValue(null);
       model('attendance').create.mockResolvedValue({ ...attendanceRow, category: 'children' });
 
-      await service.recordAttendance({ serviceId, memberId }, churchId, userId);
+      await service.recordAttendance(
+        { serviceId, memberId, attendanceDate: '2026-10-18' },
+        churchId,
+        userId,
+      );
 
       expect(model('attendance').create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -331,7 +335,7 @@ describe('AttendanceService — categories & visitors', () => {
       model('attendance').create.mockResolvedValue(attendanceRow);
 
       await service.recordAttendance(
-        { serviceId, memberId, category: 'children' },
+        { serviceId, memberId, category: 'children', attendanceDate: '2026-10-18' },
         churchId,
         userId,
       );
@@ -357,7 +361,11 @@ describe('AttendanceService — categories & visitors', () => {
         visitor_name: 'Ada Nwosu',
       });
 
-      await service.recordAttendance({ serviceId, visitorId, category: 'adult' }, churchId, userId);
+      await service.recordAttendance(
+        { serviceId, visitorId, category: 'adult', attendanceDate: '2026-10-18' },
+        churchId,
+        userId,
+      );
 
       expect(model('visitor').findUnique).toHaveBeenCalled();
       expect(model('attendance').create).toHaveBeenCalledWith(
@@ -375,7 +383,11 @@ describe('AttendanceService — categories & visitors', () => {
       model('visitor').findUnique.mockResolvedValue(null);
 
       await expect(
-        service.recordAttendance({ serviceId, visitorId }, churchId, userId),
+        service.recordAttendance(
+          { serviceId, visitorId, attendanceDate: '2026-10-18' },
+          churchId,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -393,7 +405,7 @@ describe('AttendanceService — categories & visitors', () => {
       });
 
       const result = await service.recordVisitorAttendance(
-        { serviceId, visitorName: 'Ada Nwosu', visitorId },
+        { serviceId, visitorName: 'Ada Nwosu', visitorId, attendanceDate: '2026-10-18' },
         churchId,
         userId,
       );
@@ -409,6 +421,104 @@ describe('AttendanceService — categories & visitors', () => {
       );
       expect(result.visitorName).toBe('Ada Nwosu');
       expect(result.category).toBe('children');
+    });
+  });
+
+  describe('service schedules', () => {
+    it('persists recurrence and date window on create', async () => {
+      model('service').create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...adultServiceRow, ...data }),
+      );
+      const result = await service.createService(
+        {
+          name: 'Launch weekend',
+          recurrence: 'multi_day',
+          startsOn: '2026-11-01',
+          endsOn: '2026-11-03',
+        },
+        churchId,
+        userId,
+      );
+      expect(model('service').create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            recurrence: 'multi_day',
+            starts_on: new Date('2026-11-01T00:00:00Z'),
+            ends_on: new Date('2026-11-03T00:00:00Z'),
+          }),
+        }),
+      );
+      expect(result).toMatchObject({
+        recurrence: 'multi_day',
+        startsOn: '2026-11-01',
+        endsOn: '2026-11-03',
+      });
+    });
+
+    it('rejects a one-time service without a start date before writing', async () => {
+      await expect(
+        service.createService({ name: 'One off', recurrence: 'one_time' }, churchId, userId),
+      ).rejects.toThrow('start date');
+      expect(model('service').create).not.toHaveBeenCalled();
+    });
+
+    it('merges the existing schedule when a partial update touches recurrence only', async () => {
+      model('service').findUnique.mockResolvedValue({
+        ...adultServiceRow,
+        recurrence: 'multi_day',
+        starts_on: new Date('2026-11-01T00:00:00Z'),
+        ends_on: new Date('2026-11-03T00:00:00Z'),
+      });
+      model('service').update.mockImplementation(({ data }) =>
+        Promise.resolve({ ...adultServiceRow, ...data }),
+      );
+      const result = await service.updateService(
+        serviceId,
+        { recurrence: 'one_time' },
+        churchId,
+        userId,
+      );
+      expect(model('service').update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            recurrence: 'one_time',
+            starts_on: new Date('2026-11-01T00:00:00Z'),
+            ends_on: null,
+          }),
+        }),
+      );
+      expect(result).toMatchObject({ recurrence: 'one_time', startsOn: '2026-11-01' });
+    });
+
+    it('rejects check-in on a day the service does not meet', async () => {
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      await expect(
+        service.recordAttendance(
+          { serviceId, memberId, attendanceDate: '2026-10-19' },
+          churchId,
+          userId,
+        ),
+      ).rejects.toThrow('does not meet on 2026-10-19');
+      expect(model('attendance').create).not.toHaveBeenCalled();
+    });
+
+    it('accepts a past date the service does meet on', async () => {
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      model('member').findUnique.mockResolvedValue({ id: memberId, church_id: churchId });
+      model('attendance').findUnique.mockResolvedValue(null);
+      model('attendance').create.mockResolvedValue({ ...attendanceRow, member_id: memberId });
+      await service.recordAttendance(
+        { serviceId, memberId, attendanceDate: '2026-09-06' },
+        churchId,
+        userId,
+      );
+      expect(model('attendance').create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            attendance_date: new Date('2026-09-06T00:00:00Z'),
+          }),
+        }),
+      );
     });
   });
 

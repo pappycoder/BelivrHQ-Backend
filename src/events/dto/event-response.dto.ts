@@ -41,6 +41,13 @@ export class EventResponseDto {
   @ApiPropertyOptional({ description: 'End date and time', example: '2026-08-01T12:00:00.000Z' })
   endDate?: string;
 
+  @ApiProperty({
+    description: 'How the event repeats',
+    enum: ['one_time', 'weekly'],
+    example: 'one_time',
+  })
+  recurrence!: string;
+
   @ApiPropertyOptional({ description: 'Event location', example: 'Main Auditorium' })
   location?: string;
 

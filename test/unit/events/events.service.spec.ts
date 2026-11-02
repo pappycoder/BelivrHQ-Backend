@@ -106,20 +106,62 @@ describe('EventsService', () => {
       [mockMemberId],
       mockChurchId,
       mockUserId,
-      '2026-10-18',
+      '2026-08-01',
     );
     expect(result).toEqual({ checkedIn: 1, skipped: 0 });
     expect(prisma.attendance.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          attendance_date: new Date('2026-10-18T00:00:00Z'),
-          checkin_at: new Date('2026-10-18T00:00:00Z'),
+          attendance_date: new Date('2026-08-01T00:00:00Z'),
+          checkin_at: new Date('2026-08-01T00:00:00Z'),
         }),
       }),
     );
     expect(prisma.eventRegistration.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { checked_in: true, checked_in_at: new Date('2026-10-18T00:00:00Z') },
+        data: { checked_in: true, checked_in_at: new Date('2026-08-01T00:00:00Z') },
+      }),
+    );
+  });
+
+  it('rejects an event check-in date the event does not occur on', async () => {
+    prisma.event.findFirst.mockResolvedValue(mockEvent);
+    await expect(
+      service.bulkCheckInAttendees(
+        mockEventId,
+        [mockMemberId],
+        mockChurchId,
+        mockUserId,
+        '2026-08-02',
+      ),
+    ).rejects.toThrow('does not occur on 2026-08-02');
+    expect(prisma.attendance.create).not.toHaveBeenCalled();
+  });
+
+  it('checks in weekly events on later occurrences of the start weekday', async () => {
+    prisma.event.findFirst.mockResolvedValue({
+      ...mockEvent,
+      recurrence: 'weekly',
+      end_date: new Date('2026-10-31T12:00:00.000Z'),
+    });
+    prisma.member.findFirst.mockResolvedValue({ id: mockMemberId });
+    prisma.attendance.findUnique.mockResolvedValue(null);
+    prisma.eventRegistration.findUnique.mockResolvedValue(mockRegistration);
+
+    await expect(
+      service.bulkCheckInAttendees(
+        mockEventId,
+        [mockMemberId],
+        mockChurchId,
+        mockUserId,
+        '2026-10-24',
+      ),
+    ).resolves.toEqual({ checkedIn: 1, skipped: 0 });
+    expect(prisma.attendance.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          attendance_date: new Date('2026-10-24T00:00:00Z'),
+        }),
       }),
     );
   });
@@ -147,6 +189,27 @@ describe('EventsService', () => {
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({ entity: 'event', action: 'CREATE' }),
       );
+    });
+
+    it('persists a weekly recurrence instead of defaulting to one-time', async () => {
+      prisma.event.create.mockResolvedValue({ ...mockEvent, recurrence: 'weekly' });
+
+      const result = await service.createEvent(
+        {
+          title: 'Weekly prayer',
+          startDate: '2026-08-01T09:00:00.000Z',
+          recurrence: 'weekly',
+        },
+        mockChurchId,
+        mockUserId,
+      );
+
+      expect(prisma.event.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ recurrence: 'weekly' }),
+        }),
+      );
+      expect(result.recurrence).toBe('weekly');
     });
   });
 

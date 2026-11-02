@@ -16,6 +16,12 @@ import {
   validateGeneralCounts,
 } from './dto/general-attendance.dto';
 import { summarizeGeneralAttendance } from './general-attendance-summary';
+import {
+  EventSchedule,
+  ServiceSchedule,
+  assertEventOccursOn,
+  assertServiceOccursOn,
+} from './schedule-occurrence';
 
 export type AttendanceContext = 'service' | 'event' | 'department' | 'cell_group';
 const contextField = {
@@ -154,6 +160,18 @@ export class AttendanceSessionsService {
     const counts = this.counts(dto),
       date = this.date(dto.attendanceDate);
     const parent = await this.target(type, contextId, churchId, viewer, true);
+    if (type === 'service')
+      assertServiceOccursOn(
+        (parent as { name: string }).name,
+        parent as ServiceSchedule,
+        dto.attendanceDate,
+      );
+    if (type === 'event')
+      assertEventOccursOn(
+        (parent as { title: string }).title,
+        parent as EventSchedule,
+        dto.attendanceDate,
+      );
     const scope = this.branchScope.resolve(viewer);
     const branchId = parent.branch_id ?? (scope.churchOnly ? dto.branchId : scope.branchId);
     if (!branchId || branchId === '00000000-0000-0000-0000-000000000000')

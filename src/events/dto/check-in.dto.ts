@@ -10,7 +10,7 @@ export class BulkCheckInDto extends AttendanceDateDto {
   memberIds!: string[];
 }
 
-export class WalkInCheckInDto {
+export class WalkInCheckInDto extends AttendanceDateDto {
   @ApiProperty({ description: 'First name', example: 'John' })
   @IsString()
   @IsNotEmpty()

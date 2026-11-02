@@ -9,6 +9,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ATTENDANCE_CATEGORIES } from './create-service.dto';
+import { AttendanceDateDto } from '../../common/dto/attendance-date.dto';
 
 const CHECKIN_SOURCES = ['manual', 'qr', 'whatsapp'] as const;
 
@@ -17,7 +18,7 @@ const CHECKIN_SOURCES = ['manual', 'qr', 'whatsapp'] as const;
  * Either memberId or visitorName/visitorId must be provided.
  * Exactly one of serviceId or eventId must be provided (enforced at service level).
  */
-export class RecordAttendanceDto {
+export class RecordAttendanceDto extends AttendanceDateDto {
   @ApiPropertyOptional({ description: 'Service ID (for service check-in)' })
   @IsUUID()
   @IsOptional()
@@ -66,7 +67,7 @@ export class RecordAttendanceDto {
  * DTO for recording a walk-in visitor attendance check-in.
  * Requires serviceId or eventId and visitorName (or visitorId).
  */
-export class RecordVisitorAttendanceDto {
+export class RecordVisitorAttendanceDto extends AttendanceDateDto {
   @ApiPropertyOptional({ description: 'Service ID (for service check-in)' })
   @IsUUID()
   @IsOptional()

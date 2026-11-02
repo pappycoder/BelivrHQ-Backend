@@ -9,6 +9,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -16,6 +17,10 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
+
+/** Recurrence modes an event supports. */
+export const EVENT_RECURRENCES = ['one_time', 'weekly'] as const;
+export type EventRecurrence = (typeof EVENT_RECURRENCES)[number];
 
 export class CreateEventDto {
   @ApiProperty({ description: 'Event title', example: 'Sunday Worship Service' })
@@ -55,6 +60,16 @@ export class CreateEventDto {
   @IsDateString()
   @IsOptional()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'How the event repeats: one_time (default, every day in the start…end window) or weekly (same weekday as startDate)',
+    enum: EVENT_RECURRENCES,
+    default: 'one_time',
+  })
+  @IsOptional()
+  @IsIn(EVENT_RECURRENCES)
+  recurrence?: EventRecurrence;
 
   @ApiPropertyOptional({ description: 'Event location', example: 'Main Auditorium' })
   @IsString()

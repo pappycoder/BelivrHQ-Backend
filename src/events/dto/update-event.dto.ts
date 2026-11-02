@@ -9,12 +9,14 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Min,
 } from 'class-validator';
+import { EVENT_RECURRENCES, type EventRecurrence } from './create-event.dto';
 
 export class UpdateEventDto {
   @ApiPropertyOptional({ description: 'Event title', example: 'Sunday Worship Service' })
@@ -44,6 +46,14 @@ export class UpdateEventDto {
   @IsDateString()
   @IsOptional()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'How the event repeats',
+    enum: EVENT_RECURRENCES,
+  })
+  @IsOptional()
+  @IsIn(EVENT_RECURRENCES)
+  recurrence?: EventRecurrence;
 
   @ApiPropertyOptional({ description: 'Event location' })
   @IsString()

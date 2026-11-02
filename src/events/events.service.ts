@@ -1,6 +1,7 @@
 import { attendanceConflict, isAttendanceDuplicate } from '../attendance/attendance-duplicates';
 import { contentBranch } from '../common/services/content-branch';
 import { attendanceDay } from '../attendance/attendance-day';
+import { assertEventOccursOn } from '../attendance/schedule-occurrence';
 import { assertPlanFeature } from '../billing/entitlements';
 import { attendanceSessionId } from '../attendance/attendance-session-links';
 import { PaymentAccountsService } from '../giving/services/payment-accounts.service';
@@ -101,6 +102,7 @@ export class EventsService {
         type: (dto.type as never) || 'service',
         start_date: new Date(dto.startDate),
         end_date: dto.endDate ? new Date(dto.endDate) : null,
+        recurrence: dto.recurrence ?? 'one_time',
         location: dto.location,
         capacity: dto.capacity,
         is_free: dto.isFree ?? true,
@@ -282,6 +284,7 @@ export class EventsService {
     if (dto.type !== undefined) data.type = dto.type as never;
     if (dto.startDate !== undefined) data.start_date = new Date(dto.startDate);
     if (dto.endDate !== undefined) data.end_date = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.recurrence !== undefined) data.recurrence = dto.recurrence;
     if (dto.location !== undefined) data.location = dto.location;
     if (dto.capacity !== undefined) data.capacity = dto.capacity;
     if (dto.isFree !== undefined) data.is_free = dto.isFree;
@@ -1862,6 +1865,7 @@ export class EventsService {
     memberId: string,
     churchId: string,
     userId: string,
+    selectedDate?: string,
   ): Promise<AttendanceResponseDto> {
     const event = await this.prisma.event.findFirst({
       where: {
@@ -1874,8 +1878,8 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-    const checkedInAt = new Date();
-    const attendanceDate = new Date(checkedInAt.toISOString().slice(0, 10));
+    const { checkedInAt, attendanceDate } = attendanceDay(selectedDate);
+    assertEventOccursOn(event.title, event, attendanceDate.toISOString().slice(0, 10));
     const sessionId = await attendanceSessionId(
       this.prisma,
       'event',
@@ -1970,6 +1974,7 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
     const { checkedInAt, attendanceDate } = attendanceDay(selectedDate);
+    assertEventOccursOn(event.title, event, attendanceDate.toISOString().slice(0, 10));
     const sessionId = await attendanceSessionId(
       this.prisma,
       'event',
@@ -2082,8 +2087,8 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-    const checkedInAt = new Date();
-    const attendanceDate = new Date(checkedInAt.toISOString().slice(0, 10));
+    const { checkedInAt, attendanceDate } = attendanceDay(dto.attendanceDate);
+    assertEventOccursOn(event.title, event, attendanceDate.toISOString().slice(0, 10));
     const sessionId = await attendanceSessionId(
       this.prisma,
       'event',
@@ -2304,6 +2309,7 @@ export class EventsService {
       type: event.type as string,
       startDate: event.start_date.toISOString(),
       endDate: event.end_date ? (event.end_date as Date).toISOString() : undefined,
+      recurrence: (event.recurrence as string) || 'one_time',
       location: (event.location as string) || undefined,
       capacity: (event.capacity as number) || undefined,
       isFree: event.is_free as boolean,

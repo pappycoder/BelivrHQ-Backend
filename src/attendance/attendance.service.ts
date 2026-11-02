@@ -5,6 +5,11 @@ import {
   visitorAlreadyAttended,
 } from './attendance-duplicates';
 import { attendanceDay } from './attendance-day';
+import {
+  assertEventOccursOn,
+  assertServiceOccursOn,
+  assertServiceSchedule,
+} from './schedule-occurrence';
 import { serviceTimeForStorage, serviceTimeForResponse } from './service-time';
 import { attendanceSessionId } from './attendance-session-links';
 import { AttendanceSessionsService } from './attendance-sessions.service';
@@ -36,7 +41,7 @@ import { CreateServiceDto, defaultAttendanceCategory } from './dto/create-servic
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { ListServicesDto } from './dto/list-services.dto';
 import { ListAttendanceDto } from './dto/list-attendance.dto';
-import { RecordAttendanceDto } from './dto/record-attendance.dto';
+import { RecordAttendanceDto, RecordVisitorAttendanceDto } from './dto/record-attendance.dto';
 import { RecordBulkAttendanceDto } from './dto/record-bulk-attendance.dto';
 import { ServiceResponseDto } from './dto/service-response.dto';
 import {
@@ -87,6 +92,11 @@ export class AttendanceService extends AttendanceSessionsService {
       });
       if (!branch) throw new BadRequestException('Select an active branch in this church');
     }
+    const schedule = assertServiceSchedule({
+      recurrence: dto.recurrence,
+      startsOn: dto.startsOn,
+      endsOn: dto.endsOn,
+    });
     const service = await this.prisma.service.create({
       data: {
         church_id: churchId,
@@ -94,6 +104,9 @@ export class AttendanceService extends AttendanceSessionsService {
         name: dto.name,
         category: dto.category ?? 'adult',
         day_of_week: dto.dayOfWeek ?? null,
+        recurrence: schedule.recurrence,
+        starts_on: schedule.startsOn,
+        ends_on: schedule.endsOn,
         start_time: serviceTimeForStorage(dto.startTime),
         end_time: serviceTimeForStorage(dto.endTime),
         is_active: dto.isActive ?? true,
@@ -106,7 +119,14 @@ export class AttendanceService extends AttendanceSessionsService {
       entity: 'service',
       action: 'CREATE',
       entityId: service.id,
-      newValues: { name: dto.name, dayOfWeek: dto.dayOfWeek, branchId },
+      newValues: {
+        name: dto.name,
+        dayOfWeek: dto.dayOfWeek,
+        recurrence: schedule.recurrence,
+        startsOn: dto.startsOn,
+        endsOn: dto.endsOn,
+        branchId,
+      },
     });
 
     this.logger.log(`Service created: ${service.name} (${service.id})`);
@@ -235,6 +255,19 @@ export class AttendanceService extends AttendanceSessionsService {
     if (dto.startTime !== undefined) updateData.start_time = serviceTimeForStorage(dto.startTime);
     if (dto.endTime !== undefined) updateData.end_time = serviceTimeForStorage(dto.endTime);
     if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+
+    const scheduleTouched =
+      dto.recurrence !== undefined || dto.startsOn !== undefined || dto.endsOn !== undefined;
+    if (scheduleTouched) {
+      const schedule = assertServiceSchedule({
+        recurrence: dto.recurrence ?? existing.recurrence,
+        startsOn: dto.startsOn !== undefined ? dto.startsOn : existing.starts_on,
+        endsOn: dto.endsOn !== undefined ? dto.endsOn : existing.ends_on,
+      });
+      updateData.recurrence = schedule.recurrence;
+      updateData.starts_on = schedule.startsOn;
+      updateData.ends_on = schedule.endsOn;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return this.mapToServiceResponse(existing);
@@ -420,20 +453,28 @@ export class AttendanceService extends AttendanceSessionsService {
       throw new BadRequestException('Either serviceId or eventId must be provided');
     }
 
-    const checkedInAt = new Date();
-    const attendanceDate = new Date(checkedInAt.toISOString().slice(0, 10));
+    const { checkedInAt, attendanceDate } = attendanceDay(dto.attendanceDate);
+    const dateKey = attendanceDate.toISOString().slice(0, 10);
     let serviceCategory: string | null = null;
     let parentBranch: string | null | undefined;
 
     if (dto.eventId) {
       const event = await this.prisma.event.findFirst({
         where: { id: dto.eventId, church_id: churchId },
-        select: { id: true, branch_id: true },
+        select: {
+          id: true,
+          title: true,
+          branch_id: true,
+          recurrence: true,
+          start_date: true,
+          end_date: true,
+        },
       });
       parentBranch = event?.branch_id;
       if (!event) {
         throw new NotFoundException('Event not found');
       }
+      assertEventOccursOn(event.title, event, dateKey);
     } else {
       const service = await this.prisma.service.findUnique({
         where: { id: dto.serviceId },
@@ -445,6 +486,7 @@ export class AttendanceService extends AttendanceSessionsService {
       ) {
         throw new NotFoundException('Service not found');
       }
+      assertServiceOccursOn(service.name, service, dateKey);
       serviceCategory = service.category;
       parentBranch = service.branch_id;
     }
@@ -574,18 +616,27 @@ export class AttendanceService extends AttendanceSessionsService {
     if (Number(!!dto.serviceId) + Number(!!dto.eventId) !== 1)
       throw new BadRequestException('Select exactly one service or event');
     const { checkedInAt, attendanceDate } = attendanceDay(dto.attendanceDate);
+    const dateKey = attendanceDate.toISOString().slice(0, 10);
     let serviceCategory: string | null = null;
     let parentBranch: string | null | undefined;
 
     if (dto.eventId) {
       const event = await this.prisma.event.findFirst({
         where: { id: dto.eventId, church_id: churchId },
-        select: { id: true, branch_id: true },
+        select: {
+          id: true,
+          title: true,
+          branch_id: true,
+          recurrence: true,
+          start_date: true,
+          end_date: true,
+        },
       });
       parentBranch = event?.branch_id;
       if (!event) {
         throw new NotFoundException('Event not found');
       }
+      assertEventOccursOn(event.title, event, dateKey);
     } else {
       const service = await this.prisma.service.findUnique({
         where: { id: dto.serviceId },
@@ -597,6 +648,7 @@ export class AttendanceService extends AttendanceSessionsService {
       ) {
         throw new NotFoundException('Service not found');
       }
+      assertServiceOccursOn(service.name, service, dateKey);
       serviceCategory = service.category;
       parentBranch = service.branch_id;
     }
@@ -745,14 +797,7 @@ export class AttendanceService extends AttendanceSessionsService {
   }
 
   async recordVisitorAttendance(
-    dto: {
-      serviceId?: string;
-      eventId?: string;
-      visitorName: string;
-      visitorId?: string;
-      category?: string;
-      source?: string;
-    },
+    dto: RecordVisitorAttendanceDto,
     churchId: string,
     userId: string,
   ): Promise<AttendanceResponseDto> {
@@ -762,20 +807,28 @@ export class AttendanceService extends AttendanceSessionsService {
       throw new BadRequestException('Visitor name is required');
     }
 
-    const checkedInAt = new Date();
-    const attendanceDate = new Date(checkedInAt.toISOString().slice(0, 10));
+    const { checkedInAt, attendanceDate } = attendanceDay(dto.attendanceDate);
+    const dateKey = attendanceDate.toISOString().slice(0, 10);
     let serviceCategory: string | null = null;
     let parentBranch: string | null | undefined;
 
     if (dto.eventId) {
       const event = await this.prisma.event.findFirst({
         where: { id: dto.eventId, church_id: churchId },
-        select: { id: true, branch_id: true },
+        select: {
+          id: true,
+          title: true,
+          branch_id: true,
+          recurrence: true,
+          start_date: true,
+          end_date: true,
+        },
       });
       parentBranch = event?.branch_id;
       if (!event) {
         throw new NotFoundException('Event not found');
       }
+      assertEventOccursOn(event.title, event, dateKey);
     } else {
       const service = await this.prisma.service.findUnique({
         where: { id: dto.serviceId },
@@ -787,6 +840,7 @@ export class AttendanceService extends AttendanceSessionsService {
       ) {
         throw new NotFoundException('Service not found');
       }
+      assertServiceOccursOn(service.name, service, dateKey);
       serviceCategory = service.category;
       parentBranch = service.branch_id;
     }
@@ -1194,6 +1248,9 @@ export class AttendanceService extends AttendanceSessionsService {
     name: string;
     category: string;
     day_of_week: number | null;
+    recurrence?: string | null;
+    starts_on?: Date | null;
+    ends_on?: Date | null;
     start_time: Date | null;
     end_time: Date | null;
     is_active: boolean;
@@ -1209,6 +1266,9 @@ export class AttendanceService extends AttendanceSessionsService {
       name: service.name,
       category: service.category || 'adult',
       dayOfWeek: service.day_of_week ?? undefined,
+      recurrence: service.recurrence || 'weekly',
+      startsOn: service.starts_on?.toISOString().slice(0, 10),
+      endsOn: service.ends_on?.toISOString().slice(0, 10),
       startTime: serviceTimeForResponse(service.start_time),
       endTime: serviceTimeForResponse(service.end_time),
       isActive: service.is_active,

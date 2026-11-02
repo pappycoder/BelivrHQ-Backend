@@ -566,6 +566,9 @@ model Service {
   name        String // e.g., "Sunday Service", "Wednesday Bible Study"
   category    String    @default("adult") // adult | children | mixed — mixed check-ins default to unspecified
   day_of_week Int? // 0=Sunday, 6=Saturday
+  recurrence  String    @default("weekly") // weekly | one_time | multi_day
+  starts_on   DateTime? @db.Date // first valid day for one_time/multi_day, optional bound for weekly
+  ends_on     DateTime? @db.Date // last valid day for multi_day, optional bound for weekly
   start_time  DateTime? @db.Time(3)
   end_time    DateTime? @db.Time(3)
   is_active   Boolean   @default(true)
@@ -754,6 +757,7 @@ model Event {
   type                EventType @default(service)
   start_date          DateTime
   end_date            DateTime?
+  recurrence          String    @default("one_time") // one_time | weekly — weekly repeats on start_date's weekday
   location            String?
   capacity            Int?
   is_free             Boolean   @default(true)

@@ -33,6 +33,18 @@ export class ServiceResponseDto {
   @ApiPropertyOptional({ description: 'Day of week (0=Sunday, 6=Saturday)' })
   dayOfWeek?: number;
 
+  @ApiProperty({
+    description: 'How the schedule repeats',
+    enum: ['weekly', 'one_time', 'multi_day'],
+  })
+  recurrence!: string;
+
+  @ApiPropertyOptional({ description: 'First valid day (YYYY-MM-DD)' })
+  startsOn?: string;
+
+  @ApiPropertyOptional({ description: 'Last valid day (YYYY-MM-DD)' })
+  endsOn?: string;
+
   @ApiPropertyOptional({ description: 'Local start time (24-hour HH:mm)', example: '09:00' })
   startTime?: string;
 

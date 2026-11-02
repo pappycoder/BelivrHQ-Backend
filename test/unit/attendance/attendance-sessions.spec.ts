@@ -37,6 +37,12 @@ describe('Shared attendance session scope', () => {
         id: 'parent-a',
         church_id: church,
         branch_id: branch,
+        ...(type === 'event'
+          ? {
+              start_date: new Date(`${input.attendanceDate}T09:00:00Z`),
+              recurrence: 'one_time',
+            }
+          : {}),
       });
       const field = `${type}_id`;
       prisma.attendanceSession.create.mockResolvedValue({
