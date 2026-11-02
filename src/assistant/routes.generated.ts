@@ -21,6 +21,12 @@ export interface RoutePermissionRule {
 export const ROUTE_PERMISSIONS: RoutePermissionRule[] = [
   // Shared pages require an active authenticated profile, without a module grant.
   { prefix: "/dashboard" },
+  // Paper (Abide IA) workspace shell — Home and Notifications are shared.
+  { prefix: "/home" },
+  { prefix: "/support" },
+  { prefix: "/search" },
+  { prefix: "/people/segments" },
+  { prefix: "/notifications" },
   { prefix: "/subscription", permission: "billing:read" },
   { prefix: "/docs" },
   // Public Help Centre is also a workspace navigation destination.
@@ -28,15 +34,85 @@ export const ROUTE_PERMISSIONS: RoutePermissionRule[] = [
   { prefix: "/help/contact-support" },
   { prefix: "/profile" },
   // Contact support shares the workspace; live chat is restricted to administrators.
-  { prefix: "/support" },
 
   // Members
+  { prefix: "/people/members/new", permission: "members:new:create" },
+  { prefix: "/people/members/import", permission: "members:import:create" },
+  { prefix: "/people/families", permission: "families:read" },
+  { prefix: "/people/visitors", permission: "visitors:list:read" },
+  { prefix: "/people/pastoral/care", permission: "pastoral:life-events:read" },
+  { prefix: "/people/pastoral/life-events", permission: "pastoral:life-events:read" },
+  { prefix: "/people/pastoral/risk", permission: "pastoral:risk-scores:read" },
+  { prefix: "/people/pastoral/engagement", permission: "pastoral:engagement:read" },
+  { prefix: "/people/pastoral", permission: "pastoral:notes:read" },
+  // Connect (Paper IA) — mirrors the legacy communication codes.
+  { prefix: "/connect/inbox", permission: "emails:read" },
+  { prefix: "/connect/templates", permission: "templates:read" },
+  { prefix: "/connect/broadcasts", permission: "broadcasts:read" },
+  { prefix: "/connect/messages", permission: "whatsapp:read" },
+  { prefix: "/connect/appointments", permission: "appointments:read" },
+  // Library (Paper IA) — mirrors the legacy sermon/media codes.
+  { prefix: "/library/sermons/new", permission: "sermons:new:create" },
+  { prefix: "/library/sermons/[sermonId]/edit", permission: "sermons:update" },
+  { prefix: "/people/visitors/import", permission: "visitors:new:create" },
+  { prefix: "/library/sermons/series", permission: "sermons:series:read" },
+  { prefix: "/library/sermons/speakers", permission: "sermons:speakers:read" },
+  { prefix: "/library/sermons", permission: "sermons:list:read" },
+  { prefix: "/library/media/folders", permission: "media:folders:read" },
+  { prefix: "/library/media", permission: "media:library:read" },
+  // Library · Forms (Paper IA) — mirrors legacy forms codes.
+  { prefix: "/library/forms/new", permission: "forms:list:create" },
+  { prefix: "/library/forms/[formId]/edit", permission: "forms:list:update" },
+  { prefix: "/library/forms/[formId]/fill", permission: "forms:list:read" },
+  { prefix: "/library/forms/submissions", permission: "forms:submissions:read" },
+  { prefix: "/library/forms", permission: "forms:list:read" },
+  // Insights + Operations (Paper IA) — mirror the legacy analytics/reports/assets codes.
+  { prefix: "/insights/analytics/giving", permission: "analytics:giving:read" },
+  { prefix: "/insights/analytics/attendance", permission: "analytics:attendance:read" },
+  { prefix: "/insights/analytics/members", permission: "analytics:members:read" },
+  { prefix: "/insights/analytics", permission: "analytics:dashboard:read" },
+  { prefix: "/insights/reports", permission: "reports:view", anyOf: ["reports:financial:read", "reports:attendance:read", "reports:members:read"] },
+  { prefix: "/operations/assets/categories", permission: "assets:categories:read" },
+  { prefix: "/operations/assets/maintenance", permission: "assets:maintenance:read" },
+  { prefix: "/operations/assets/loans", permission: "assets:loans:read" },
+  { prefix: "/operations/assets/new", permission: "assets:list:create" },
+  { prefix: "/operations/assets/[assetId]/edit", permission: "assets:list:update", allOf: ["assets:list:read"] },
+  { prefix: "/admin/team/[profileId]", permission: "users:read", allOf: ["profiles:read"] },
+  { prefix: "/operations/assets", permission: "assets:list:read" },
+  // Giving workspace (Paper IA) — mirrors the legacy giving surface codes. Overview and
+  // schedules sit on interim paths because /giving and /giving/recurring are still legacy pages.
+  { prefix: "/giving/donations", permission: "giving:records:read" },
+  { prefix: "/giving/funds", permission: "giving:categories:read" },
+  { prefix: "/giving/statements", permission: "giving:reports:read" },
+  { prefix: "/giving/schedules", permission: "giving:recurring:read" },
+  // Admin + Settings (Paper IA) — personal pages are login-only; billing mirrors /subscription.
+  // Roles/branches/integrations land on interim prefixes because the Abide IA URLs are still
+  // owned by the legacy pages; they consolidate to /admin/* in the redirect pass.
+  { prefix: "/admin/team", permission: "users:read", allOf: ["profiles:read"] },
+  { prefix: "/admin/permissions", permission: "roles:read" },
+  { prefix: "/admin/church", permission: "church_settings:update" },
+  { prefix: "/admin/locations", permission: "branches:directory:read" },
+  { prefix: "/admin/channels", permission: "integrations:read" },
+  { prefix: "/settings/billing", permission: "billing:read" },
+  { prefix: "/settings/profile" },
+  { prefix: "/settings/security" },
+  { prefix: "/settings/notifications" },
+  { prefix: "/settings/appearance" },
+  { prefix: "/settings" },
+  { prefix: "/people/members", permission: "members:all:read" },
   { prefix: "/members/import", permission: "members:import:create" },
   { prefix: "/members/new", permission: "members:new:create" },
   { prefix: "/members/families", permission: "families:read" },
   { prefix: "/members", permission: "members:all:read" },
 
   // Attendance
+  { prefix: "/gatherings/attendance/check-in", permission: "attendance:checkin:create" },
+  { prefix: "/gatherings/attendance/services", permission: "attendance:services:read" },
+  { prefix: "/gatherings/attendance/reports", permission: "attendance:reports:read" },
+  { prefix: "/gatherings/attendance/records", permission: "attendance:records:read" },
+  { prefix: "/gatherings/attendance", permission: "attendance:dashboard:read" },
+  { prefix: "/gatherings/groups/cell", permission: "cell_groups:read" },
+  { prefix: "/gatherings/groups", permission: "departments:read" },
   { prefix: "/attendance/check-in", permission: "attendance:checkin:create" },
   { prefix: "/attendance/services", permission: "attendance:services:read" },
   { prefix: "/attendance/records", permission: "attendance:records:read" },
@@ -51,6 +127,14 @@ export const ROUTE_PERMISSIONS: RoutePermissionRule[] = [
   { prefix: "/giving", permission: "giving:dashboard:read" },
 
   // Events
+  { prefix: "/gatherings/events/new", permission: "events:create" },
+  { prefix: "/gatherings/events/check-in", permission: "events:checkin:create" },
+  { prefix: "/gatherings/events/registrations", permission: "events:registrations:read" },
+  { prefix: "/gatherings/events/tiers", permission: "events:tickets:read" },
+  { prefix: "/gatherings/events/[eventId]", permission: "events:all:read" },
+  { prefix: "/gatherings/events/[eventId]/edit", permission: "events:update" },
+  { prefix: "/gatherings/events/tickets", permission: "events:tickets:read" },
+  { prefix: "/gatherings/events", permission: "events:calendar:read" },
   { prefix: "/events/check-in", permission: "events:checkin:create" },
   { prefix: "/events/new", permission: "events:create" },
   { prefix: "/events/management", permission: "events:tickets:read" },
@@ -164,11 +248,11 @@ export function checkRule(
 
 /** Login returns only to a known, authorized application page. */
 export function permissionReturnTo(destination: string | null, can: (permission: string) => boolean): string {
-  if (!destination?.startsWith("/") || destination.startsWith("//") || /[\\\u0000-\u001f]/.test(destination)) return "/dashboard";
+  if (!destination?.startsWith("/") || destination.startsWith("//") || /[\\\u0000-\u001f]/.test(destination)) return "/home";
   const url = new URL(destination, "https://churchos.invalid");
   return checkRule(matchRoutePermission(url.pathname), can)
     ? `${url.pathname}${url.search}${url.hash}`
-    : "/dashboard";
+    : "/home";
 }
 
 /** Mirrors the server feature catalog; unknown/missing entitlements never grant a paid feature. */
@@ -182,6 +266,20 @@ export const FEATURE_MINIMUM_PLAN = {
 export type PlanFeature = keyof typeof FEATURE_MINIMUM_PLAN;
 
 export function featureForPath(path: string): PlanFeature | undefined {
+  // Paper (Abide IA) routes — same feature boundaries as the legacy prefixes below.
+  if (/^\/insights\/reports(?:\/|$)/.test(path)) return 'reports';
+  if (/^\/insights(?:\/|$)/.test(path)) return 'analytics';
+  if (/^\/operations(?:\/|$)/.test(path)) return 'assets';
+  if (/^\/gatherings\/events\/registrations(?:\/|$)/.test(path)) return 'events';
+  if (/^\/gatherings\/events\/(?:tiers|tickets)(?:\/|$)/.test(path)) return 'tickets';
+  if (/^\/gatherings\/groups(?:\/|$)/.test(path)) return 'groups';
+  if (/^\/gatherings\/events(?:\/|$)/.test(path)) return 'events';
+  if (/^\/connect\/appointments(?:\/|$)/.test(path)) return 'pastoral';
+  if (/^\/connect(?:\/|$)/.test(path)) return 'email';
+  if (/^\/library\/forms(?:\/|$)/.test(path)) return 'forms';
+  if (/^\/library(?:\/|$)/.test(path)) return 'media';
+  if (/^\/people\/pastoral(?:\/|$)/.test(path)) return 'pastoral';
+  if (/^\/admin\/channels(?:\/|$)/.test(path)) return 'giving';
   if (/^\/analytics(?:\/|$)/.test(path)) return 'analytics';
   if (/^\/assets(?:\/|$)/.test(path)) return 'assets';
   if (/^\/(?:pastoral|appointments)(?:\/|$)/.test(path)) return 'pastoral';
@@ -207,7 +305,12 @@ export function featureForPermission(permission: string): PlanFeature | undefine
   if (['pastoral', 'pastoral_confidential', 'appointments'].includes(resource)) return 'pastoral';
   if (['departments', 'cell_groups'].includes(resource)) return 'groups';
   if (['sermons', 'media'].includes(resource)) return 'media';
-  if (['templates', 'broadcasts', 'messages'].includes(resource)) return 'email';
+  // The shared inbox ("emails") is part of the email feature (Community);
+  // WhatsApp/SMS message history is its own Network feature. Without these
+  // mappings the resources fell through as plan-free and leaked into Essentials.
+  if (['emails', 'templates', 'broadcasts', 'messages'].includes(resource)) return 'email';
+  if (resource === 'whatsapp') return 'whatsapp';
+  if (resource === 'sms') return 'sms';
   if (resource === 'reports' && (surface === 'financial' || surface === 'view')) return 'giving';
   if (resource === 'integrations') return 'giving';
   if (resource === 'calls') return 'calls';

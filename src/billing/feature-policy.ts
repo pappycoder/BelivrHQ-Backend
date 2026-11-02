@@ -9,7 +9,13 @@ export function featureForPermission(permission: string): PlanFeature | undefine
   if (['pastoral', 'pastoral_confidential', 'appointments'].includes(resource)) return 'pastoral';
   if (['departments', 'cell_groups'].includes(resource)) return 'groups';
   if (['sermons', 'media'].includes(resource)) return 'media';
-  if (['templates', 'broadcasts', 'messages'].includes(resource)) return 'email';
+  // The internal inbox ("emails") belongs to the email feature (Community);
+  // WhatsApp/SMS message threads are their own Network features. Unmapped
+  // resources fall through as plan-free, which let Inbox/Messages leak into
+  // Essentials.
+  if (['emails', 'templates', 'broadcasts', 'messages'].includes(resource)) return 'email';
+  if (resource === 'whatsapp') return 'whatsapp';
+  if (resource === 'sms') return 'sms';
   if (resource === 'reports' && (surface === 'financial' || surface === 'view')) return 'giving';
   if (resource === 'integrations') return 'giving';
   if (resource === 'calls') return 'calls';
@@ -47,6 +53,8 @@ export function featureForApiPath(path: string): PlanFeature | undefined {
   if (/^\/church\/integrations(?:\/|$)/.test(path)) return 'giving';
   if (/^\/giving(?:\/|$)/.test(path)) return 'giving';
   if (/^\/(?:templates|broadcasts|messages)(?:\/|$)/.test(path)) return 'email';
+  if (/^\/email(?:\/|$)/.test(path)) return 'email';
+  if (/^\/whatsapp(?:\/|$)/.test(path)) return 'whatsapp';
   if (/^\/calls(?:\/|$)/.test(path)) return 'calls';
   if (/^\/webhooks(?:\/|$)/.test(path)) return 'webhooks';
   if (/^\/(?:sermons|media\/library)(?:\/|$)/.test(path)) return 'media';

@@ -24,6 +24,11 @@ describe('GivingService - Recurring Giving', () => {
   let paystack: Record<string, jest.Mock>;
   let gatewayRegistry: Map<string, PaymentGatewayProvider>;
   let receipt: Record<string, jest.Mock>;
+  let paymentAccounts: {
+    defaultGateway: jest.Mock;
+    current: jest.Mock;
+    historical: jest.Mock;
+  };
 
   const mockUserId = '11111111-1111-1111-1111-111111111111';
   const mockChurchId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -119,6 +124,15 @@ describe('GivingService - Recurring Giving', () => {
       generateReceiptNumber: jest.fn().mockReturnValue('2026/TIT/0001'),
     };
 
+    paymentAccounts = {
+      defaultGateway: jest.fn().mockResolvedValue('paystack'),
+      current: jest.fn().mockImplementation(async () => ({
+        provider: paystack,
+        accountId: 'church-payment-account',
+      })),
+      historical: jest.fn().mockImplementation(async () => paystack),
+    };
+
     service = new GivingService(
       prisma as unknown as PrismaService,
       audit as unknown as AuditLoggingService,
@@ -132,18 +146,49 @@ describe('GivingService - Recurring Giving', () => {
       {
         notify: jest.fn().mockResolvedValue(undefined),
       } as never,
-      {
-        defaultGateway: jest.fn().mockResolvedValue('paystack'),
-        current: jest.fn().mockImplementation(async () => ({
-          provider: paystack,
-          accountId: 'church-payment-account',
-        })),
-        historical: jest.fn().mockImplementation(async () => paystack),
-      } as never,
+      paymentAccounts as never,
     );
   });
 
   describe('createRecurringGiving', () => {
+    it('rejects with setup guidance when the church has no payment provider', async () => {
+      paymentAccounts.defaultGateway.mockResolvedValue(null);
+
+      await expect(
+        service.createRecurringGiving(
+          {
+            categoryId: mockCategoryId,
+            amount: 5000,
+            frequency: 'monthly',
+            email: 'test@example.com',
+            memberId: mockMemberId,
+          },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('has no payment provider yet');
+      expect(model('recurringGiving').create).not.toHaveBeenCalled();
+    });
+
+    it('explains the Paystack requirement when the church pays through another gateway', async () => {
+      paymentAccounts.defaultGateway.mockResolvedValue('flutterwave');
+
+      await expect(
+        service.createRecurringGiving(
+          {
+            categoryId: mockCategoryId,
+            amount: 5000,
+            frequency: 'monthly',
+            email: 'test@example.com',
+            memberId: mockMemberId,
+          },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('charge through Paystack');
+      expect(model('recurringGiving').create).not.toHaveBeenCalled();
+    });
+
     it('allows a treasurer to create a schedule for a member in their branch', async () => {
       model('givingCategory').findUnique.mockResolvedValue(mockCategory);
       model('member').findFirst.mockResolvedValue({ id: mockMemberId, branch_id: 'lekki' });

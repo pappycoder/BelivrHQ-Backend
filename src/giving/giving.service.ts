@@ -39,7 +39,11 @@ import { InitializePaymentDto } from './dto/initialize-payment.dto';
 import { RecordCashDto } from './dto/record-cash.dto';
 import { TransactionResponseDto } from './dto/transaction-response.dto';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
-import { GivingDashboardChartsQueryDto, GivingDashboardChartsResponseDto, GivingDashboardCategoryDto } from './dto/dashboard-charts.dto';
+import {
+  GivingDashboardChartsQueryDto,
+  GivingDashboardChartsResponseDto,
+  GivingDashboardCategoryDto,
+} from './dto/dashboard-charts.dto';
 import {
   TransactionSummaryResponseDto,
   GivingTrendPointDto,
@@ -1174,25 +1178,51 @@ export class GivingService {
   }
 
   /** Successful giving chart aggregates, with no donor selectors or records. */
-  async getDashboardCharts(churchId: string, query: GivingDashboardChartsQueryDto, viewer?: ViewerScope | null): Promise<GivingDashboardChartsResponseDto> {
+  async getDashboardCharts(
+    churchId: string,
+    query: GivingDashboardChartsQueryDto,
+    viewer?: ViewerScope | null,
+  ): Promise<GivingDashboardChartsResponseDto> {
     const start = query.startDate ? new Date(query.startDate) : undefined;
-    const end = query.endDate ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(query.endDate) ? `${query.endDate}T23:59:59.999Z` : query.endDate) : undefined;
-    if ((start && !Number.isFinite(start.getTime())) || (end && !Number.isFinite(end.getTime())) || (start && end && start > end)) {
+    const end = query.endDate
+      ? new Date(
+          /^\d{4}-\d{2}-\d{2}$/.test(query.endDate)
+            ? `${query.endDate}T23:59:59.999Z`
+            : query.endDate,
+        )
+      : undefined;
+    if (
+      (start && !Number.isFinite(start.getTime())) ||
+      (end && !Number.isFinite(end.getTime())) ||
+      (start && end && start > end)
+    ) {
       throw new BadRequestException('Choose a valid date range');
     }
     const currency = query.currency ?? 'NGN';
-    const where = this.buildTransactionWhere(churchId, { branchId: query.branchId }, viewer, 'success');
+    const where = this.buildTransactionWhere(
+      churchId,
+      { branchId: query.branchId },
+      viewer,
+      'success',
+    );
     where.currency = currency;
-    if (start || end) where.giving_date = { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) };
+    if (start || end)
+      where.giving_date = { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) };
     const rows = await this.prisma.transaction.findMany({
-      where, select: { amount: true, giving_date: true, category_id: true },
+      where,
+      select: { amount: true, giving_date: true, category_id: true },
       orderBy: { giving_date: 'asc' },
     });
-    const categoryIds = [...new Set(rows.flatMap(row => row.category_id ? [row.category_id] : []))];
-    const categories = categoryIds.length ? await this.prisma.givingCategory.findMany({
-      where: { church_id: churchId, id: { in: categoryIds } }, select: { id: true, name: true },
-    }) : [];
-    const categoryNames = new Map(categories.map(category => [category.id, category.name]));
+    const categoryIds = [
+      ...new Set(rows.flatMap((row) => (row.category_id ? [row.category_id] : []))),
+    ];
+    const categories = categoryIds.length
+      ? await this.prisma.givingCategory.findMany({
+          where: { church_id: churchId, id: { in: categoryIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const daily = new Map<string, number>();
     const byCategory = new Map<string | null, GivingDashboardCategoryDto>();
     let total = 0;
@@ -1201,13 +1231,22 @@ export class GivingService {
       const date = row.giving_date.toISOString().slice(0, 10);
       daily.set(date, (daily.get(date) ?? 0) + row.amount);
       const category = byCategory.get(row.category_id) ?? {
-        categoryId: row.category_id, categoryName: (row.category_id && categoryNames.get(row.category_id)) || 'Uncategorized', total: 0, count: 0,
+        categoryId: row.category_id,
+        categoryName: (row.category_id && categoryNames.get(row.category_id)) || 'Uncategorized',
+        total: 0,
+        count: 0,
       };
       category.total += row.amount;
       category.count++;
       byCategory.set(row.category_id, category);
     }
-    return { currency, total, count: rows.length, trend: [...daily.entries()].map(([date, amount]) => ({ date, total: amount })), byCategory: [...byCategory.values()].sort((a, b) => b.total - a.total) };
+    return {
+      currency,
+      total,
+      count: rows.length,
+      trend: [...daily.entries()].map(([date, amount]) => ({ date, total: amount })),
+      byCategory: [...byCategory.values()].sort((a, b) => b.total - a.total),
+    };
   }
 
   /**
@@ -1321,6 +1360,20 @@ export class GivingService {
     userId: string,
     viewer?: ViewerScope | null,
   ): Promise<RecurringGivingResponseDto> {
+    // Recurring schedules charge cards automatically, which needs an enabled
+    // church payment account (Paystack is the only auto-charge provider).
+    // Fail with guidance instead of the bare "not configured" gateway errors.
+    const defaultProvider = await this.paymentAccounts.defaultGateway(churchId);
+    if (!defaultProvider) {
+      throw new BadRequestException(
+        'Recurring gifts need automatic card charges, but this church has no payment provider yet. Add and enable a Paystack account under Settings → Integrations → Payments, then create the schedule.',
+      );
+    }
+    if (defaultProvider !== 'paystack') {
+      throw new BadRequestException(
+        `Recurring gifts currently charge through Paystack, but this church pays through ${defaultProvider}. Add a Paystack account under Settings → Integrations → Payments before creating a schedule.`,
+      );
+    }
     await this.churchPayment(churchId, 'paystack');
     const category = await this.prisma.givingCategory.findUnique({
       where: { id: dto.categoryId },

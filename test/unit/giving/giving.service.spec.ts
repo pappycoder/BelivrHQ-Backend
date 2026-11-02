@@ -171,18 +171,34 @@ describe('GivingService', () => {
       [true, 'branch-a', undefined, undefined],
       [false, 'branch-a', 'branch-b', 'branch-a'],
       [false, undefined, 'branch-b', '00000000-0000-0000-0000-000000000000'],
-    ])('pins successful giving to church, currency and scope for HQ=%s own=%s requested=%s', async (hq, own, requested, expected) => {
-      model('transaction').findMany.mockResolvedValue([]);
-      const result = await service.getDashboardCharts(mockChurchId, { branchId: requested as string | undefined }, {
-        church_id: mockChurchId, role: 'church_admin', is_admin_hq: hq as boolean, branch_id: own as string | undefined,
-      });
-      expect(model('transaction').findMany).toHaveBeenCalledWith({
-        where: { church_id: mockChurchId, status: 'success', currency: 'NGN', ...(expected ? { branch_id: expected } : {}) },
-        select: { amount: true, giving_date: true, category_id: true }, orderBy: { giving_date: 'asc' },
-      });
-      expect(result).toEqual({ currency: 'NGN', total: 0, count: 0, trend: [], byCategory: [] });
-      expect(model('givingCategory').findMany).not.toHaveBeenCalled();
-    });
+    ])(
+      'pins successful giving to church, currency and scope for HQ=%s own=%s requested=%s',
+      async (hq, own, requested, expected) => {
+        model('transaction').findMany.mockResolvedValue([]);
+        const result = await service.getDashboardCharts(
+          mockChurchId,
+          { branchId: requested as string | undefined },
+          {
+            church_id: mockChurchId,
+            role: 'church_admin',
+            is_admin_hq: hq as boolean,
+            branch_id: own as string | undefined,
+          },
+        );
+        expect(model('transaction').findMany).toHaveBeenCalledWith({
+          where: {
+            church_id: mockChurchId,
+            status: 'success',
+            currency: 'NGN',
+            ...(expected ? { branch_id: expected } : {}),
+          },
+          select: { amount: true, giving_date: true, category_id: true },
+          orderBy: { giving_date: 'asc' },
+        });
+        expect(result).toEqual({ currency: 'NGN', total: 0, count: 0, trend: [], byCategory: [] });
+        expect(model('givingCategory').findMany).not.toHaveBeenCalled();
+      },
+    );
 
     it('uses selected currency, inclusive dates, and tenant-scoped category names without donor data', async () => {
       model('transaction').findMany.mockResolvedValue([
@@ -191,23 +207,47 @@ describe('GivingService', () => {
         { amount: 5, giving_date: new Date('2026-10-28T12:00:00Z'), category_id: null },
       ]);
       model('givingCategory').findMany.mockResolvedValue([{ id: 'cat-a', name: 'Offering' }]);
-      const result = await service.getDashboardCharts(mockChurchId, { currency: 'USD', startDate: '2026-10-27', endDate: '2026-10-28' });
-      expect(model('transaction').findMany.mock.calls[0][0].where).toEqual({
-        church_id: mockChurchId, status: 'success', currency: 'USD',
-        giving_date: { gte: new Date('2026-10-27T00:00:00Z'), lte: new Date('2026-10-28T23:59:59.999Z') },
+      const result = await service.getDashboardCharts(mockChurchId, {
+        currency: 'USD',
+        startDate: '2026-10-27',
+        endDate: '2026-10-28',
       });
-      expect(model('givingCategory').findMany.mock.calls[0][0].where).toEqual({ church_id: mockChurchId, id: { in: ['cat-a'] } });
-      expect(result).toEqual({ currency: 'USD', total: 35, count: 3,
-        trend: [{ date: '2026-10-27', total: 30 }, { date: '2026-10-28', total: 5 }],
-        byCategory: [{ categoryId: 'cat-a', categoryName: 'Offering', total: 30, count: 2 }, { categoryId: null, categoryName: 'Uncategorized', total: 5, count: 1 }],
+      expect(model('transaction').findMany.mock.calls[0][0].where).toEqual({
+        church_id: mockChurchId,
+        status: 'success',
+        currency: 'USD',
+        giving_date: {
+          gte: new Date('2026-10-27T00:00:00Z'),
+          lte: new Date('2026-10-28T23:59:59.999Z'),
+        },
+      });
+      expect(model('givingCategory').findMany.mock.calls[0][0].where).toEqual({
+        church_id: mockChurchId,
+        id: { in: ['cat-a'] },
+      });
+      expect(result).toEqual({
+        currency: 'USD',
+        total: 35,
+        count: 3,
+        trend: [
+          { date: '2026-10-27', total: 30 },
+          { date: '2026-10-28', total: 5 },
+        ],
+        byCategory: [
+          { categoryId: 'cat-a', categoryName: 'Offering', total: 30, count: 2 },
+          { categoryId: null, categoryName: 'Uncategorized', total: 5, count: 1 },
+        ],
       });
     });
 
     it.each([
       { startDate: '2026-10-29', endDate: '2026-10-28' },
-      { startDate: 'invalid' }, { endDate: 'invalid' },
-    ])('rejects invalid date bounds without querying records: %j', async query => {
-      await expect(service.getDashboardCharts(mockChurchId, query)).rejects.toThrow(BadRequestException);
+      { startDate: 'invalid' },
+      { endDate: 'invalid' },
+    ])('rejects invalid date bounds without querying records: %j', async (query) => {
+      await expect(service.getDashboardCharts(mockChurchId, query)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(model('transaction').findMany).not.toHaveBeenCalled();
     });
   });
@@ -1548,7 +1588,12 @@ describe('GivingService', () => {
       const monthWhere = (model('transaction').aggregate as jest.Mock).mock.calls[0][0].where as {
         giving_date: { gte: Date };
       };
-      expect(monthWhere.giving_date.gte.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+      // The window must track the actual calendar month, not a frozen date —
+      // an earlier hardcoded value broke the moment the month rolled over.
+      const now = new Date();
+      expect(monthWhere.giving_date.gte.toISOString()).toBe(
+        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString(),
+      );
     });
 
     it('should branch-scope a non-HQ viewer in every query', async () => {
