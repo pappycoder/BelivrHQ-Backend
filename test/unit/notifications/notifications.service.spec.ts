@@ -214,6 +214,28 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('bulkMarkAsUnread', () => {
+    it('should clear read_at only on already-read rows scoped to the profile', async () => {
+      model('notification').updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.bulkMarkAsUnread(mockChurchId, mockProfileId, [
+        'id-1',
+        'id-2',
+      ]);
+
+      expect(result.updated).toBe(2);
+      expect(model('notification').updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['id-1', 'id-2'] },
+          church_id: mockChurchId,
+          profile_id: mockProfileId,
+          read_at: { not: null },
+        },
+        data: { read_at: null },
+      });
+    });
+  });
+
   describe('bulkRemove', () => {
     it('should hard-delete rows scoped to the profile', async () => {
       model('notification').deleteMany.mockResolvedValue({ count: 2 });

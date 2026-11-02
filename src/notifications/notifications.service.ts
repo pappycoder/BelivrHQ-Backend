@@ -165,6 +165,29 @@ export class NotificationsService {
   }
 
   /**
+   * Mark multiple notifications as unread (bulk), scoped to a profile.
+   * The inverse of `bulkMarkAsRead` — only rows that were actually read flip.
+   */
+  async bulkMarkAsUnread(
+    churchId: string,
+    profileId: string,
+    ids: string[],
+  ): Promise<{ updated: number }> {
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        id: { in: ids },
+        church_id: churchId,
+        profile_id: profileId,
+        read_at: { not: null },
+      },
+      data: { read_at: null },
+    });
+
+    this.logger.log(`Bulk marked ${result.count} notifications as unread for profile ${profileId}`);
+    return { updated: result.count };
+  }
+
+  /**
    * Permanently delete multiple notifications (bulk hard delete), scoped to a profile.
    */
   async bulkRemove(

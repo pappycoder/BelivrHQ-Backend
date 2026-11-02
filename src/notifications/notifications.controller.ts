@@ -108,6 +108,22 @@ export class NotificationsController {
   }
 
   /**
+   * Mark multiple notifications as unread (bulk).
+   */
+  @Patch('bulk-unread')
+  @ApiUpdateEndpoint(
+    'Bulk mark as unread',
+    'Marks multiple read notifications as unread for the current user.',
+  )
+  async bulkMarkAsUnread(
+    @Body() dto: BulkNotificationsDto,
+    @Request() req: Record<string, unknown>,
+  ): Promise<{ updated: number }> {
+    const profile = this.getProfile(req);
+    return this.notificationsService.bulkMarkAsUnread(profile.church_id, profile.id, dto.ids);
+  }
+
+  /**
    * Permanently delete multiple notifications (bulk hard delete).
    */
   @Post('bulk-delete')
