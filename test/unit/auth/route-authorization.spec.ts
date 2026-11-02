@@ -60,6 +60,7 @@ const exceptions: Record<string, string[]> = {
     'listNotifications',
     'getUnreadCount',
     'bulkMarkAsRead',
+    'bulkMarkAsUnread',
     'bulkRemove',
     'getOne',
     'markAsRead',
