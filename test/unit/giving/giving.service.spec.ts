@@ -1524,9 +1524,18 @@ describe('GivingService', () => {
 
     it('should return month/all-time totals, count, and a 30-day zero-filled trend', async () => {
       stubSummaryAggregates(1500, 5000, 42);
+      // Day-relative to the rolling 30-day window so the assertions hold on
+      // any date: the gifts sit 10 days back (index 19), the window's first
+      // day (index 0) must read zero.
+      const midDay = new Date();
+      midDay.setUTCHours(9, 0, 0, 0);
+      midDay.setUTCDate(midDay.getUTCDate() - 10);
+      const midKey = midDay.toISOString().slice(0, 10);
+      const lateGift = new Date(midDay);
+      lateGift.setUTCHours(18, 0, 0, 0);
       model('transaction').findMany.mockResolvedValue([
-        { amount: 1000, giving_date: new Date('2026-10-05T09:00:00.000Z') },
-        { amount: 500, giving_date: new Date('2026-10-05T18:00:00.000Z') },
+        { amount: 1000, giving_date: midDay },
+        { amount: 500, giving_date: lateGift },
       ]);
 
       const result = await service.getTransactionsSummary(mockChurchId, {});
@@ -1537,8 +1546,8 @@ describe('GivingService', () => {
       expect(result.count).toBe(42);
       expect(result.trend).toHaveLength(30);
       expect(result.trend[0].total).toBe(0);
-      expect(result.trend.find((p) => p.date === '2026-10-05')).toEqual({
-        date: '2026-10-05',
+      expect(result.trend.find((p) => p.date === midKey)).toEqual({
+        date: midKey,
         total: 1500,
       });
     });

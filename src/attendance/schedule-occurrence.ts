@@ -3,9 +3,11 @@
  * @description Shared date maths for service schedules and recurring events.
  *
  * A service can repeat weekly (the historical behaviour), happen once, or run
- * across a bounded multi-day window. Events either happen once across their
- * start/end window or repeat weekly on their start weekday. Check-in calls use
- * these helpers to reject dates that the schedule never occurs on.
+ * across a bounded multi-day window. Events follow the same rules: once on a
+ * single day, across a bounded multi-day window, or weekly on their start
+ * weekday. Check-in calls use these helpers to reject dates that the schedule
+ * never occurs on; create/update calls use the assert helpers to reject
+ * schedules that mix the modes up.
  *
  * @module attendance/schedule-occurrence
  * @since 1.0.0
@@ -17,8 +19,8 @@ import { BadRequestException } from '@nestjs/common';
 export const SCHEDULE_RECURRENCES = ['weekly', 'one_time', 'multi_day'] as const;
 export type ScheduleRecurrence = (typeof SCHEDULE_RECURRENCES)[number];
 
-/** Events only repeat weekly or happen once across their start/end window. */
-export const EVENT_RECURRENCES = ['one_time', 'weekly'] as const;
+/** Events happen once, repeat weekly, or run across a bounded multi-day window. */
+export const EVENT_RECURRENCES = ['one_time', 'weekly', 'multi_day'] as const;
 export type EventRecurrence = (typeof EVENT_RECURRENCES)[number];
 
 export interface ServiceSchedule {
@@ -80,7 +82,9 @@ export function serviceOccursOn(schedule: ServiceSchedule, date: string): boolea
 /**
  * Whether an event occurs on the supplied calendar day.
  *
- * - one_time: every day inside `[start_date day, end_date day]` (end optional).
+ * - one_time: exactly the day of `start_date` (a same-day `end_date` only
+ *   carries the end time, not extra days — multi-day windows are `multi_day`).
+ * - multi_day: every day from `start_date` through `end_date` inclusive.
  * - weekly: the same weekday as `start_date`, from `start_date` through
  *   `end_date` when present, otherwise indefinitely.
  */
@@ -91,9 +95,41 @@ export function eventOccursOn(schedule: EventSchedule, date: string): boolean {
   if (date < start) return false;
   if (end && date > end) return false;
 
-  if ((schedule.recurrence || 'one_time') === 'weekly') return weekdayOf(date) === weekdayOf(start);
+  const recurrence = (schedule.recurrence || 'one_time') as EventRecurrence;
+  if (recurrence === 'weekly') return weekdayOf(date) === weekdayOf(start);
+  if (recurrence === 'multi_day') return end !== null && date >= start && date <= end;
 
-  return true;
+  return date === start;
+}
+
+/**
+ * Cross-field validation for an event schedule — the event twin of
+ * `assertServiceSchedule`. `startDate`/`endDate` stay full timestamps (events
+ * carry wall-clock times); the rules run on their UTC day keys. A same-day
+ * `endDate` is kept for one-time events (it carries the end time).
+ */
+export function assertEventSchedule(input: {
+  recurrence?: string | null;
+  startDate: Date | string;
+  endDate?: Date | string | null;
+}): { recurrence: EventRecurrence } {
+  const recurrence = (input.recurrence || 'one_time') as EventRecurrence;
+  if (!(EVENT_RECURRENCES as readonly string[]).includes(recurrence))
+    throw new BadRequestException('Choose a valid event recurrence');
+
+  const start = dayKey(input.startDate);
+  const end = input.endDate ? dayKey(input.endDate) : null;
+
+  if (recurrence === 'one_time' && end && end !== start)
+    throw new BadRequestException(
+      'A one-time event happens on a single day — choose Date range for multiple days',
+    );
+  if (recurrence === 'multi_day' && !end)
+    throw new BadRequestException('A date-range event needs a start and end date');
+  if (end && end < start)
+    throw new BadRequestException('The end date must be on or after the start date');
+
+  return { recurrence };
 }
 
 /** Cross-field validation for a service schedule. */
@@ -133,4 +169,32 @@ export function assertServiceOccursOn(name: string, schedule: ServiceSchedule, d
 export function assertEventOccursOn(name: string, schedule: EventSchedule, date: string): void {
   if (!eventOccursOn(schedule, date))
     throw new BadRequestException(`${name} does not occur on ${date}`);
+}
+
+/**
+ * The first UTC-midnight day on or after `from` that the event occurs on, or
+ * null when the schedule produces no further occurrence. Lets "upcoming"
+ * consumers present recurring events by their NEXT date, even months out.
+ */
+export function nextEventOccurrence(schedule: EventSchedule, from: Date = new Date()): Date | null {
+  const fromKey = dayKey(from);
+  const startKey = dayKey(schedule.start_date);
+  const endKey = schedule.end_date ? dayKey(schedule.end_date) : null;
+  const recurrence = (schedule.recurrence || 'one_time') as EventRecurrence;
+
+  if (endKey && endKey < fromKey) return null;
+  if (recurrence === 'one_time') return startKey >= fromKey ? dateOnly(startKey) : null;
+  if (recurrence === 'multi_day') {
+    if (!endKey) return null;
+    return dateOnly(startKey >= fromKey ? startKey : fromKey);
+  }
+
+  const targetWeekday = weekdayOf(startKey);
+  const cursor = new Date(`${startKey >= fromKey ? startKey : fromKey}T00:00:00.000Z`);
+  for (let i = 0; i < 7; i += 1) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (weekdayOf(key) === targetWeekday && (!endKey || key <= endKey)) return cursor;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return null;
 }

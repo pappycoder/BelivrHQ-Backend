@@ -757,7 +757,7 @@ model Event {
   type                EventType @default(service)
   start_date          DateTime
   end_date            DateTime?
-  recurrence          String    @default("one_time") // one_time | weekly — weekly repeats on start_date's weekday
+  recurrence          String    @default("one_time") // one_time | weekly | multi_day — weekly repeats on start_date's weekday, multi_day spans every day start_date…end_date
   location            String?
   capacity            Int?
   is_free             Boolean   @default(true)

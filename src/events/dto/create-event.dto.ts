@@ -19,7 +19,7 @@ import {
 } from 'class-validator';
 
 /** Recurrence modes an event supports. */
-export const EVENT_RECURRENCES = ['one_time', 'weekly'] as const;
+export const EVENT_RECURRENCES = ['one_time', 'weekly', 'multi_day'] as const;
 export type EventRecurrence = (typeof EVENT_RECURRENCES)[number];
 
 export class CreateEventDto {
@@ -63,7 +63,7 @@ export class CreateEventDto {
 
   @ApiPropertyOptional({
     description:
-      'How the event repeats: one_time (default, every day in the start…end window) or weekly (same weekday as startDate)',
+      'How the event repeats: one_time (default, exactly the start day), weekly (same weekday as startDate, through endDate when set) or multi_day (every day in the start…end window)',
     enum: EVENT_RECURRENCES,
     default: 'one_time',
   })

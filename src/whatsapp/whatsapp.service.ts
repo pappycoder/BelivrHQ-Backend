@@ -1,4 +1,5 @@
 import { RequestContextService } from '../common/services/request-context.service';
+import { nextEventOccurrence } from '../attendance/schedule-occurrence';
 /**
  * @file whatsapp.service.ts
  * @description WhatsApp Business API integration service.
@@ -675,19 +676,41 @@ export class WhatsAppService {
     const events = await this.prisma.event.findMany({
       where: {
         church_id: msg.churchId,
-        start_date: { gte: today },
+        // Future starts plus still-live recurring events — same rule as the
+        // events list "upcoming" filter, so the desk never misses a weekly.
+        AND: [
+          {
+            OR: [
+              { start_date: { gte: today } },
+              {
+                recurrence: { in: ['weekly', 'multi_day'] },
+                start_date: { lt: today },
+                OR: [{ end_date: null }, { end_date: { gte: today } }],
+              },
+            ],
+          },
+        ],
       },
       orderBy: { start_date: 'asc' },
-      take: 5,
+      take: 15,
     });
 
-    if (events.length === 0) {
+    const dated = events
+      .map((event) => ({
+        event,
+        next: nextEventOccurrence(event, today),
+      }))
+      .filter((row): row is { event: (typeof events)[number]; next: Date } => !!row.next)
+      .sort((a, b) => a.next.getTime() - b.next.getTime())
+      .slice(0, 5);
+
+    if (dated.length === 0) {
       return '📅 No upcoming events at this time. Check back later!';
     }
 
     const lines = ['📅 *Upcoming Events*', ''];
-    for (const event of events) {
-      const date = new Date(event.start_date).toLocaleDateString('en-NG', {
+    for (const { event, next } of dated) {
+      const date = next.toLocaleDateString('en-NG', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',

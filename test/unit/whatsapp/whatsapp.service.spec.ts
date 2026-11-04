@@ -350,7 +350,9 @@ describe('WhatsAppService', () => {
         {
           id: 'evt-1',
           title: 'Youth Conference',
-          start_date: new Date('2026-08-01'),
+          start_date: new Date('2027-08-01'),
+          end_date: null,
+          recurrence: 'one_time',
           description: 'Annual youth gathering',
         },
       ]);

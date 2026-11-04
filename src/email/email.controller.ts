@@ -147,10 +147,13 @@ export class EmailController {
 
   /**
    * Mark a received email as read.
+   * Self-scoped (only the caller's own EmailRecipient copy flips), so the
+   * mailbox read grant is the floor — same rule as the detail GET, which
+   * already marks read on open.
    */
   @Post(':messageId/read')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('emails:update')
+  @RequirePermissions('emails:read')
   @ApiUpdateEndpoint('Mark as read', 'Marks a received email as read.')
   async markRead(
     @Param('messageId') messageId: string,
@@ -162,10 +165,11 @@ export class EmailController {
 
   /**
    * Mark a received email as unread.
+   * Self-scoped like mark-read — the caller only ever clears their own copy.
    */
   @Post(':messageId/unread')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('emails:update')
+  @RequirePermissions('emails:read')
   @ApiUpdateEndpoint('Mark as unread', 'Marks a received email as unread.')
   async markUnread(
     @Param('messageId') messageId: string,

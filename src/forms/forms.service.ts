@@ -147,11 +147,21 @@ export class FormsService {
       ];
     }
 
+    const orderDirection = query.sortOrder ?? (query.sortBy === 'title' ? 'asc' : 'desc');
+    const orderBy: Prisma.FormOrderByWithRelationInput =
+      query.sortBy === 'title'
+        ? { title: orderDirection }
+        : query.sortBy === 'createdAt'
+          ? { created_at: orderDirection }
+          : query.sortBy === 'submissionCount'
+            ? { submissions: { _count: orderDirection } }
+            : { updated_at: orderDirection };
+
     const [total, forms] = await Promise.all([
       this.prisma.form.count({ where }),
       this.prisma.form.findMany({
         where,
-        orderBy: { updated_at: 'desc' },
+        orderBy,
         skip,
         take: limit,
         include: { branch: { select: { name: true } }, _count: { select: { submissions: true } } },
@@ -723,24 +733,38 @@ export class FormsService {
     if (query.status) where.status = query.status;
     if (query.submittedBy) where.submitted_by = query.submittedBy;
 
+    // Prisma cannot LIKE inside a Json column, so a searched read filters
+    // BEFORE paging (bounded walk) instead of post-filtering one page and
+    // reporting unfiltered totals. Unsearched reads keep native server paging.
+    const orderBy: Prisma.FormSubmissionOrderByWithRelationInput = {
+      created_at: query.sortOrder ?? 'desc',
+    };
+    if (query.search) {
+      const term = query.search.toLowerCase();
+      const matches = (
+        await this.prisma.formSubmission.findMany({ where, orderBy, take: 1_000 })
+      ).filter((submission) =>
+        Object.values(this.mapSubmission(submission).data).some((value) =>
+          String(value).toLowerCase().includes(term),
+        ),
+      );
+      const items = matches
+        .slice(skip, skip + limit)
+        .map((submission) => this.mapSubmission(submission));
+      return { items, total: matches.length, page, limit };
+    }
+
     const [total, submissions] = await Promise.all([
       this.prisma.formSubmission.count({ where }),
       this.prisma.formSubmission.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
     ]);
 
-    let items = submissions.map((submission) => this.mapSubmission(submission));
-
-    if (query.search) {
-      const term = query.search.toLowerCase();
-      items = items.filter((submission) =>
-        Object.values(submission.data).some((value) => String(value).toLowerCase().includes(term)),
-      );
-    }
+    const items = submissions.map((submission) => this.mapSubmission(submission));
 
     return { items, total, page, limit };
   }

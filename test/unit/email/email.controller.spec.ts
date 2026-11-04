@@ -56,14 +56,14 @@ describe('EmailController permission decorators + route order', () => {
     expect(block).toContain("@RequirePermissions('emails:read')");
   });
 
-  it('marks read under POST /email/:messageId/read (emails:update)', () => {
+  it('marks read under POST /email/:messageId/read (emails:read — self-scoped mailbox bookkeeping)', () => {
     const block = blockBetween("@Post(':messageId/read')", 'async markRead(');
-    expect(block).toContain("@RequirePermissions('emails:update')");
+    expect(block).toContain("@RequirePermissions('emails:read')");
   });
 
-  it('marks unread under POST /email/:messageId/unread (emails:update)', () => {
+  it('marks unread under POST /email/:messageId/unread (emails:read — self-scoped mailbox bookkeeping)', () => {
     const block = blockBetween("@Post(':messageId/unread')", 'async markUnread(');
-    expect(block).toContain("@RequirePermissions('emails:update')");
+    expect(block).toContain("@RequirePermissions('emails:read')");
   });
 
   it('trashes under DELETE /email/:messageId (emails:delete)', () => {

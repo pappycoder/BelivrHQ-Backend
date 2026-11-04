@@ -132,10 +132,18 @@ export class SermonsService {
       };
     }
 
+    // Accept both wire shapes: the web sends camelCase (createdAt/sermonDate),
+    // older clients may send the snake_case column names.
+    const normalizedSortBy =
+      dto.sortBy === 'createdAt' || dto.sortBy === 'created_at'
+        ? 'created_at'
+        : dto.sortBy === 'sermonDate' || dto.sortBy === 'sermon_date'
+          ? 'sermon_date'
+          : (dto.sortBy ?? 'sermon_date');
     const orderBy: Prisma.SermonOrderByWithRelationInput =
-      dto.sortBy === 'title'
+      normalizedSortBy === 'title'
         ? { title: dto.sortOrder ?? 'asc' }
-        : dto.sortBy === 'created_at'
+        : normalizedSortBy === 'created_at'
           ? { created_at: dto.sortOrder ?? 'desc' }
           : { sermon_date: dto.sortOrder ?? 'desc' };
 

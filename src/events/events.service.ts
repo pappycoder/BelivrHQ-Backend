@@ -1,7 +1,7 @@
 import { attendanceConflict, isAttendanceDuplicate } from '../attendance/attendance-duplicates';
 import { contentBranch } from '../common/services/content-branch';
 import { attendanceDay } from '../attendance/attendance-day';
-import { assertEventOccursOn } from '../attendance/schedule-occurrence';
+import { assertEventOccursOn, assertEventSchedule } from '../attendance/schedule-occurrence';
 import { assertPlanFeature } from '../billing/entitlements';
 import { attendanceSessionId } from '../attendance/attendance-session-links';
 import { PaymentAccountsService } from '../giving/services/payment-accounts.service';
@@ -92,6 +92,11 @@ export class EventsService {
       churchId,
       dto.branchId,
     );
+    const schedule = assertEventSchedule({
+      recurrence: dto.recurrence,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+    });
     const event = await this.prisma.event.create({
       include: { branch: { select: { name: true } } },
       data: {
@@ -102,7 +107,7 @@ export class EventsService {
         type: (dto.type as never) || 'service',
         start_date: new Date(dto.startDate),
         end_date: dto.endDate ? new Date(dto.endDate) : null,
-        recurrence: dto.recurrence ?? 'one_time',
+        recurrence: schedule.recurrence,
         location: dto.location,
         capacity: dto.capacity,
         is_free: dto.isFree ?? true,
@@ -167,9 +172,32 @@ export class EventsService {
     const dateFilter = dto.dateFilter || dto.status;
     const now = new Date();
     if (dateFilter === 'upcoming') {
-      where.start_date = { gte: now };
+      // Live recurring events stay upcoming after their first start date —
+      // the same evergreen rule the service schedules follow.
+      where.AND = [
+        {
+          OR: [
+            { start_date: { gte: now } },
+            {
+              recurrence: { in: ['weekly', 'multi_day'] },
+              start_date: { lt: now },
+              OR: [{ end_date: null }, { end_date: { gte: now } }],
+            },
+          ],
+        },
+      ];
     } else if (dateFilter === 'past') {
       where.start_date = { lt: now };
+      where.AND = [
+        {
+          NOT: {
+            AND: [
+              { recurrence: { in: ['weekly', 'multi_day'] } },
+              { OR: [{ end_date: null }, { end_date: { gte: now } }] },
+            ],
+          },
+        },
+      ];
     }
 
     if (dto.startDate) {
@@ -278,6 +306,19 @@ export class EventsService {
     }
 
     const data: Prisma.EventUpdateInput = {};
+
+    // Re-validate the MERGED schedule (DTO over existing row) whenever any
+    // recurrence/date field is touched — same rule as updateService.
+    if (dto.recurrence !== undefined || dto.startDate !== undefined || dto.endDate !== undefined) {
+      const merged = assertEventSchedule({
+        recurrence: dto.recurrence ?? existing.recurrence,
+        startDate: dto.startDate ?? existing.start_date,
+        endDate: dto.endDate === undefined ? existing.end_date : dto.endDate,
+      });
+      if (dto.recurrence === undefined && existing.recurrence !== merged.recurrence) {
+        data.recurrence = merged.recurrence;
+      }
+    }
 
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;

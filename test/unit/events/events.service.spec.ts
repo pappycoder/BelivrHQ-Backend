@@ -211,6 +211,49 @@ describe('EventsService', () => {
       );
       expect(result.recurrence).toBe('weekly');
     });
+
+    it('rejects a one-time event whose end lands on a later day', async () => {
+      await expect(
+        service.createEvent(
+          {
+            title: 'Camp meeting',
+            startDate: '2026-08-01T09:00:00.000Z',
+            endDate: '2026-08-04T17:00:00.000Z',
+          },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('single day');
+      expect(prisma.event.create).not.toHaveBeenCalled();
+    });
+
+    it('requires both bounds for a date-range event and persists multi_day', async () => {
+      await expect(
+        service.createEvent(
+          { title: 'Revival', startDate: '2026-08-01T09:00:00.000Z', recurrence: 'multi_day' },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('start and end date');
+
+      prisma.event.create.mockResolvedValue({ ...mockEvent, recurrence: 'multi_day' });
+      const result = await service.createEvent(
+        {
+          title: 'Revival',
+          startDate: '2026-08-01T09:00:00.000Z',
+          endDate: '2026-08-07T21:00:00.000Z',
+          recurrence: 'multi_day',
+        },
+        mockChurchId,
+        mockUserId,
+      );
+      expect(prisma.event.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ recurrence: 'multi_day' }),
+        }),
+      );
+      expect(result.recurrence).toBe('multi_day');
+    });
   });
 
   describe('listEvents', () => {
@@ -238,7 +281,7 @@ describe('EventsService', () => {
       );
     });
 
-    it('should filter upcoming events', async () => {
+    it('should filter upcoming events, keeping still-live recurring events', async () => {
       prisma.event.findMany.mockResolvedValue([]);
       prisma.event.count.mockResolvedValue(0);
 
@@ -247,7 +290,18 @@ describe('EventsService', () => {
       expect(prisma.event.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            start_date: expect.objectContaining({ gte: expect.any(Date) }),
+            AND: [
+              {
+                OR: [
+                  { start_date: { gte: expect.any(Date) } },
+                  {
+                    recurrence: { in: ['weekly', 'multi_day'] },
+                    start_date: { lt: expect.any(Date) },
+                    OR: [{ end_date: null }, { end_date: { gte: expect.any(Date) } }],
+                  },
+                ],
+              },
+            ],
           }),
         }),
       );
@@ -305,6 +359,71 @@ describe('EventsService', () => {
       await expect(
         service.updateEvent('nonexistent', { title: 'X' }, mockChurchId, mockUserId),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('re-validates the merged schedule when only the end date changes', async () => {
+      prisma.event.findFirst.mockResolvedValue({ ...mockEvent, recurrence: 'one_time' });
+
+      await expect(
+        service.updateEvent(
+          mockEventId,
+          { endDate: '2026-08-05T12:00:00.000Z' },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('single day');
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('re-validates the merged schedule when only the start date moves', async () => {
+      prisma.event.findFirst.mockResolvedValue({ ...mockEvent, recurrence: 'weekly' });
+
+      await expect(
+        service.updateEvent(
+          mockEventId,
+          { startDate: '2026-09-01T09:00:00.000Z' },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('on or after');
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects moving a one-time start date away from its stored same-day end', async () => {
+      prisma.event.findFirst.mockResolvedValue({ ...mockEvent, recurrence: 'one_time' });
+
+      await expect(
+        service.updateEvent(
+          mockEventId,
+          { startDate: '2026-09-01T09:00:00.000Z' },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow('single day');
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('switching to multi_day against the stored window is accepted and persisted', async () => {
+      prisma.event.findFirst.mockResolvedValue({ ...mockEvent, recurrence: 'one_time' });
+      prisma.event.update.mockResolvedValue({
+        ...mockEvent,
+        recurrence: 'multi_day',
+        _count: { registrations: 0 },
+      });
+
+      const result = await service.updateEvent(
+        mockEventId,
+        { recurrence: 'multi_day' },
+        mockChurchId,
+        mockUserId,
+      );
+
+      expect(prisma.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ recurrence: 'multi_day' }),
+        }),
+      );
+      expect(result.recurrence).toBe('multi_day');
     });
   });
 

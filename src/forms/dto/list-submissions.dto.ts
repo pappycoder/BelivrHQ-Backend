@@ -8,7 +8,7 @@
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { SubmissionStatus } from '@prisma/client';
 
 export class ListFormSubmissionsDto {
@@ -37,4 +37,17 @@ export class ListFormSubmissionsDto {
   @Type(() => Number)
   @IsOptional()
   limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Sort field (default: createdAt desc)',
+    enum: ['createdAt'],
+  })
+  @IsIn(['createdAt'])
+  @IsOptional()
+  sortBy?: 'createdAt';
+
+  @ApiPropertyOptional({ description: 'Sort direction', enum: ['asc', 'desc'], default: 'desc' })
+  @IsIn(['asc', 'desc'])
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc';
 }

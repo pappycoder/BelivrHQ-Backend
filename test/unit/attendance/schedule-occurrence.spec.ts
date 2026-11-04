@@ -9,10 +9,12 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   assertEventOccursOn,
+  assertEventSchedule,
   assertServiceOccursOn,
   assertServiceSchedule,
   dateOnly,
   eventOccursOn,
+  nextEventOccurrence,
   serviceOccursOn,
 } from '../../../src/attendance/schedule-occurrence';
 
@@ -71,18 +73,36 @@ describe('schedule occurrence helpers', () => {
     const oneTime = {
       recurrence: 'one_time',
       start_date: new Date('2026-10-18T09:00:00.000Z'),
-      end_date: new Date('2026-10-20T12:00:00.000Z'),
+      end_date: new Date('2026-10-18T12:00:00.000Z'),
     };
 
-    it('accepts every day inside a one-time window', () => {
+    it('accepts exactly the start day for a one-time event (service semantics)', () => {
       expect(eventOccursOn(oneTime, sunday)).toBe(true);
-      expect(eventOccursOn(oneTime, '2026-10-20')).toBe(true);
-      expect(eventOccursOn(oneTime, '2026-10-21')).toBe(false);
+      expect(eventOccursOn(oneTime, monday)).toBe(false);
+      expect(eventOccursOn(oneTime, '2026-10-20')).toBe(false);
       expect(eventOccursOn(oneTime, '2026-10-17')).toBe(false);
     });
 
-    it('defaults missing recurrence to a one-time window', () => {
-      expect(eventOccursOn({ start_date: '2026-10-18' }, '2026-10-19')).toBe(true);
+    it('defaults missing recurrence to the exact start day', () => {
+      expect(eventOccursOn({ start_date: '2026-10-18' }, sunday)).toBe(true);
+      expect(eventOccursOn({ start_date: '2026-10-18' }, '2026-10-19')).toBe(false);
+    });
+
+    it('accepts every day inside a date-range window', () => {
+      const range = {
+        recurrence: 'multi_day',
+        start_date: new Date('2026-10-18T09:00:00.000Z'),
+        end_date: new Date('2026-10-20T12:00:00.000Z'),
+      };
+      expect(eventOccursOn(range, sunday)).toBe(true);
+      expect(eventOccursOn(range, '2026-10-19')).toBe(true);
+      expect(eventOccursOn(range, '2026-10-20')).toBe(true);
+      expect(eventOccursOn(range, '2026-10-21')).toBe(false);
+      expect(eventOccursOn(range, '2026-10-17')).toBe(false);
+      // A date-range without a bound has no valid window.
+      expect(eventOccursOn({ recurrence: 'multi_day', start_date: '2026-10-18' }, sunday)).toBe(
+        false,
+      );
     });
 
     it('repeats weekly on the start weekday and stops at the end date', () => {
@@ -164,6 +184,95 @@ describe('schedule occurrence helpers', () => {
           monday,
         ),
       ).toThrow('Conference does not occur on 2026-10-19');
+    });
+  });
+
+  describe('assertEventSchedule', () => {
+    it('accepts one-time events whose end stays on the start day (end time)', () => {
+      expect(
+        assertEventSchedule({
+          recurrence: 'one_time',
+          startDate: '2026-10-18T09:00:00.000Z',
+          endDate: '2026-10-18T12:00:00.000Z',
+        }),
+      ).toEqual({ recurrence: 'one_time' });
+    });
+
+    it('rejects one-time events whose end lands on a later day', () => {
+      expect(() =>
+        assertEventSchedule({
+          recurrence: 'one_time',
+          startDate: '2026-10-18T09:00:00.000Z',
+          endDate: '2026-10-20T12:00:00.000Z',
+        }),
+      ).toThrow('single day');
+    });
+
+    it('rejects date ranges without an end date', () => {
+      expect(() =>
+        assertEventSchedule({ recurrence: 'multi_day', startDate: '2026-10-18' }),
+      ).toThrow('start and end date');
+    });
+
+    it('rejects an end date before the start date for every mode', () => {
+      expect(() =>
+        assertEventSchedule({
+          recurrence: 'multi_day',
+          startDate: '2026-10-20',
+          endDate: '2026-10-18T12:00:00.000Z',
+        }),
+      ).toThrow('on or after');
+      expect(() =>
+        assertEventSchedule({
+          recurrence: 'weekly',
+          startDate: '2026-10-20',
+          endDate: '2026-10-19',
+        }),
+      ).toThrow('on or after');
+    });
+
+    it('rejects unknown recurrence strings and defaults blanks to one_time', () => {
+      expect(() => assertEventSchedule({ recurrence: 'daily', startDate: '2026-10-18' })).toThrow(
+        BadRequestException,
+      );
+      expect(assertEventSchedule({ startDate: '2026-10-18' })).toEqual({ recurrence: 'one_time' });
+    });
+  });
+
+  describe('nextEventOccurrence', () => {
+    it('finds the next weekly occurrence after a past start', () => {
+      const weekly = { recurrence: 'weekly', start_date: '2026-10-18', end_date: null };
+      const next = nextEventOccurrence(weekly, new Date('2026-10-19T08:00:00.000Z'));
+      expect(next?.toISOString().slice(0, 10)).toBe('2026-10-25');
+    });
+
+    it('returns the day itself for a schedule that meets today', () => {
+      const weekly = { recurrence: 'weekly', start_date: '2026-10-18', end_date: null };
+      expect(
+        nextEventOccurrence(weekly, new Date('2026-10-18T00:30:00.000Z'))
+          ?.toISOString()
+          .slice(0, 10),
+      ).toBe('2026-10-18');
+    });
+
+    it('finds a far-future one-time event regardless of distance', () => {
+      const future = { recurrence: 'one_time', start_date: '2027-08-01', end_date: null };
+      expect(
+        nextEventOccurrence(future, new Date('2026-11-03T00:00:00.000Z'))
+          ?.toISOString()
+          .slice(0, 10),
+      ).toBe('2027-08-01');
+      const past = { recurrence: 'one_time', start_date: '2026-01-04', end_date: null };
+      expect(nextEventOccurrence(past, new Date('2026-11-03T00:00:00.000Z'))).toBeNull();
+    });
+
+    it('returns null once a bounded schedule is over', () => {
+      const finished = {
+        recurrence: 'weekly',
+        start_date: '2026-01-04',
+        end_date: '2026-03-29',
+      };
+      expect(nextEventOccurrence(finished, new Date('2026-04-01T00:00:00.000Z'))).toBeNull();
     });
   });
 });

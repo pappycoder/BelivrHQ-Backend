@@ -14,7 +14,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BranchScopeService, ViewerScope } from '../common/services/branch-scope.service';
 import { Prisma } from '@prisma/client';
-import { AnalyticsDateRangeDto, AnalyticsTrendQueryDto, MemberAnalyticsQueryDto } from './dto/analytics-date-range.dto';
+import {
+  AnalyticsDateRangeDto,
+  AnalyticsTrendQueryDto,
+  MemberAnalyticsQueryDto,
+} from './dto/analytics-date-range.dto';
 import {
   DashboardResponseDto,
   GivingAnalyticsResponseDto,
@@ -135,9 +139,23 @@ export class AnalyticsService {
       ...(givingFilter ? { giving_date: givingFilter } : {}),
       ...(scope.branchId ? { branch_id: scope.branchId } : {}),
     };
+    const now = new Date();
     const eventWhere: Prisma.EventWhereInput = {
       church_id: churchId,
-      start_date: { gte: new Date(), ...(upcomingEndFilter ? upcomingEndFilter : {}) },
+      // Upcoming = future starts + still-live recurring events (same rule as
+      // the events list), so a weekly meeting counts even after its first date.
+      AND: [
+        {
+          OR: [
+            { start_date: { gte: now, ...(upcomingEndFilter ? upcomingEndFilter : {}) } },
+            {
+              recurrence: { in: ['weekly', 'multi_day'] },
+              start_date: { lt: now },
+              OR: [{ end_date: null }, { end_date: { gte: now } }],
+            },
+          ],
+        },
+      ],
       ...(scope.branchId ? { branch_id: scope.branchId } : {}),
     };
 
