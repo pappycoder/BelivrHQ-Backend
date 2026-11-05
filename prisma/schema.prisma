@@ -167,37 +167,37 @@ model Church {
   updated_at   DateTime  @updatedAt
   archived_at  DateTime? // Set when archived
 
-  subscription             PlatformSubscription?
-  subscription_payments    SubscriptionPayment[]
+  subscription                PlatformSubscription?
+  subscription_payments       SubscriptionPayment[]
   company_email_notifications CompanyEmailNotification[]
-  branches                 Branch[]
-  profiles                 Profile[]
-  members                  Member[]
-  families                 Family[]
-  services                 Service[]
-  giving_categories        GivingCategory[]
-  transactions             Transaction[]
-  events                   Event[]
-  messages                 Message[]
-  templates                Template[]
-  forms                    Form[]
-  departments              Department[]
-  cell_groups              CellGroup[]
-  asset_categories         AssetCategory[]
-  assets                   Asset[]
-  audit_logs               AuditLog[]
-  attendance_sessions      AttendanceSession[]
-  attendances              Attendance[]
-  church_configs           ChurchConfig[]
-  integration_accounts     IntegrationAccount[]
-  integration_channels     IntegrationChannel[]
-  sermons                  Sermon[]
-  media_assets             MediaAsset[]
-  broadcasts               Broadcast[]
-  church_role_permissions  ChurchRolePermission[]
-  custom_field_definitions CustomFieldDefinition[]
-  visitors                 Visitor[]
-  roles                    Role[]
+  branches                    Branch[]
+  profiles                    Profile[]
+  members                     Member[]
+  families                    Family[]
+  services                    Service[]
+  giving_categories           GivingCategory[]
+  transactions                Transaction[]
+  events                      Event[]
+  messages                    Message[]
+  templates                   Template[]
+  forms                       Form[]
+  departments                 Department[]
+  cell_groups                 CellGroup[]
+  asset_categories            AssetCategory[]
+  assets                      Asset[]
+  audit_logs                  AuditLog[]
+  attendance_sessions         AttendanceSession[]
+  attendances                 Attendance[]
+  church_configs              ChurchConfig[]
+  integration_accounts        IntegrationAccount[]
+  integration_channels        IntegrationChannel[]
+  sermons                     Sermon[]
+  media_assets                MediaAsset[]
+  broadcasts                  Broadcast[]
+  church_role_permissions     ChurchRolePermission[]
+  custom_field_definitions    CustomFieldDefinition[]
+  visitors                    Visitor[]
+  roles                       Role[]
 
   @@map("churches")
 }
@@ -258,44 +258,56 @@ model ChurchConfig {
 
 // Every church requires an explicit paid subscription for workspace access.
 model PlatformSubscription {
-  church_id  String           @id
-  plan       SubscriptionPlan
-  cycle      BillingCycle
-  paid_until DateTime?
+  church_id         String            @id
+  plan              SubscriptionPlan
+  cycle             BillingCycle
+  paid_until        DateTime?
   period_started_at DateTime?
-  scheduled_plan SubscriptionPlan?
-  scheduled_cycle BillingCycle?
+  scheduled_plan    SubscriptionPlan?
+  scheduled_cycle   BillingCycle?
   enterprise_limits Json?
-  created_at DateTime         @default(now())
-  church     Church           @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  created_at        DateTime          @default(now())
+  church            Church            @relation(fields: [church_id], references: [id], onDelete: Cascade)
 
   @@map("platform_subscriptions")
 }
 
 // Immutable payment facts. The partial unique pending index is defined in SQL.
 model SubscriptionPayment {
-  reference    String                    @id
-  church_id    String
-  gateway      SubscriptionGateway
-  plan         SubscriptionPlan
-  cycle        BillingCycle
-  amount       Int
-  currency     String                    @default("NGN")
-  status       SubscriptionPaymentStatus @default(pending)
-  billing_email String?
-  pricing_snapshot Json?
-  checkout_url String?
-  intent String @default("renewal")
-  base_plan SubscriptionPlan?
-  base_paid_until DateTime?
-  target_paid_until DateTime?
-  application_status String @default("pending")
-  verified_at  DateTime?
-  created_at   DateTime                  @default(now())
-  church       Church                    @relation(fields: [church_id], references: [id], onDelete: Restrict)
+  reference          String                    @id
+  church_id          String
+  gateway            SubscriptionGateway
+  plan               SubscriptionPlan
+  cycle              BillingCycle
+  amount             Int
+  currency           String                    @default("NGN")
+  status             SubscriptionPaymentStatus @default(pending)
+  billing_email      String?
+  pricing_snapshot   Json?
+  checkout_url       String?
+  intent             String                    @default("renewal")
+  base_plan          SubscriptionPlan?
+  base_paid_until    DateTime?
+  target_paid_until  DateTime?
+  application_status String                    @default("pending")
+  verified_at        DateTime?
+  created_at         DateTime                  @default(now())
+  church             Church                    @relation(fields: [church_id], references: [id], onDelete: Restrict)
 
   @@index([church_id, created_at])
   @@map("subscription_payments")
+}
+
+model SubscriptionAlertKey {
+  id         String   @id
+  church_id  String
+  profile_id String
+  resource   String
+  threshold  Int
+  period_end DateTime
+
+  @@unique([church_id, profile_id, resource, threshold, period_end])
+  @@map("subscription_alert_keys")
 }
 
 // ─── Identity & access ───
@@ -357,6 +369,19 @@ model VerifiedMfaSession {
   @@id([user_id, session_id])
   @@index([expires_at])
   @@map("verified_mfa_sessions")
+}
+
+// Seats reserved before calling an external authentication provider.
+model StaffInvitationReservation {
+  id         String   @id @default(uuid())
+  church_id  String
+  email      String
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@unique([church_id, email])
+  @@index([church_id, expires_at])
+  @@map("staff_invitation_reservations")
 }
 
 model Role {
@@ -1096,6 +1121,33 @@ model EmailRecipient {
   @@map("email_recipients")
 }
 
+// Server-only, durable organization account mail. No church email integration required.
+model CompanyEmailNotification {
+  id               String    @id @default(uuid())
+  event_key        String    @unique
+  church_id        String
+  kind             String
+  to_email         String
+  from_email       String
+  subject          String
+  html             String
+  text             String
+  status           String    @default("pending")
+  attempts         Int       @default(0)
+  available_at     DateTime  @default(now())
+  lease_token      String?
+  lease_until      DateTime?
+  first_attempt_at DateTime?
+  sent_at          DateTime?
+  provider_id      String?
+  last_error       String?
+  created_at       DateTime  @default(now())
+  church           Church    @relation(fields: [church_id], references: [id], onDelete: Cascade)
+
+  @@index([status, available_at])
+  @@map("company_email_notifications")
+}
+
 model Notification {
   id         String    @id @default(uuid())
   church_id  String
@@ -1601,54 +1653,4 @@ model WebhookDelivery {
 
   @@index([subscription_id, status])
   @@map("webhook_deliveries")
-}
-
-// Seats reserved before calling an external authentication provider.
-model StaffInvitationReservation {
-  id String @id @default(uuid())
-  church_id String
-  email String
-  expires_at DateTime
-  created_at DateTime @default(now())
-  @@unique([church_id, email])
-  @@index([church_id, expires_at])
-  @@map("staff_invitation_reservations")
-}
-
-model SubscriptionAlertKey {
- id String @id
- church_id String
- profile_id String
- resource String
- threshold Int
- period_end DateTime
- @@unique([church_id, profile_id, resource, threshold, period_end])
- @@map("subscription_alert_keys")
-}
-
-
-// Server-only, durable organization account mail. No church email integration required.
-model CompanyEmailNotification {
-  id String @id @default(uuid())
-  event_key String @unique
-  church_id String
-  kind String
-  to_email String
-  from_email String
-  subject String
-  html String
-  text String
-  status String @default("pending")
-  attempts Int @default(0)
-  available_at DateTime @default(now())
-  lease_token String?
-  lease_until DateTime?
-  first_attempt_at DateTime?
-  sent_at DateTime?
-  provider_id String?
-  last_error String?
-  created_at DateTime @default(now())
-  church Church @relation(fields: [church_id], references: [id], onDelete: Cascade)
-  @@index([status, available_at])
-  @@map("company_email_notifications")
 }
