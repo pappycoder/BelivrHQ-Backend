@@ -67,6 +67,7 @@
     "@supabase/supabase-js": "^2.110.6",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "altcha-lib": "2.8.0",
     "bullmq": "^5.80.9",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",

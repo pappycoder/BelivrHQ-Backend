@@ -9,6 +9,7 @@
  * @since 1.0.0
  */
 
+import { ApiBotProtection } from '../bot-protection/api-bot-protection.decorator';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { RateLimit } from '../common/guards/rate-limit.guard';
@@ -38,6 +39,7 @@ export class FormsPublicController {
    * Submits a form using a public token.
    */
   @Post(':publicToken/submit')
+  @ApiBotProtection(CreateFormSubmissionDto)
   @RateLimit({ limit: 5, windowSeconds: 60 })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

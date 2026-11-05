@@ -10,6 +10,7 @@
  * @since 1.0.0
  */
 
+import { ApiBotProtection } from '../bot-protection/api-bot-protection.decorator';
 import {
   Controller,
   Get,
@@ -385,6 +386,7 @@ export class ProfileController {
    * Invite a new user via email.
    */
   @Post('invite')
+  @ApiBotProtection(InviteUserDto)
   @RequirePermissions('profiles:create')
   @ApiCreateEndpoint(
     'Invite a new user',
@@ -488,6 +490,7 @@ export class ProfileController {
    * Reset a user's password.
    */
   @Post(':profileId/reset-password')
+  @ApiBotProtection()
   @RequirePermissions('profiles:update')
   @HttpCode(HttpStatus.OK)
   @ApiCreateEndpoint(

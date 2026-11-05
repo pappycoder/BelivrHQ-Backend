@@ -1,3 +1,4 @@
+import { ApiBotProtection } from '../bot-protection/api-bot-protection.decorator';
 import { UpdateBroadcastDto } from './dto/update-broadcast.dto';
 /**
  * @file broadcast.controller.ts
@@ -54,6 +55,7 @@ export class BroadcastController {
    * Creates a new broadcast campaign.
    */
   @Post()
+  @ApiBotProtection(CreateBroadcastDto)
   @RequirePermissions('broadcasts:create')
   @HttpCode(HttpStatus.CREATED)
   @ApiCreateEndpoint(

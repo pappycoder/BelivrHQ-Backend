@@ -1,3 +1,4 @@
+import { ApiBotProtection } from '../bot-protection/api-bot-protection.decorator';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 /**
  * @file auth.controller.ts
@@ -70,6 +71,7 @@ export class AuthController {
    * This is a public endpoint — no authentication required.
    */
   @Post('register')
+  @ApiBotProtection(RegisterDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.CREATED)
@@ -92,6 +94,7 @@ export class AuthController {
    */
   @Header('Cache-Control', 'no-store')
   @Post('login')
+  @ApiBotProtection(LoginDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.OK)
@@ -115,6 +118,7 @@ export class AuthController {
    */
   @Header('Cache-Control', 'no-store')
   @Post('login/2fa')
+  @ApiBotProtection(Login2faDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.OK)
@@ -158,6 +162,7 @@ export class AuthController {
    * The company email sender delivers a one-time recovery link.
    */
   @Post('forgot-password')
+  @ApiBotProtection(ForgotPasswordDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.OK)
@@ -177,6 +182,7 @@ export class AuthController {
    * Accept a one-time staff invitation and choose a password.
    */
   @Post('accept-invitation')
+  @ApiBotProtection(AcceptInvitationDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.OK)
@@ -187,6 +193,7 @@ export class AuthController {
   }
 
   @Patch('reset-password')
+  @ApiBotProtection(ResetPasswordDto)
   @UseGuards(RateLimitGuard)
   @RateLimit(RATE_LIMITS.auth)
   @HttpCode(HttpStatus.OK)
@@ -207,6 +214,7 @@ export class AuthController {
    * Requires the current password for verification before setting the new one.
    */
   @Put('password')
+  @ApiBotProtection(ChangePasswordDto)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('supabase-auth')
   @HttpCode(HttpStatus.OK)

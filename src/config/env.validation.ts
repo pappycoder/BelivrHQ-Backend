@@ -15,6 +15,7 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     WEB_URL: z.url().default('http://localhost:3000'),
+    ALTCHA_HMAC_KEY: z.string().min(32, 'ALTCHA_HMAC_KEY must contain at least 32 characters'),
 
     // ─── Database (Prisma + PostgreSQL) ───────────────────────
     DATABASE_URL: z.string().startsWith('postgresql://', {

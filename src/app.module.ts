@@ -1,3 +1,4 @@
+import { BotProtectionModule } from './bot-protection/bot-protection.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { PlanFeatureGuard } from './billing/plan-feature.guard';
 /**
@@ -217,6 +218,7 @@ import { PermissionsModule } from './auth/permissions.module';
     // Import DeveloperGuideModule for the developer integration guide.
     DeveloperGuideModule,
     BillingModule,
+    BotProtectionModule,
   ],
   controllers: [],
   providers: [

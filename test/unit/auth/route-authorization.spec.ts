@@ -6,6 +6,8 @@ import { join, relative } from 'node:path';
 // cannot be described as one static ALL-permissions requirement. New exceptions
 // must be reviewed here rather than silently bypassing the global guard.
 const exceptions: Record<string, string[]> = {
+  // Action-scoped challenge issuance reads no business data; private issuance requires JWT.
+  'bot-protection/bot-protection.controller.ts': ['challenge', 'authenticatedChallenge'],
   // Self-service product guidance only: JWT plus AssistantService active staff/church checks.
   // No business-record reads/actions; grants, scope and plan are resolved from the verified profile.
   'assistant/assistant.controller.ts': ['context', 'ask'],
@@ -89,6 +91,7 @@ const exceptions: Record<string, string[]> = {
   'integrations/payment-callbacks.controller.ts': ['receive'],
 };
 const publicRoutes = new Set([
+  'bot-protection/bot-protection.controller.ts:challenge',
   // Public server-owned subscription prices; no church or payment history.
   'billing/billing.controller.ts:catalog',
   'billing/billing.controller.ts:webhook',

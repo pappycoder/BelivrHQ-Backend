@@ -6,6 +6,7 @@
  * @since 1.0.0
  */
 
+import { ApiBotProtection } from '../bot-protection/api-bot-protection.decorator';
 import {
   Controller,
   Get,
@@ -201,6 +202,7 @@ export class ChurchController {
   }
 
   @Post('invite')
+  @ApiBotProtection(InviteStaffDto)
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions('church_settings:update')
   @ApiCreateEndpoint(
