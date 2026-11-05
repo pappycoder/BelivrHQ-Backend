@@ -86,8 +86,7 @@ function messageRow(overrides: Record<string, unknown> = {}): Record<string, unk
 beforeEach(() => {
   prisma = createPrismaMock();
   audit = { log: jest.fn().mockResolvedValue(undefined) };
-  service = new EmailService(prisma as never,
-      new RequestContextService(), audit as never);
+  service = new EmailService(prisma as never, new RequestContextService(), audit as never);
 });
 
 describe('EmailService', () => {

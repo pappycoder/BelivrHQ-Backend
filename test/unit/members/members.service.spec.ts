@@ -107,22 +107,40 @@ describe('MembersService', () => {
       [true, 'branch-a', undefined, undefined],
       [false, 'branch-a', 'branch-b', 'branch-a'],
       [false, undefined, 'branch-b', '00000000-0000-0000-0000-000000000000'],
-    ])('keeps church and non-archived scope for HQ=%s own=%s requested=%s', async (hq, own, requested, expected) => {
-      model('member').findMany.mockResolvedValue([]);
-      const result = await service.getDashboard(mockChurchId, { branchId: requested as string | undefined }, {
-        church_id: mockChurchId, role: 'church_admin', is_admin_hq: hq as boolean, branch_id: own as string | undefined,
-      });
-      expect(model('member').findMany).toHaveBeenCalledWith({
-        where: { church_id: mockChurchId, archived_at: null, ...(expected ? { branch_id: expected } : {}) },
-        select: { status: true, date_of_birth: true, member_since: true },
-      });
-      expect(result.total).toBe(0);
-      expect(result.growth).toEqual([]);
-    });
+    ])(
+      'keeps church and non-archived scope for HQ=%s own=%s requested=%s',
+      async (hq, own, requested, expected) => {
+        model('member').findMany.mockResolvedValue([]);
+        const result = await service.getDashboard(
+          mockChurchId,
+          { branchId: requested as string | undefined },
+          {
+            church_id: mockChurchId,
+            role: 'church_admin',
+            is_admin_hq: hq as boolean,
+            branch_id: own as string | undefined,
+          },
+        );
+        expect(model('member').findMany).toHaveBeenCalledWith({
+          where: {
+            church_id: mockChurchId,
+            archived_at: null,
+            ...(expected ? { branch_id: expected } : {}),
+          },
+          select: { status: true, date_of_birth: true, member_since: true },
+        });
+        expect(result.total).toBe(0);
+        expect(result.growth).toEqual([]);
+      },
+    );
 
     it('returns demographic and cumulative growth aggregates without individual records', async () => {
       model('member').findMany.mockResolvedValue([
-        { status: 'active', date_of_birth: new Date(Date.UTC(new Date().getUTCFullYear() - 20, 0, 1)), member_since: new Date('2025-02-01') },
+        {
+          status: 'active',
+          date_of_birth: new Date(Date.UTC(new Date().getUTCFullYear() - 20, 0, 1)),
+          member_since: new Date('2025-02-01'),
+        },
         { status: 'inactive', date_of_birth: null, member_since: new Date('2025-01-01') },
         { status: 'active', date_of_birth: null, member_since: new Date('2025-02-02') },
       ]);

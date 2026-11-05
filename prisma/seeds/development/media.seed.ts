@@ -55,13 +55,7 @@ const SERMON_DEFS: SermonDefinition[] = [
 
 // ── Media definitions ───────────────────────────────────────────────
 const MEDIA_DEFS: MediaDefinition[] = [
-  [
-    'logo-main.png',
-    storagePublicUrl('media/logo-main.png'),
-    'image/png',
-    245000,
-    'branding',
-  ],
+  ['logo-main.png', storagePublicUrl('media/logo-main.png'), 'image/png', 245000, 'branding'],
   [
     'youth-camp-poster.jpg',
     storagePublicUrl('media/youth-camp-poster.jpg'),

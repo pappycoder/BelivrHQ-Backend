@@ -7,7 +7,17 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsISO8601, IsInt, IsIn, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsISO8601,
+  IsInt,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { APPOINTMENT_STATUS } from './appointment-response.dto';
 

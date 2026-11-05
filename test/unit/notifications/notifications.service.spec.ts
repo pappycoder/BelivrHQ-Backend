@@ -218,10 +218,7 @@ describe('NotificationsService', () => {
     it('should clear read_at only on already-read rows scoped to the profile', async () => {
       model('notification').updateMany.mockResolvedValue({ count: 2 });
 
-      const result = await service.bulkMarkAsUnread(mockChurchId, mockProfileId, [
-        'id-1',
-        'id-2',
-      ]);
+      const result = await service.bulkMarkAsUnread(mockChurchId, mockProfileId, ['id-1', 'id-2']);
 
       expect(result.updated).toBe(2);
       expect(model('notification').updateMany).toHaveBeenCalledWith({

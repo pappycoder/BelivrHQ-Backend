@@ -324,18 +324,33 @@ describe('AnalyticsService', () => {
       { hq: true, ownBranch: 'branch-a', requested: 'branch-b', expected: 'branch-b' },
       { hq: true, ownBranch: 'branch-a', requested: undefined, expected: undefined },
       { hq: false, ownBranch: 'branch-a', requested: 'branch-b', expected: 'branch-a' },
-      { hq: false, ownBranch: undefined, requested: 'branch-b', expected: '00000000-0000-0000-0000-000000000000' },
-    ])('scopes every membership aggregate for $hq HQ, own=$ownBranch, requested=$requested', async ({ hq, ownBranch, requested, expected }) => {
-      prisma.member.findMany.mockReset().mockResolvedValue([]);
-      prisma.member.groupBy.mockReset().mockResolvedValue([]);
-      await service.getMemberAnalytics(churchId, {
-        church_id: churchId, role: 'church_admin', is_admin_hq: hq, branch_id: ownBranch,
-      }, { branchId: requested });
-      const where = { church_id: churchId, ...(expected ? { branch_id: expected } : {}) };
-      expect(prisma.member.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
-      expect(prisma.member.groupBy).toHaveBeenCalledTimes(2);
-      for (const [args] of prisma.member.groupBy.mock.calls) expect(args.where).toEqual(where);
-    });
+      {
+        hq: false,
+        ownBranch: undefined,
+        requested: 'branch-b',
+        expected: '00000000-0000-0000-0000-000000000000',
+      },
+    ])(
+      'scopes every membership aggregate for $hq HQ, own=$ownBranch, requested=$requested',
+      async ({ hq, ownBranch, requested, expected }) => {
+        prisma.member.findMany.mockReset().mockResolvedValue([]);
+        prisma.member.groupBy.mockReset().mockResolvedValue([]);
+        await service.getMemberAnalytics(
+          churchId,
+          {
+            church_id: churchId,
+            role: 'church_admin',
+            is_admin_hq: hq,
+            branch_id: ownBranch,
+          },
+          { branchId: requested },
+        );
+        const where = { church_id: churchId, ...(expected ? { branch_id: expected } : {}) };
+        expect(prisma.member.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
+        expect(prisma.member.groupBy).toHaveBeenCalledTimes(2);
+        for (const [args] of prisma.member.groupBy.mock.calls) expect(args.where).toEqual(where);
+      },
+    );
 
     it('should return member demographics and growth', async () => {
       prisma.member.findMany

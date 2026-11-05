@@ -27,7 +27,12 @@ describe('MembersController route ordering', () => {
   it('declares literal GET routes before the :memberId param route', () => {
     const findOneIdx = indexOfDecorator("@Get(':memberId')\n  @ApiGetEndpoint('Get member by ID'");
 
-    for (const literal of ["@Get('dashboard')", "@Get('search')", "@Get('export/csv')", "@Get('export/xlsx')"]) {
+    for (const literal of [
+      "@Get('dashboard')",
+      "@Get('search')",
+      "@Get('export/csv')",
+      "@Get('export/xlsx')",
+    ]) {
       expect(indexOfDecorator(literal)).toBeLessThan(findOneIdx);
     }
   });

@@ -16,7 +16,8 @@ describe('ScoringService', () => {
     prisma = createPrismaMock();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [RequestContextService,
+      providers: [
+        RequestContextService,
         ScoringService,
         { provide: PrismaService, useValue: prisma },
         {

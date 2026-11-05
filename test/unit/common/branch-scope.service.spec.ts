@@ -49,7 +49,10 @@ describe('BranchScopeService', () => {
         role: 'secretary',
         is_admin_hq: false,
       };
-      expect(service.resolve(viewer)).toEqual({ churchOnly: false, branchId: '00000000-0000-0000-0000-000000000000' });
+      expect(service.resolve(viewer)).toEqual({
+        churchOnly: false,
+        branchId: '00000000-0000-0000-0000-000000000000',
+      });
     });
   });
 
@@ -121,7 +124,7 @@ describe('BranchScopeService', () => {
         branch_id: branchId,
         member_id: memberId,
         role: 'cell_leader',
-            permissions: ['cell_groups:own:read', 'cell_groups:own:update'],
+        permissions: ['cell_groups:own:read', 'cell_groups:own:update'],
         roles: ['cell_leader'],
         is_admin_hq: false,
       };
@@ -137,7 +140,8 @@ describe('BranchScopeService', () => {
         branch_id: branchId,
         member_id: memberId,
         role: 'secretary',
-        roles: ['secretary', 'cell_leader'], permissions: ['cell_groups:own:read'],
+        roles: ['secretary', 'cell_leader'],
+        permissions: ['cell_groups:own:read'],
         is_admin_hq: false,
       };
       expect(service.resolveCellGroupScope(viewer)).toEqual({
@@ -168,7 +172,7 @@ describe('BranchScopeService', () => {
           church_id: 'c',
           branch_id: branchId,
           role: 'department_head',
-            permissions: ['departments:own:read', 'departments:own:update'],
+          permissions: ['departments:own:read', 'departments:own:update'],
           is_admin_hq: true,
         }),
       ).toEqual({ churchOnly: true });
@@ -180,7 +184,7 @@ describe('BranchScopeService', () => {
         branch_id: branchId,
         member_id: memberId,
         role: 'department_head',
-            permissions: ['departments:own:read', 'departments:own:update'],
+        permissions: ['departments:own:read', 'departments:own:update'],
         roles: ['department_head'],
         is_admin_hq: false,
       };
@@ -196,7 +200,8 @@ describe('BranchScopeService', () => {
         branch_id: branchId,
         member_id: memberId,
         role: 'secretary',
-        roles: ['secretary', 'department_head'], permissions: ['departments:own:read'],
+        roles: ['secretary', 'department_head'],
+        permissions: ['departments:own:read'],
         is_admin_hq: false,
       };
       expect(service.resolveDepartmentScope(viewer)).toEqual({

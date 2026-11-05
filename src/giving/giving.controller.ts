@@ -46,7 +46,10 @@ import {
 } from '../common/decorators/api-standard-responses.decorator';
 import { ApiPaginatedResponse } from '../common/decorators/api-paginated.decorator';
 import { GivingDashboardQueryDto } from './dto/dashboard-query.dto';
-import { GivingDashboardChartsQueryDto, GivingDashboardChartsResponseDto } from './dto/dashboard-charts.dto';
+import {
+  GivingDashboardChartsQueryDto,
+  GivingDashboardChartsResponseDto,
+} from './dto/dashboard-charts.dto';
 import { CacheInterceptor, CacheTTL } from '../common/interceptors/cache.interceptor';
 import { GivingService } from './giving.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -546,7 +549,10 @@ export class GivingController {
   @CacheTTL(60)
   @ApiOkResponse({ type: GivingDashboardChartsResponseDto })
   @ApiOperation({ summary: 'Read scoped giving charts without individual donor data' })
-  async getDashboardCharts(@Query() query: GivingDashboardChartsQueryDto, @Request() req: AuthenticatedRequest): Promise<GivingDashboardChartsResponseDto> {
+  async getDashboardCharts(
+    @Query() query: GivingDashboardChartsQueryDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<GivingDashboardChartsResponseDto> {
     return this.givingService.getDashboardCharts(req.profile?.church_id || '', query, req.profile);
   }
 

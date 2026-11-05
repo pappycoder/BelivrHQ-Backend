@@ -47,8 +47,20 @@ import { AppointmentListEnvelopeDto, AppointmentContactDto } from './dto/appoint
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
-  private getProfile(req: Record<string, unknown>): { church_id: string; id: string; is_admin_hq?: boolean; branch_id?: string | null; permissions?: string[] } {
-    return req['profile'] as { church_id: string; id: string; is_admin_hq?: boolean; branch_id?: string | null; permissions?: string[] };
+  private getProfile(req: Record<string, unknown>): {
+    church_id: string;
+    id: string;
+    is_admin_hq?: boolean;
+    branch_id?: string | null;
+    permissions?: string[];
+  } {
+    return req['profile'] as {
+      church_id: string;
+      id: string;
+      is_admin_hq?: boolean;
+      branch_id?: string | null;
+      permissions?: string[];
+    };
   }
 
   private getUserId(req: Record<string, unknown>): string {

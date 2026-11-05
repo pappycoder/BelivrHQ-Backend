@@ -107,7 +107,10 @@ export class MembersController {
   @RequirePermissions('members:all:read')
   @ApiOperation({ summary: 'Read scoped member dashboard aggregates' })
   @ApiOkResponse({ type: MemberDashboardResponseDto })
-  async getDashboard(@Query() query: MemberDashboardQueryDto, @Request() req: AuthenticatedRequest): Promise<MemberDashboardResponseDto> {
+  async getDashboard(
+    @Query() query: MemberDashboardQueryDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<MemberDashboardResponseDto> {
     return this.membersService.getDashboard(req.profile?.church_id || '', query, req.profile);
   }
 

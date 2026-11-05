@@ -32,7 +32,9 @@ export class AnalyticsDateRangeDto {
 }
 
 /** Optional branch selection; member demographics remain current snapshots. */
-export class MemberAnalyticsQueryDto extends PickType(AnalyticsDateRangeDto, ['branchId'] as const) {}
+export class MemberAnalyticsQueryDto extends PickType(AnalyticsDateRangeDto, [
+  'branchId',
+] as const) {}
 
 /** Query DTO for analytics trend endpoints that support grouping. */
 export class AnalyticsTrendQueryDto extends AnalyticsDateRangeDto {

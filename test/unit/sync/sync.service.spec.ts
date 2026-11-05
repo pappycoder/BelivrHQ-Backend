@@ -83,7 +83,24 @@ beforeEach(() => {
   );
 });
 
-const viewer = { id: '11111111-1111-4111-8111-111111111111', church_id: mockChurchId, role: 'church_admin', branch_id: '22222222-2222-4222-8222-222222222222', is_admin_hq: true, permissions: ['members:all:read', 'members:new:create', 'members:all:update', 'members:all:delete', 'attendance:services:read', 'giving:categories:read', 'visitors:list:read', 'attendance:records:read', 'giving:records:read'] };
+const viewer = {
+  id: '11111111-1111-4111-8111-111111111111',
+  church_id: mockChurchId,
+  role: 'church_admin',
+  branch_id: '22222222-2222-4222-8222-222222222222',
+  is_admin_hq: true,
+  permissions: [
+    'members:all:read',
+    'members:new:create',
+    'members:all:update',
+    'members:all:delete',
+    'attendance:services:read',
+    'giving:categories:read',
+    'visitors:list:read',
+    'attendance:records:read',
+    'giving:records:read',
+  ],
+};
 
 describe('SyncService', () => {
   describe('pushChanges', () => {
@@ -92,14 +109,19 @@ describe('SyncService', () => {
       model('member').create.mockResolvedValue({ id: mockMemberId });
       model('syncQueue').create.mockResolvedValue({ id: '1' });
 
-      const result = await service.pushChanges(mockChurchId, mockUserId, [
-        {
-          entity: 'member',
-          entityId: mockMemberId,
-          action: 'create',
-          data: { firstName: 'John', lastName: 'Doe' },
-        },
-      ], viewer);
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'member',
+            entityId: mockMemberId,
+            action: 'create',
+            data: { firstName: 'John', lastName: 'Doe' },
+          },
+        ],
+        viewer,
+      );
 
       expect(result.accepted).toBe(1);
       expect(result.rejected).toBe(0);
@@ -130,14 +152,19 @@ describe('SyncService', () => {
     it('should skip already-synced changes (idempotency)', async () => {
       model('syncQueue').findFirst.mockResolvedValue({ id: 'existing', synced: true });
 
-      const result = await service.pushChanges(mockChurchId, mockUserId, [
-        {
-          entity: 'member',
-          entityId: mockMemberId,
-          action: 'create',
-          data: { firstName: 'John' },
-        },
-      ], viewer);
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'member',
+            entityId: mockMemberId,
+            action: 'create',
+            data: { firstName: 'John' },
+          },
+        ],
+        viewer,
+      );
 
       expect(result.accepted).toBe(1);
       expect(model('syncQueue').create).not.toHaveBeenCalled();
@@ -153,15 +180,20 @@ describe('SyncService', () => {
           created_at: new Date('2026-07-22T12:00:00Z'),
         }); // conflict check
 
-      const result = await service.pushChanges(mockChurchId, mockUserId, [
-        {
-          entity: 'member',
-          entityId: mockMemberId,
-          action: 'create',
-          data: { firstName: 'John' },
-          clientTimestamp: '2026-07-22T11:00:00Z', // older
-        },
-      ], viewer);
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'member',
+            entityId: mockMemberId,
+            action: 'create',
+            data: { firstName: 'John' },
+            clientTimestamp: '2026-07-22T11:00:00Z', // older
+          },
+        ],
+        viewer,
+      );
 
       expect(result.rejected).toBe(1);
       expect(result.conflicts).toContain(`member/${mockMemberId}`);
@@ -171,14 +203,19 @@ describe('SyncService', () => {
     it('should reject changes for unsupported entities', async () => {
       model('syncQueue').findFirst.mockResolvedValue(null);
 
-      const result = await service.pushChanges(mockChurchId, mockUserId, [
-        {
-          entity: 'alienSaucer',
-          entityId: mockMemberId,
-          action: 'create',
-          data: {},
-        },
-      ], viewer);
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'alienSaucer',
+            entityId: mockMemberId,
+            action: 'create',
+            data: {},
+          },
+        ],
+        viewer,
+      );
 
       expect(result.rejected).toBe(1);
     });
@@ -191,17 +228,25 @@ describe('SyncService', () => {
       model('member').deleteMany.mockResolvedValue({ count: 1 });
       model('syncQueue').create.mockResolvedValue({ id: '1' });
 
-      const result = await service.pushChanges(mockChurchId, mockUserId, [
-        {
-          entity: 'member',
-          entityId: mockMemberId,
-          action: 'delete',
-          data: {},
-        },
-      ], viewer);
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'member',
+            entityId: mockMemberId,
+            action: 'delete',
+            data: {},
+          },
+        ],
+        viewer,
+      );
 
       expect(result.accepted).toBe(1);
-      expect(model('member').updateMany).toHaveBeenCalledWith({ where: { id: mockMemberId, church_id: mockChurchId }, data: { archived_at: expect.any(Date) } });
+      expect(model('member').updateMany).toHaveBeenCalledWith({
+        where: { id: mockMemberId, church_id: mockChurchId },
+        data: { archived_at: expect.any(Date) },
+      });
     });
 
     it('should throw BadRequestException for empty changes', async () => {
@@ -251,10 +296,18 @@ describe('SyncService', () => {
       mockDevice(new Date('2026-07-01T00:00:00Z'));
       model('syncQueue').findMany.mockResolvedValue([]);
 
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, viewer);
+      const result = await service.pullChanges(
+        mockChurchId,
+        'device-1',
+        undefined,
+        undefined,
+        viewer,
+      );
 
       expect(model('syncDevice').upsert).toHaveBeenCalledWith({
-        where: { church_id_device_id: { church_id: mockChurchId, device_id: `${viewer.id}:device-1` } },
+        where: {
+          church_id_device_id: { church_id: mockChurchId, device_id: `${viewer.id}:device-1` },
+        },
         create: { church_id: mockChurchId, device_id: `${viewer.id}:device-1` },
         update: { last_seen_at: expect.any(Date) },
       });
@@ -300,7 +353,13 @@ describe('SyncService', () => {
       ]);
       model('member').findFirst.mockResolvedValue(memberRow);
 
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, viewer);
+      const result = await service.pullChanges(
+        mockChurchId,
+        'device-1',
+        undefined,
+        undefined,
+        viewer,
+      );
 
       expect(result.changes).toHaveLength(1);
       expect(result.changes[0].entity).toBe('member');
@@ -317,14 +376,26 @@ describe('SyncService', () => {
 
     it('delivers shared category deletions to branch devices', async () => {
       mockDevice();
-      model('syncQueue').findMany.mockResolvedValue([{
-        id: 'queue-category-delete', entity: 'givingCategory', entity_id: mockMemberId,
-        action: 'delete', data: { branch_id: null }, created_at: new Date('2026-07-22T10:00:00Z'),
-      }]);
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined,
-        { ...viewer, is_admin_hq: false });
+      model('syncQueue').findMany.mockResolvedValue([
+        {
+          id: 'queue-category-delete',
+          entity: 'givingCategory',
+          entity_id: mockMemberId,
+          action: 'delete',
+          data: { branch_id: null },
+          created_at: new Date('2026-07-22T10:00:00Z'),
+        },
+      ]);
+      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, {
+        ...viewer,
+        is_admin_hq: false,
+      });
       expect(result.changes).toHaveLength(1);
-      expect(result.changes[0]).toMatchObject({ entity: 'givingCategory', action: 'delete', data: null });
+      expect(result.changes[0]).toMatchObject({
+        entity: 'givingCategory',
+        action: 'delete',
+        data: null,
+      });
     });
 
     it('should return tombstones for deletes', async () => {
@@ -340,7 +411,13 @@ describe('SyncService', () => {
         },
       ]);
 
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, viewer);
+      const result = await service.pullChanges(
+        mockChurchId,
+        'device-1',
+        undefined,
+        undefined,
+        viewer,
+      );
 
       expect(result.changes[0].data).toBeNull();
       expect(model('member').findFirst).not.toHaveBeenCalled();
@@ -360,7 +437,13 @@ describe('SyncService', () => {
       ]);
       model('member').findFirst.mockResolvedValue(null);
 
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, viewer);
+      const result = await service.pullChanges(
+        mockChurchId,
+        'device-1',
+        undefined,
+        undefined,
+        viewer,
+      );
 
       expect(result.changes).toEqual([]);
     });
@@ -379,7 +462,13 @@ describe('SyncService', () => {
       ]);
       model('member').findFirst.mockResolvedValue({ ...memberRow, archived_at: new Date() });
 
-      const result = await service.pullChanges(mockChurchId, 'device-1', undefined, undefined, viewer);
+      const result = await service.pullChanges(
+        mockChurchId,
+        'device-1',
+        undefined,
+        undefined,
+        viewer,
+      );
 
       expect(result.changes[0].data).toBeNull();
     });
@@ -466,13 +555,17 @@ describe('SyncService', () => {
       model('transaction').findMany.mockResolvedValue([]);
       const branchViewer = { ...viewer, is_admin_hq: false };
       await service.bootstrap(mockChurchId, branchViewer, 100, 'givingCategory');
-      expect(model('givingCategory').findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: { church_id: mockChurchId, archived_at: null },
-      }));
+      expect(model('givingCategory').findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { church_id: mockChurchId, archived_at: null },
+        }),
+      );
       await service.bootstrap(mockChurchId, branchViewer, 100, 'transaction');
-      expect(model('transaction').findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: { church_id: mockChurchId, branch_id: viewer.branch_id },
-      }));
+      expect(model('transaction').findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { church_id: mockChurchId, branch_id: viewer.branch_id },
+        }),
+      );
     });
 
     it('should scope all archivable bootstrap collections to active rows', async () => {

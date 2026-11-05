@@ -37,7 +37,8 @@ describe('BranchesService', () => {
     mediaDelete = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [RequestContextService,
+      providers: [
+        RequestContextService,
         BranchesService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLoggingService, useValue: { log: auditLog } },

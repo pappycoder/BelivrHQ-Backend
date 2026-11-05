@@ -47,7 +47,8 @@ describe('PastoralService', () => {
     prisma.member.findFirst.mockResolvedValue({ id: mockMemberId });
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [RequestContextService,
+      providers: [
+        RequestContextService,
         PastoralService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLoggingService, useValue: { log: auditLog } },
@@ -180,7 +181,12 @@ describe('PastoralService', () => {
       };
       prisma.pastoralNote.findFirst.mockResolvedValue(noteWithEncrypted);
 
-      const result = await service.getNoteById('note-1', mockChurchId, ['pastoral_confidential:read'], mockUserId);
+      const result = await service.getNoteById(
+        'note-1',
+        mockChurchId,
+        ['pastoral_confidential:read'],
+        mockUserId,
+      );
 
       expect(result.content).toBe(plaintext);
     });
@@ -189,7 +195,12 @@ describe('PastoralService', () => {
       prisma.pastoralNote.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getNoteById('non-existent', mockChurchId, ['pastoral_confidential:read'], mockUserId),
+        service.getNoteById(
+          'non-existent',
+          mockChurchId,
+          ['pastoral_confidential:read'],
+          mockUserId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -214,7 +225,17 @@ describe('PastoralService', () => {
         author_id: 'other-member',
       });
 
-      const result = await service.getNoteById('note-1', mockChurchId, ['pastoral_confidential:read', 'pastoral_restricted:read', 'pastoral_moderation:update', 'pastoral_moderation:delete'], mockUserId);
+      const result = await service.getNoteById(
+        'note-1',
+        mockChurchId,
+        [
+          'pastoral_confidential:read',
+          'pastoral_restricted:read',
+          'pastoral_moderation:update',
+          'pastoral_moderation:delete',
+        ],
+        mockUserId,
+      );
       expect(result.content).toBe(plaintext);
     });
 
@@ -227,7 +248,12 @@ describe('PastoralService', () => {
         author_id: mockMemberId,
       });
 
-      const result = await service.getNoteById('note-1', mockChurchId, ['pastoral_confidential:read'], mockUserId);
+      const result = await service.getNoteById(
+        'note-1',
+        mockChurchId,
+        ['pastoral_confidential:read'],
+        mockUserId,
+      );
       expect(result.content).toBe(plaintext);
     });
   });
@@ -260,13 +286,12 @@ describe('PastoralService', () => {
       prisma.pastoralNote.update.mockResolvedValue(mockNote);
 
       await expect(
-        service.updateNote(
-          'note-1',
-          { content: 'Admin update' },
-          mockChurchId,
-          mockUserId,
-          ['pastoral_confidential:read', 'pastoral_restricted:read', 'pastoral_moderation:update', 'pastoral_moderation:delete'],
-        ),
+        service.updateNote('note-1', { content: 'Admin update' }, mockChurchId, mockUserId, [
+          'pastoral_confidential:read',
+          'pastoral_restricted:read',
+          'pastoral_moderation:update',
+          'pastoral_moderation:delete',
+        ]),
       ).resolves.toBeDefined();
     });
 
@@ -277,13 +302,9 @@ describe('PastoralService', () => {
       });
 
       await expect(
-        service.updateNote(
-          'note-1',
-          { content: 'Unauthorized update' },
-          mockChurchId,
-          mockUserId,
-          ['pastoral_confidential:read'],
-        ),
+        service.updateNote('note-1', { content: 'Unauthorized update' }, mockChurchId, mockUserId, [
+          'pastoral_confidential:read',
+        ]),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -294,13 +315,12 @@ describe('PastoralService', () => {
       });
 
       await expect(
-        service.updateNote(
-          'note-1',
-          { content: 'Attempted update' },
-          mockChurchId,
-          mockUserId,
-          ['pastoral_confidential:read', 'pastoral_restricted:read', 'pastoral_moderation:update', 'pastoral_moderation:delete'],
-        ),
+        service.updateNote('note-1', { content: 'Attempted update' }, mockChurchId, mockUserId, [
+          'pastoral_confidential:read',
+          'pastoral_restricted:read',
+          'pastoral_moderation:update',
+          'pastoral_moderation:delete',
+        ]),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -348,7 +368,12 @@ describe('PastoralService', () => {
       prisma.pastoralNote.findMany.mockResolvedValue([]);
       prisma.pastoralNote.count.mockResolvedValue(0);
 
-      await service.listNotes({ page: 1, limit: 10 }, mockChurchId, ['pastoral_confidential:read'], mockUserId);
+      await service.listNotes(
+        { page: 1, limit: 10 },
+        mockChurchId,
+        ['pastoral_confidential:read'],
+        mockUserId,
+      );
 
       expect(prisma.pastoralNote.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
