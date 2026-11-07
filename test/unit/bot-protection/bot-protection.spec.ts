@@ -19,6 +19,13 @@ const publicPath = '/forms/public/token-a/submit';
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64');
 
 describe('bot protection with real signed ALTCHA proofs', () => {
+  it('protects intake submission without exposing review endpoints', () => {
+    expect(protectedAction('POST', '/intake/public/token-a/submit')).toEqual({
+      authenticated: false,
+    });
+    expect(protectedAction('GET', '/intake/public/token-a/submit')).toBeNull();
+    expect(protectedAction('POST', '/intake/submissions/id/accept')).toBeNull();
+  });
   let bots: BotProtectionService;
   let issued: Map<string, unknown>;
   let redis: { set: jest.Mock; consume: jest.Mock };

@@ -36,19 +36,21 @@ export class VisitorsService {
     churchId: string,
     userId: string,
     viewer?: ViewerScope | null,
+    transaction?: Prisma.TransactionClient,
   ): Promise<VisitorResponseDto> {
+    const db = transaction ?? this.prisma;
     let assignedToId = dto.assignedToId;
     if (assignedToId) {
-      assignedToId = await this.resolveAssigneeProfileId(assignedToId, churchId);
+      assignedToId = await this.resolveAssigneeProfileId(assignedToId, churchId, db);
     }
 
     // Tag the visitor with a branch so branch-restricted viewers can scope
     // follow-up lists. HQ/unspecified creators may set an explicit branch or
     // leave it unset (null = church-wide); branch-restricted creators are
     // pinned to their own branch.
-    const branchId = await this.resolveVisitorBranch(dto.branchId, churchId, viewer);
+    const branchId = await this.resolveVisitorBranch(dto.branchId, churchId, viewer, db);
 
-    const visitor = await this.prisma.visitor.create({
+    const visitor = await db.visitor.create({
       data: {
         church_id: churchId,
         branch_id: branchId,
@@ -70,14 +72,15 @@ export class VisitorsService {
       },
     });
 
-    await this.audit.log({
-      userId,
-      churchId,
-      entity: 'visitor',
-      action: 'CREATE',
-      entityId: visitor.id,
-      newValues: { first_name: dto.firstName, last_name: dto.lastName },
-    });
+    if (!transaction)
+      await this.audit.log({
+        userId,
+        churchId,
+        entity: 'visitor',
+        action: 'CREATE',
+        entityId: visitor.id,
+        newValues: { first_name: dto.firstName, last_name: dto.lastName },
+      });
 
     this.logger.log(`Visitor created: ${visitor.id}`);
 
@@ -600,6 +603,7 @@ export class VisitorsService {
     dtoBranchId: string | undefined,
     churchId: string,
     viewer?: ViewerScope | null,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<string | null> {
     viewer ??= this.requestContext.getStore()?.viewer;
     this.requestContext.branchWhere(churchId);
@@ -618,7 +622,7 @@ export class VisitorsService {
     // Validate only explicit branches (the viewer's own branch comes from the
     // trusted profile context).
     if (explicit) {
-      const branch = await this.prisma.branch.findFirst({
+      const branch = await db.branch.findFirst({
         where: { id: branchId as string, church_id: churchId, archived_at: null },
         select: { id: true },
       });
@@ -630,8 +634,12 @@ export class VisitorsService {
     return branchId;
   }
 
-  private async resolveAssigneeProfileId(assigneeId: string, churchId: string): Promise<string> {
-    const profile = await this.prisma.profile.findUnique({
+  private async resolveAssigneeProfileId(
+    assigneeId: string,
+    churchId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<string> {
+    const profile = await db.profile.findUnique({
       where: { id: assigneeId },
       select: { id: true, church_id: true },
     });
@@ -640,7 +648,7 @@ export class VisitorsService {
       return profile.id;
     }
 
-    const memberProfile = await this.prisma.profile.findUnique({
+    const memberProfile = await db.profile.findUnique({
       where: { member_id: assigneeId },
       select: { id: true, church_id: true },
     });

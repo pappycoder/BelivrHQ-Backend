@@ -32,6 +32,10 @@ export class SubmissionAttachmentDto {
  * Response shape for a single form.
  */
 export class FormResponseDto {
+  @ApiPropertyOptional({ description: 'Owning church name' })
+  churchName?: string;
+  @ApiPropertyOptional({ description: 'Owning church logo; use app logo only when absent' })
+  churchLogoUrl?: string;
   @ApiPropertyOptional({ description: 'Assigned branch ID' })
   branchId?: string;
 
@@ -89,9 +93,13 @@ export class FormResponseDto {
 
 /**
  * Response shape for the public-facing metadata used to render a form for
- * anonymous respondents (no church or submission data).
+ * anonymous respondents, including public church branding but no submissions.
  */
 export class PublicFormMetaDto {
+  @ApiPropertyOptional({ description: 'Owning church name' })
+  churchName?: string;
+  @ApiPropertyOptional({ description: 'Owning church logo; use app logo only when absent' })
+  churchLogoUrl?: string;
   @ApiProperty({ description: 'Form title' })
   title!: string;
 

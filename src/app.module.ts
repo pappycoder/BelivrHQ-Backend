@@ -1,3 +1,4 @@
+import { IntakeModule } from './intake/intake.module';
 import { BotProtectionModule } from './bot-protection/bot-protection.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { PlanFeatureGuard } from './billing/plan-feature.guard';
@@ -184,6 +185,7 @@ import { PermissionsModule } from './auth/permissions.module';
 
     // Import FormsModule for form and submission management.
     FormsModule,
+    IntakeModule,
 
     // Import AnalyticsModule for cross-domain analytics and reporting.
     AnalyticsModule,

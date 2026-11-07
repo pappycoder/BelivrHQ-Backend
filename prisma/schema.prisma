@@ -167,6 +167,7 @@ model Church {
   updated_at   DateTime  @updatedAt
   archived_at  DateTime? // Set when archived
 
+  intake_links                IntakeLink[]
   subscription                PlatformSubscription?
   subscription_payments       SubscriptionPayment[]
   company_email_notifications CompanyEmailNotification[]
@@ -218,6 +219,7 @@ model Branch {
   updated_at      DateTime  @updatedAt
   archived_at     DateTime? // Set when archived
 
+  intake_links        IntakeLink[]
   church              Church              @relation(fields: [church_id], references: [id])
   profiles            Profile[]
   members             Member[]
@@ -1653,4 +1655,39 @@ model WebhookDelivery {
 
   @@index([subscription_id, status])
   @@map("webhook_deliveries")
+}
+
+// Branch-specific public people registration. Accepted receipts prevent repeat creation.
+model IntakeLink {
+  id          String             @id @default(uuid())
+  church_id   String
+  branch_id   String
+  kind        String
+  token       String             @unique
+  created_at  DateTime           @default(now())
+  church      Church             @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  branch      Branch             @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  submissions IntakeSubmission[]
+
+  @@unique([church_id, branch_id, kind])
+  @@map("intake_links")
+}
+
+model IntakeSubmission {
+  id             String     @id @default(uuid())
+  church_id      String
+  branch_id      String
+  kind           String
+  link_id        String
+  data           Json
+  search_text    String
+  status         String     @default("pending")
+  destination_id String?
+  reviewed_by    String?
+  reviewed_at    DateTime?
+  created_at     DateTime   @default(now())
+  link           IntakeLink @relation(fields: [link_id], references: [id], onDelete: Cascade)
+
+  @@index([church_id, kind, status, branch_id, created_at])
+  @@map("intake_submissions")
 }

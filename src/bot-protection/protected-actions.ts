@@ -7,7 +7,7 @@ export function protectedAction(method: string, path: string): { authenticated: 
   )
     return { authenticated: false };
   if (method === 'PATCH' && path === '/auth/reset-password') return { authenticated: false };
-  if (method === 'POST' && /^\/forms\/public\/[a-zA-Z0-9_-]+\/submit$/.test(path))
+  if (method === 'POST' && /^\/(?:forms|intake)\/public\/[a-zA-Z0-9_-]+\/submit$/.test(path))
     return { authenticated: false };
   if (
     (method === 'PUT' && path === '/auth/password') ||

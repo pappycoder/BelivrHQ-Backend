@@ -58,10 +58,12 @@ export class MembersService {
     dto: CreateMemberDto,
     churchId: string,
     userId: string,
+    transaction?: Prisma.TransactionClient,
   ): Promise<MemberResponseDto> {
+    const db = transaction ?? this.prisma;
     // Check for duplicate phone number within the same church
     if (dto.phone) {
-      const existing = await this.prisma.member.findFirst({
+      const existing = await db.member.findFirst({
         where: {
           church_id: churchId,
           phone: dto.phone,
@@ -85,7 +87,7 @@ export class MembersService {
     const normalizedState = dto.state?.trim() || null;
     const normalizedNotes = dto.notes?.trim() || null;
 
-    const member = await this.prisma.member.create({
+    const member = await db.member.create({
       data: {
         church_id: churchId,
         branch_id: this.requestContext.branchIdForWrite(churchId, dto.branchId) ?? null,
@@ -104,13 +106,24 @@ export class MembersService {
       },
     });
 
+    const response = this.mapToResponseDto(member);
+    if (!transaction) await this.afterMemberCreated(dto, churchId, userId, response);
+    return response;
+  }
+
+  async afterMemberCreated(
+    dto: CreateMemberDto,
+    churchId: string,
+    userId: string,
+    member: MemberResponseDto,
+  ) {
     // Audit-log the creation
     await this.audit.log({
       userId,
       churchId,
       entity: 'member',
       action: 'CREATE',
-      entityId: member.id,
+      entityId: member.memberId,
       newValues: {
         firstName: dto.firstName,
         lastName: dto.lastName,
@@ -119,7 +132,7 @@ export class MembersService {
       },
     });
 
-    this.logger.log(`Member created: ${member.first_name} ${member.last_name} (${member.id})`);
+    this.logger.log(`Member created: ${member.firstName} ${member.lastName} (${member.memberId})`);
 
     const adminProfiles = await this.prisma.profile.findMany({
       where: { church_id: churchId, role: { hasSome: ['church_admin', 'secretary'] } },
@@ -131,13 +144,11 @@ export class MembersService {
           admin.id,
           'member',
           'New Member',
-          `${member.first_name} ${member.last_name} has been added to the church.`,
-          { memberId: member.id },
+          `${member.firstName} ${member.lastName} has been added to the church.`,
+          { memberId: member.memberId },
         )
         .catch((err) => this.logger.warn(`Notification failed: ${(err as Error).message}`));
     }
-
-    return this.mapToResponseDto(member);
   }
 
   /**

@@ -98,6 +98,10 @@ describe('FormsService', () => {
       plan: 'community',
       paid_until: new Date(Date.now() + 86400000),
     });
+    prisma.church.findUnique.mockResolvedValue({
+      name: 'Grace Church',
+      logo_url: 'https://example.com/church.png',
+    });
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     service = new FormsService(
       prisma as unknown as PrismaService,
@@ -760,6 +764,8 @@ describe('FormsService', () => {
       const result = await service.getPublicFormMeta('public-token');
 
       expect(result).toEqual({
+        churchName: 'Grace Church',
+        churchLogoUrl: 'https://example.com/church.png',
         title: 'Test Form',
         description: 'A public form',
         fields: mockFields,

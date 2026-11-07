@@ -1,3 +1,5 @@
+import { IntakePublicController } from '../../../src/intake/intake.controller';
+import { IntakeService } from '../../../src/intake/intake.service';
 import { Body, Controller, INestApplication, Post, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { APP_INTERCEPTOR } from '@nestjs/core';
@@ -29,9 +31,10 @@ describe('HTTP bot protection pipeline (isolated, no database)', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [BotProtectionController, SubmissionController],
+      controllers: [BotProtectionController, SubmissionController, IntakePublicController],
       providers: [
         BotProtectionService,
+        { provide: IntakeService, useValue: { submit: businessWrite } },
         { provide: ConfigService, useValue: { get: () => 'http-test-secret-'.repeat(4) } },
         {
           provide: RedisService,
@@ -91,6 +94,20 @@ describe('HTTP bot protection pipeline (isolated, no database)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+  it('protects the real intake controller before calling its service', async () => {
+    const path = '/intake/public/token-a/submit';
+    expect((await post(path, { data: { firstName: 'Grace' } })).status).toBe(400);
+    expect(businessWrite).not.toHaveBeenCalled();
+    const fields = await proof(path);
+    expect(
+      (await post(path, { data: { firstName: 'Grace' }, ...fields, website: 'spam' })).status,
+    ).toBe(400);
+    expect(businessWrite).not.toHaveBeenCalled();
+    expect((await post(path, { data: { firstName: 'Grace' }, ...fields })).status).toBe(201);
+    expect(businessWrite).toHaveBeenCalledWith('token-a', { firstName: 'Grace' });
+    expect((await post(path, { data: { firstName: 'Grace' }, ...fields })).status).toBe(400);
+  });
 
   it('accepts one real proof and rejects its replay before any further business write', async () => {
     const fields = await proof();

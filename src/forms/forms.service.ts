@@ -191,7 +191,15 @@ export class FormsService {
     const form = await this.findFormOrFail(churchId, formId);
     if (form.branch_id && !this.branchScope.isVisible(viewer, form.branch_id))
       throw new NotFoundException('Form not found');
-    return this.mapForm(form);
+    const church = await this.prisma.church.findUnique({
+      where: { id: churchId },
+      select: { name: true, logo_url: true },
+    });
+    return {
+      ...this.mapForm(form),
+      churchName: church?.name,
+      churchLogoUrl: church?.logo_url ?? undefined,
+    };
   }
 
   /**
@@ -595,6 +603,8 @@ export class FormsService {
    * @throws NotFoundException if no such public form exists
    */
   async getPublicFormMeta(publicToken: string): Promise<{
+    churchName: string;
+    churchLogoUrl?: string;
     title: string;
     description?: string;
     fields: FormFieldDto[];
@@ -609,7 +619,14 @@ export class FormsService {
 
     await assertPlanFeature(this.prisma, form.church_id, 'forms');
 
+    const church = await this.prisma.church.findUnique({
+      where: { id: form.church_id },
+      select: { name: true, logo_url: true },
+    });
+    if (!church) throw new NotFoundException('Form not found');
     return {
+      churchName: church.name,
+      churchLogoUrl: church.logo_url ?? undefined,
       title: form.title,
       description: form.description ?? undefined,
       fields: this.parseFields(form.fields),
