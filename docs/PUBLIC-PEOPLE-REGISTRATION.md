@@ -1,5 +1,13 @@
 # Public member and visitor registration
 
+## Pending register columns and sorting (2026-11-08)
+
+`GET /intake/submissions` additionally returns `fields` with the core intake fields and applicable active custom-field definitions. This lets the web offer all optional columns without requiring an answer on the current page. Existing response rows and pagination metadata are preserved.
+
+`sortBy` accepts `createdAt` (default), `firstName`, `lastName`, `email`, `phone`, or `branch`; `sortOrder` accepts `asc` or `desc` (default). Sorting happens before pagination, with an ID tie-breaker. JSON-answer and branch sorting use closed SQL expressions and parameterized scope/search/pagination values; the destination query repeats church/branch scope. Search wildcards are escaped consistently in the count and sorted-row queries. Swagger documents the parameters and field metadata.
+
+The web's confirmed bulk review calls the existing individual accept/reject endpoints. Each acceptance retains its existing transaction, duplicate checks and review metadata; rejection still hard-deletes answers. Batches report per-record failures and retain those records for correction. No batch endpoint, migration, permission or environment changes are introduced.
+
 Each branch has a stable, random-token member link and a separate visitor link. Links are obtained through **Public registration link** on either register or its import page. HQ staff select a branch; other staff use their own branch. Sharing a link permits anonymous registration only, never reading submissions or existing people.
 
 Public registration uses the church name and uploaded church logo, with an app-mark fallback only when no church logo is configured. The same branding applies to public/private Forms-module respondent pages and builder previews. An image loading error keeps church identity without substituting app branding.

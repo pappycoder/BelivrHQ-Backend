@@ -279,4 +279,80 @@ describe('public people intake', () => {
       firstName: 'Grace',
     });
   });
+  it('sorts the full scoped queue before pagination and restores SQL ordering', async () => {
+    (prisma.$queryRaw as unknown as jest.Mock).mockResolvedValue([{ id: 'b' }, { id: 'a' }]);
+    prisma.intakeSubmission.findMany.mockResolvedValue([
+      { ...row, id: 'a' },
+      { ...row, id: 'b' },
+    ]);
+    prisma.intakeSubmission.count.mockResolvedValue(2);
+    prisma.branch.findMany.mockResolvedValue([{ id: branchId, name: 'Main branch' }]);
+    const result = await service.list(viewer, {
+      kind: 'members',
+      page: 2,
+      limit: 10,
+      sortBy: 'firstName',
+      sortOrder: 'asc',
+      branchId: 'other',
+    } as IntakeListDto);
+    expect(result.data.map((item) => item.id)).toEqual(['b', 'a']);
+    const sql = (prisma.$queryRaw as unknown as jest.Mock).mock.calls[0][0];
+    expect(sql.strings.join(' ')).toContain("lower(COALESCE(s.data->>'firstName'");
+    expect(sql.strings.join(' ')).toContain('ASC');
+    expect(sql.values).toEqual(expect.arrayContaining([churchId, branchId, 'members', 10]));
+    expect(sql.values).not.toContain('other');
+    expect(prisma.intakeSubmission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          church_id: churchId,
+          branch_id: branchId,
+          status: 'pending',
+          id: { in: ['b', 'a'] },
+        }),
+      }),
+    );
+    expect(result.fields.some((field) => field.key === 'dateOfBirth')).toBe(true);
+  });
+  it.each(['__proto__', 'firstName; DROP TABLE intake_submissions'])(
+    'rejects unsupported sort expression %s',
+    async (sortBy) => {
+      prisma.intakeSubmission.count.mockResolvedValue(0);
+      await expect(
+        service.list(viewer, {
+          kind: 'members',
+          page: 1,
+          limit: 15,
+          sortBy,
+          sortOrder: 'asc',
+        } as IntakeListDto),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    },
+  );
+  it('keeps search text in parameters and escapes LIKE wildcard characters consistently', async () => {
+    (prisma.$queryRaw as unknown as jest.Mock).mockResolvedValue([]);
+    prisma.intakeSubmission.count.mockResolvedValue(0);
+    prisma.branch.findMany.mockResolvedValue([]);
+    await service.list(viewer, {
+      kind: 'visitors',
+      page: 1,
+      limit: 15,
+      sortBy: 'email',
+      sortOrder: 'desc',
+      search: "Ada%' OR 1=1 --",
+    } as IntakeListDto);
+    const sql = (prisma.$queryRaw as unknown as jest.Mock).mock.calls[0][0];
+    expect(sql.strings.join(' ')).not.toContain('OR 1=1');
+    expect(
+      sql.values.some(
+        (value: unknown) =>
+          typeof value === 'string' && value.includes(String.fromCharCode(92) + '%'),
+      ),
+    ).toBe(true);
+    expect(prisma.intakeSubmission.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ church_id: churchId, branch_id: branchId }),
+      }),
+    );
+  });
 });

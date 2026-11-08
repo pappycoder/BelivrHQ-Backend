@@ -181,6 +181,10 @@ export class AttendanceService extends AttendanceSessionsService {
       where.branch_id = query.branchId;
     }
 
+    if (query.search?.trim()) {
+      where.name = { contains: query.search.trim(), mode: 'insensitive' };
+    }
+
     if (query.category) {
       where.category = query.category;
     }
@@ -991,6 +995,23 @@ export class AttendanceService extends AttendanceSessionsService {
       where.checkin_at = {};
       if (query.startDate) where.checkin_at.gte = new Date(query.startDate);
       if (query.endDate) where.checkin_at.lte = new Date(query.endDate);
+    }
+
+    if (query.search?.trim()) {
+      const terms = query.search.trim().split(/\s+/);
+      const searchConditions: Prisma.AttendanceWhereInput[] = terms.map((term) => ({
+        OR: [
+          { member: { first_name: { contains: term, mode: 'insensitive' } } },
+          { member: { last_name: { contains: term, mode: 'insensitive' } } },
+          { visitor: { first_name: { contains: term, mode: 'insensitive' } } },
+          { visitor: { last_name: { contains: term, mode: 'insensitive' } } },
+          { visitor_name: { contains: term, mode: 'insensitive' } },
+        ],
+      }));
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        ...searchConditions,
+      ];
     }
 
     const sortField = query.sortBy === 'createdAt' ? 'created_at' : 'checkin_at';

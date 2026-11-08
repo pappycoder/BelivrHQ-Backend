@@ -34,6 +34,17 @@ export class IntakeListDto extends IntakeKindDto {
   @Max(100)
   limit = 15;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) search?: string;
+  @ApiPropertyOptional({
+    enum: ['createdAt', 'firstName', 'lastName', 'email', 'phone', 'branch'],
+    default: 'createdAt',
+  })
+  @IsOptional()
+  @IsIn(['createdAt', 'firstName', 'lastName', 'email', 'phone', 'branch'])
+  sortBy: 'createdAt' | 'firstName' | 'lastName' | 'email' | 'phone' | 'branch' = 'createdAt';
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder: 'asc' | 'desc' = 'desc';
 }
 export class IntakeAnswersDto {
   @ApiProperty({
@@ -72,4 +83,20 @@ export class IntakeAcceptedResponseDto {
 export class IntakeSubmittedResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() message!: string;
+}
+
+export class IntakePageMetaDto {
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() limit!: number;
+  @ApiProperty() totalPages!: number;
+}
+export class IntakeListResponseDto {
+  @ApiProperty({ type: [IntakePendingResponseDto] }) data!: IntakePendingResponseDto[];
+  @ApiProperty({
+    type: [FormFieldDto],
+    description: 'Active registration fields available as optional list columns',
+  })
+  fields!: FormFieldDto[];
+  @ApiProperty({ type: IntakePageMetaDto }) meta!: IntakePageMetaDto;
 }

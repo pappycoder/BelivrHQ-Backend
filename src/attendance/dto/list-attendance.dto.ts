@@ -7,7 +7,17 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ATTENDANCE_CATEGORIES } from './create-service.dto';
 
@@ -15,6 +25,12 @@ import { ATTENDANCE_CATEGORIES } from './create-service.dto';
  * DTO for listing attendance records with pagination and filters.
  */
 export class ListAttendanceDto {
+  @ApiPropertyOptional({ description: 'Case-insensitive search', maxLength: 200 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
   @ApiPropertyOptional({ description: 'Filter attendance by branch' })
   @IsUUID()
   @IsOptional()

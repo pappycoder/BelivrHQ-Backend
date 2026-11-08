@@ -1,4 +1,3 @@
-import { ApiPaginatedResponse } from '../common/decorators/api-paginated.decorator';
 import {
   Body,
   Controller,
@@ -31,6 +30,7 @@ import {
   IntakeKindDto,
   IntakeLinkDto,
   IntakeListDto,
+  IntakeListResponseDto,
 } from './intake.dto';
 import { IntakeService } from './intake.service';
 
@@ -69,9 +69,11 @@ export class IntakeController {
     return this.service.link(req.profile!, body.kind, body.branchId);
   }
   @Get('submissions')
-  @ApiPaginatedResponse(IntakePendingResponseDto)
+  @ApiOkResponse({ type: IntakeListResponseDto })
   @ApiOperation({
-    summary: 'List pending registrations; requires register read and create permissions',
+    summary: 'List and sort pending registrations; requires register read and create permissions',
+    description:
+      'Sorts the full scoped queue before pagination. Includes the active registration field catalog for optional list columns.',
   })
   list(@Request() req: AuthenticatedRequest, @Query() query: IntakeListDto) {
     return this.service.list(req.profile!, query);

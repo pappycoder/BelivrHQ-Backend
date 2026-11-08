@@ -21,6 +21,10 @@ import { churchEntitlements } from '../billing/entitlements';
 import { IntakeListDto } from './intake.dto';
 import { intakeFields, validateIntake } from './intake-fields';
 
+function escapeIntakeSearch(value: string) {
+  return value.replace(/[\\%_]/g, (character) => '\\' + character);
+}
+
 @Injectable()
 export class IntakeService {
   private readonly logger = new Logger(IntakeService.name);
@@ -171,21 +175,65 @@ export class IntakeService {
     };
   }
 
+  /** PostgreSQL JSON sorting happens before paging; expressions are a closed allowlist. */
+  private async pendingRows(where: Prisma.IntakeSubmissionWhereInput, query: IntakeListDto) {
+    const direction = query.sortOrder ?? 'desc';
+    const sort = query.sortBy ?? 'createdAt';
+    if (!['asc', 'desc'].includes(direction))
+      throw new BadRequestException('Invalid registration sort direction');
+    if (sort === 'createdAt')
+      return this.prisma.intakeSubmission.findMany({
+        where,
+        orderBy: [{ created_at: direction }, { id: direction }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      });
+    const expressions: Record<string, Prisma.Sql> = {
+      firstName: Prisma.sql`lower(COALESCE(s.data->>'firstName', ''))`,
+      lastName: Prisma.sql`lower(COALESCE(s.data->>'lastName', ''))`,
+      email: Prisma.sql`lower(COALESCE(s.data->>'email', ''))`,
+      phone: Prisma.sql`lower(COALESCE(NULLIF(s.data->>'phone', ''), s.data->>'whatsappNumber', ''))`,
+      branch: Prisma.sql`lower(COALESCE(b.name, ''))`,
+    };
+    const expression = Object.prototype.hasOwnProperty.call(expressions, sort)
+      ? expressions[sort]
+      : undefined;
+    if (!expression) throw new BadRequestException('Invalid registration sort field');
+    const order = direction === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    const search = query.search?.trim();
+    const pattern = search ? `%${escapeIntakeSearch(search)}%` : '';
+    const ids = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT s.id FROM intake_submissions s
+      LEFT JOIN branches b ON b.id = s.branch_id AND b.church_id = s.church_id
+      WHERE s.church_id = ${String(where.church_id)} AND s.kind = ${query.kind} AND s.status = 'pending'
+      ${typeof where.branch_id === 'string' ? Prisma.sql`AND s.branch_id = ${where.branch_id}` : Prisma.empty}
+      ${search ? Prisma.sql`AND s.search_text ILIKE ${pattern}` : Prisma.empty}
+      ORDER BY ${expression} ${order}, s.id ${order}
+      OFFSET ${(query.page - 1) * query.limit} LIMIT ${query.limit}
+    `);
+    if (!ids.length) return [];
+    const rows = await this.prisma.intakeSubmission.findMany({
+      where: { ...where, id: { in: ids.map((row) => row.id) } },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap(({ id }) => (byId.has(id) ? [byId.get(id)!] : []));
+  }
+
   async list(viewer: ViewerScope, query: IntakeListDto) {
     const where = {
       ...this.where(viewer, query.kind, query.branchId),
       status: 'pending',
       ...(query.search?.trim()
-        ? { search_text: { contains: query.search.trim(), mode: 'insensitive' as const } }
+        ? {
+            search_text: {
+              contains: escapeIntakeSearch(query.search.trim()),
+              mode: 'insensitive' as const,
+            },
+          }
         : {}),
     };
     const [rows, total] = await Promise.all([
-      this.prisma.intakeSubmission.findMany({
-        where,
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-      }),
+      this.pendingRows(where, query),
       this.prisma.intakeSubmission.count({ where }),
     ]);
     const branches = await this.prisma.branch.findMany({
@@ -195,7 +243,12 @@ export class IntakeService {
       },
       select: { id: true, name: true },
     });
+    const custom = await this.prisma.customFieldDefinition.findMany({
+      where: { church_id: viewer.church_id, is_active: true, archived_at: null },
+      orderBy: { display_order: 'asc' },
+    });
     return {
+      fields: intakeFields(query.kind, custom),
       data: rows.map((r) => ({
         id: r.id,
         data: r.data,

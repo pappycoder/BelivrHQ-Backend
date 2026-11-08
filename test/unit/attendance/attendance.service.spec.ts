@@ -675,6 +675,37 @@ describe('AttendanceService — categories & visitors', () => {
   });
 
   describe('listServices', () => {
+    it('searches before pagination while retaining tenant, branch and category scope', async () => {
+      model('service').findMany.mockResolvedValue([]);
+      model('service').count.mockResolvedValue(0);
+      await service.listServices(
+        churchId,
+        {
+          search: '  Sunday  ',
+          branchId: 'other',
+          category: 'adult',
+          page: 2,
+          limit: 15,
+          sortBy: 'name',
+          sortOrder: 'desc',
+        },
+        { church_id: churchId, role: 'branch_pastor', branch_id: 'home' },
+      );
+      const call = model('service').findMany.mock.calls[0][0];
+      expect(call).toMatchObject({
+        where: {
+          church_id: churchId,
+          branch_id: 'home',
+          category: 'adult',
+          archived_at: null,
+          name: { contains: 'Sunday', mode: 'insensitive' },
+        },
+        skip: 15,
+        take: 15,
+        orderBy: [{ name: 'desc' }],
+      });
+      expect(model('service').count).toHaveBeenCalledWith({ where: call.where });
+    });
     it('should include the all-time attendance count per service', async () => {
       model('service').findMany.mockResolvedValue([
         { ...adultServiceRow, _count: { attendance: 128 } },
@@ -885,6 +916,32 @@ describe('AttendanceService — categories & visitors', () => {
   });
 
   describe('listAttendance', () => {
+    it('combines all name terms with the existing branch restriction before paging', async () => {
+      model('attendance').findMany.mockResolvedValue([]);
+      model('attendance').count.mockResolvedValue(0);
+      await service.listAttendance(
+        churchId,
+        { search: ' Ada Rice ', page: 2, limit: 20, branchId: 'other' },
+        { church_id: churchId, role: 'branch_pastor', branch_id: 'home', permissions: [] },
+      );
+      const call = model('attendance').findMany.mock.calls[0][0];
+      expect(call).toMatchObject({
+        where: { church_id: churchId, event_id: null },
+        skip: 20,
+        take: 20,
+      });
+      expect(call.where.AND).toHaveLength(3);
+      expect(call.where.AND[0]).toEqual({
+        OR: [{ service: { branch_id: 'home' } }, { event: { branch_id: 'home' } }],
+      });
+      expect(call.where.AND[1].OR).toContainEqual({
+        visitor_name: { contains: 'Ada', mode: 'insensitive' },
+      });
+      expect(call.where.AND[2].OR).toContainEqual({
+        member: { last_name: { contains: 'Rice', mode: 'insensitive' } },
+      });
+      expect(model('attendance').count).toHaveBeenCalledWith({ where: call.where });
+    });
     it('should paginate, include display relations, and map the response', async () => {
       model('attendance').findMany.mockResolvedValue([
         {

@@ -100,6 +100,37 @@ describe('Intake atomic review and migration (PostgreSQL)', () => {
     ]);
     expect(fresh[0].token).toBe(fresh[1].token);
   });
+  it('sorts the complete pending register before pagination while preserving branch scope', async () => {
+    const marker = `Sort${randomUUID().replace(/-/g, '')}`;
+    const z = await service.submit(memberToken, { firstName: `${marker}Z`, lastName: 'Sort' });
+    const a = await service.submit(memberToken, { firstName: `${marker}A`, lastName: 'Sort' });
+    const elsewhere = await service.link({ ...viewer, is_admin_hq: true }, 'members', otherBranch);
+    await service.submit(elsewhere.token, { firstName: `${marker}B`, lastName: 'Sort' });
+    const query = {
+      kind: 'members',
+      search: marker,
+      sortBy: 'firstName',
+      sortOrder: 'asc',
+      page: 1,
+      limit: 1,
+    } as const;
+    const first = await service.list(viewer, query);
+    const second = await service.list(viewer, { ...query, page: 2 });
+    expect(first.meta.total).toBe(2);
+    expect(first.data.map((row) => row.id)).toEqual([a.id]);
+    expect(second.data.map((row) => row.id)).toEqual([z.id]);
+    expect(first.fields.some((field) => field.key === 'dateOfBirth')).toBe(true);
+    const headquarters = await service.list(
+      { ...viewer, is_admin_hq: true },
+      { ...query, sortBy: 'branch', limit: 10 },
+    );
+    expect(headquarters.meta.total).toBe(3);
+    expect(headquarters.data.map((row) => row.branchName)).toEqual([
+      'Main branch',
+      'Main branch',
+      'Other branch',
+    ]);
+  });
   it('creates exactly one member for simultaneous acceptance of one registration', async () => {
     const submitted = await service.submit(memberToken, { ...data, phone: 'concurrent-one' });
     const results = await Promise.allSettled([
