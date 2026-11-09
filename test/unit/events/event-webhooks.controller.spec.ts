@@ -1,72 +1,37 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { EventWebhooksController } from '../../../src/events/event-webhooks.controller';
 
-describe('EventWebhooksController', () => {
-  const rawPayload = JSON.stringify({
-    event: 'charge.success',
-    data: { reference: 'EVT-REF-001' },
+describe('Event payment callback routing', () => {
+  const handleWebhook = jest.fn();
+  const controller = new EventWebhooksController({ handleWebhook } as never);
+  beforeEach(() => jest.resetAllMocks());
+  it.each(['charge.success', 'refund.processed', 'charge.dispute.create'])(
+    'routes %s through the common historical-account verifier',
+    async (event) => {
+      const raw = JSON.stringify({ event, data: { reference: 'payment' } });
+      await controller.handlePaystackWebhook('untrusted-id', { 'x-paystack-signature': 'signed' }, {
+        rawBody: Buffer.from(raw),
+      } as never);
+      expect(handleWebhook).toHaveBeenCalledWith(raw, 'signed', 'paystack');
+    },
+  );
+  it('uses the modern signature when both headers are present', async () => {
+    await controller.handlePaystackWebhook(
+      'id',
+      { 'paystack-signature': 'modern', 'x-paystack-signature': 'legacy' },
+      { rawBody: Buffer.from('{}') } as never,
+    );
+    expect(handleWebhook).toHaveBeenCalledWith('{}', 'modern', 'paystack');
   });
-  let eventsService: { confirmTicketPayment: jest.Mock };
-  let paystack: { validateWebhookSignature: jest.Mock; parseWebhookEvent: jest.Mock };
-  let controller: EventWebhooksController;
-
-  beforeEach(() => {
-    eventsService = { confirmTicketPayment: jest.fn().mockResolvedValue({}) };
-    paystack = {
-      validateWebhookSignature: jest.fn().mockReturnValue(true),
-      parseWebhookEvent: jest
-        .fn()
-        .mockReturnValue({ event: 'charge.success', reference: 'EVT-REF-001' }),
-    };
-    controller = new EventWebhooksController(
-      eventsService as never,
-      paystack as never,
-      { historical: jest.fn().mockResolvedValue(paystack) } as never,
-      {
-        transaction: {
-          findFirst: jest
-            .fn()
-            .mockResolvedValue({ church_id: 'church-a', integration_account_id: 'account-a' }),
-        },
-      } as never,
+  it('rejects missing raw payload', async () => {
+    await expect(controller.handlePaystackWebhook('id', {}, {} as never)).rejects.toThrow(
+      BadRequestException,
     );
   });
-
-  it('validates the exact raw payload before settling the event registration', async () => {
+  it('propagates processing failures so the provider retries', async () => {
+    handleWebhook.mockRejectedValue(new Error('retry'));
     await expect(
-      controller.handlePaystackWebhook('untrusted-event-id', 'signature', {
-        rawBody: Buffer.from(rawPayload),
-      } as never),
-    ).resolves.toEqual({ received: true });
-
-    expect(paystack.validateWebhookSignature).toHaveBeenCalledWith(rawPayload, 'signature');
-    expect(eventsService.confirmTicketPayment).toHaveBeenCalledWith('EVT-REF-001');
-  });
-
-  it('rejects missing or invalid signatures before parsing the payload', async () => {
-    paystack.validateWebhookSignature.mockReturnValue(false);
-
-    await expect(
-      controller.handlePaystackWebhook('event-id', '', {
-        rawBody: Buffer.from(rawPayload),
-      } as never),
-    ).rejects.toThrow(UnauthorizedException);
-    expect(paystack.parseWebhookEvent).not.toHaveBeenCalled();
-  });
-
-  it('rejects requests without the raw provider payload', async () => {
-    await expect(
-      controller.handlePaystackWebhook('event-id', 'signature', {} as never),
-    ).rejects.toThrow(BadRequestException);
-  });
-
-  it('acknowledges an unknown payment reference without exposing tenant data', async () => {
-    eventsService.confirmTicketPayment.mockRejectedValue(new NotFoundException());
-
-    await expect(
-      controller.handlePaystackWebhook('event-id', 'signature', {
-        rawBody: Buffer.from(rawPayload),
-      } as never),
-    ).resolves.toEqual({ received: true });
+      controller.handlePaystackWebhook('id', {}, { rawBody: Buffer.from('{}') } as never),
+    ).rejects.toThrow('retry');
   });
 });

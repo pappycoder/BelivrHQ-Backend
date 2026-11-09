@@ -1,3 +1,4 @@
+import { GivingModule } from '../giving/giving.module';
 import { CompanyEmailModule } from '../company-email/company-email.module';
 import { SubscriptionPricingService } from './subscription-pricing.service';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
@@ -13,7 +14,7 @@ import { BillingService } from './billing.service';
 import { PaystackService } from '../giving/services/paystack.service';
 import { FlutterwaveService } from '../giving/services/flutterwave.service';
 @Module({
-  imports: [AuthModule, CompanyEmailModule],
+  imports: [AuthModule, CompanyEmailModule, GivingModule],
   controllers: [BillingController, BillingWebhookController, SubscriptionPricingController],
   providers: [
     SubscriptionPricingService,

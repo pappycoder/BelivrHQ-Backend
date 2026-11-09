@@ -17,7 +17,12 @@ export class PaymentAccountsService {
       throw new BadRequestException('Church merchant credentials are missing');
     const provider =
       name === 'paystack'
-        ? new PaystackService(new ConfigService({ PAYSTACK_SECRET_KEY: credentials.secretKey }))
+        ? new PaystackService(
+            new ConfigService({
+              PAYSTACK_SECRET_KEY: credentials.secretKey,
+              PAYSTACK_WEBHOOK_SECRET: credentials.webhookSecret,
+            }),
+          )
         : new FlutterwaveService(
             new ConfigService({
               FLUTTERWAVE_SECRET_KEY: credentials.secretKey,

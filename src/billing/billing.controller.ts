@@ -16,7 +16,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { AuthenticatedRequest } from '../common/decorators/current-user.decorator';
 import { BillingService } from './billing.service';
-import { CheckoutDto, VerifySubscriptionDto, SchedulePlanDto } from './billing.dto';
+import {
+  CheckoutDto,
+  VerifySubscriptionDto,
+  SchedulePlanDto,
+  ReviewSubscriptionPaymentDto,
+} from './billing.dto';
 import { BillingAdminGuard } from './plan-feature.guard';
 import { RateLimit } from '../common/guards/rate-limit.guard';
 @Controller('billing')
@@ -44,6 +49,24 @@ export class BillingController {
   checkout(@Req() req: AuthenticatedRequest, @Body() dto: CheckoutDto) {
     return this.billing.checkout(req.profile!.church_id, req.user.email!, dto);
   }
+  @Post('payment-review')
+  @HttpCode(200)
+  @RequirePermissions('billing:update')
+  review(@Req() req: AuthenticatedRequest, @Body() dto: ReviewSubscriptionPaymentDto) {
+    return this.billing.reviewPayment(
+      req.profile!.church_id,
+      { id: req.profile!.id, roles: req.profile!.roles ?? [req.profile!.role] },
+      dto.reference,
+      dto.decision,
+      dto.reason,
+    );
+  }
+  @Post('checkout/close')
+  @HttpCode(200)
+  @RequirePermissions('billing:update')
+  closeCheckout(@Req() req: AuthenticatedRequest, @Body() dto: VerifySubscriptionDto) {
+    return this.billing.closeCheckout(req.profile!.church_id, dto.reference);
+  }
   @Post('verify')
   @HttpCode(200)
   @RequirePermissions('billing:update')
@@ -60,14 +83,16 @@ export class BillingWebhookController {
   webhook(
     @Param('gateway') gateway: string,
     @Req() req: RawBodyRequest<Request>,
-    @Headers('x-paystack-signature') paystack: string,
+    @Headers() headers: Record<string, string>,
     @Headers('flutterwave-signature') flutterwave: string,
     @Headers('verif-hash') verificationHash: string,
   ) {
     return this.billing.webhook(
       gateway,
       req.rawBody?.toString('utf8') ?? '',
-      gateway === 'paystack' ? paystack : flutterwave || verificationHash,
+      gateway === 'paystack'
+        ? (headers['paystack-signature'] ?? headers['x-paystack-signature'] ?? '')
+        : flutterwave || verificationHash,
     );
   }
 }

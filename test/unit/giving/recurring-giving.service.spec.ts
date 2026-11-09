@@ -43,11 +43,14 @@ describe('GivingService - Recurring Giving', () => {
     const handler: ProxyHandler<Record<string, unknown>> = {
       get(_target, prop: string) {
         if (prop === '$transaction') return $transactionMock;
+        if (prop === '$queryRaw') return jest.fn().mockResolvedValue([]);
         if (!models[prop]) {
           models[prop] = {
             findMany: jest.fn(),
             findUnique: jest.fn(),
             findFirst: jest.fn(),
+            findFirstOrThrow: jest.fn(),
+            updateMany: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
@@ -629,6 +632,24 @@ describe('GivingService - Recurring Giving', () => {
       };
 
       model('transaction').findFirst.mockResolvedValue(pendingTransaction);
+      model('transaction').findMany.mockResolvedValue([pendingTransaction]);
+      model('transaction').findFirstOrThrow.mockResolvedValue(pendingTransaction);
+      model('transaction').updateMany.mockImplementation(async () => {
+        model('transaction').findFirst.mockResolvedValue({
+          ...pendingTransaction,
+          status: 'success',
+        });
+        return { count: 1 };
+      });
+      prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
+      paystack.verifyTransaction.mockResolvedValue({
+        reference: 'TITHSEED123abc',
+        currency: 'NGN',
+        amount: 5000,
+        status: 'success',
+        channel: 'card',
+      });
+
       model('transaction').update.mockResolvedValue({});
       model('recurringGiving').findFirst.mockResolvedValue(mockRecurring);
       model('recurringGiving').update.mockResolvedValue({});

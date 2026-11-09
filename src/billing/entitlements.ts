@@ -1,3 +1,4 @@
+import { projectSubscription, resolvePaymentAccess } from './payment-access';
 import { ForbiddenException, ConflictException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { PlatformSubscription } from '@prisma/client';
@@ -5,6 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PLAN_CAPACITIES, planFeatures, PlanFeature } from './plans';
 
 export function entitlementsFromSubscription(subscription: PlatformSubscription | null) {
+  const access = resolvePaymentAccess(subscription?.access_grants);
+  subscription = projectSubscription(subscription);
+  if (subscription && access.selected)
+    subscription = { ...subscription, plan: access.selected.plan, cycle: access.selected.cycle };
   const plan = subscription?.plan ?? 'essentials';
   const agreement = subscription?.enterprise_limits as Record<string, unknown> | null;
   const enterpriseLimit = (key: string) =>
@@ -25,7 +30,9 @@ export function entitlementsFromSubscription(subscription: PlatformSubscription 
     limits,
     features: planFeatures(plan),
     get active() {
-      return !!(subscription?.paid_until && subscription.paid_until > new Date());
+      return access.tracked
+        ? access.active
+        : !!(subscription?.paid_until && subscription.paid_until > new Date());
     },
   };
 }

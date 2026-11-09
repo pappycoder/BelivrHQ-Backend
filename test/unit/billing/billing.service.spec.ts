@@ -1,3 +1,5 @@
+import { PaymentVerificationPendingException } from '../../../src/giving/services/payment-verification-pending.exception';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { CompanyEmailService } from '../../../src/company-email/company-email.service';
 import { SubscriptionPricingService } from '../../../src/billing/subscription-pricing.service';
 import { RedisService } from '../../../src/redis/redis.service';
@@ -50,6 +52,9 @@ describe('Platform subscriptions', () => {
       },
       subscriptionPayment: {
         findFirst: jest.fn().mockResolvedValue(null),
+        findFirstOrThrow: jest
+          .fn()
+          .mockImplementation(() => prisma.subscriptionPayment.findFirst()),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         create: jest.fn().mockImplementation(({ data }) => ({ ...data, checkout_url: null })),
@@ -228,6 +233,26 @@ describe('Platform subscriptions', () => {
       expect.objectContaining({ data: { status: 'failed' } }),
     );
   });
+  it('leaves an unconfirmed provider reference and subscription unchanged for recovery', async () => {
+    prisma.subscriptionPayment.findFirst.mockResolvedValue(payment);
+    gateway.verifyTransaction.mockRejectedValue(new PaymentVerificationPendingException());
+    await expect(service.reconcilePayment('church-a', reference)).resolves.toBeUndefined();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.subscriptionPayment.updateMany).not.toHaveBeenCalled();
+    expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+    expect(companyEmails.dispatch).not.toHaveBeenCalled();
+  });
+  it('preserves provider configuration errors for support without changing the payment', async () => {
+    prisma.subscriptionPayment.findFirst.mockResolvedValue(payment);
+    gateway.verifyTransaction.mockRejectedValue(
+      new ServiceUnavailableException('Check Flutterwave account configuration'),
+    );
+    await expect(service.reconcilePayment('church-a', reference)).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.subscriptionPayment.updateMany).not.toHaveBeenCalled();
+  });
   it('rejects cross-church references before contacting any provider', async () => {
     await expect(service.verify('church-b', reference)).rejects.toThrow('not found');
     expect(prisma.subscriptionPayment.findFirst).toHaveBeenCalledWith({
@@ -277,7 +302,7 @@ describe('Platform subscriptions', () => {
   it('ignores an already activated reference without extending or recharging', async () => {
     prisma.subscriptionPayment.findFirst.mockResolvedValue({ ...payment, status: 'success' });
     await service.verify('church-a', reference);
-    expect(gateway.verifyTransaction).not.toHaveBeenCalled();
+    expect(gateway.verifyTransaction).toHaveBeenCalledWith(reference);
     expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
   });
   it('queues a first-activation email only after verified success and retries dispatch on duplicate callbacks', async () => {
@@ -481,5 +506,32 @@ describe('Platform subscriptions', () => {
     ['2028-02-29T12:00:00Z', 'annual', '2029-02-28T12:00:00.000Z'],
   ])('uses calendar period %s %s', (start, cycle, end) => {
     expect(subscriptionEnd(new Date(start), cycle as 'monthly' | 'annual').toISOString()).toBe(end);
+  });
+  it('does not sell a new overlapping period across an unresolved access hold or an already-paid future renewal', async () => {
+    prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+      plan: 'essentials',
+      cycle: 'monthly',
+      paid_until: null,
+      access_grants: {
+        grants: [
+          {
+            reference: 'future',
+            plan: 'essentials',
+            cycle: 'monthly',
+            state: 'clear',
+            start: new Date(Date.now() + 86400000).toISOString(),
+            end: new Date(Date.now() + 32 * 86400000).toISOString(),
+          },
+        ],
+      },
+    });
+    await expect(
+      service.quote('church-a', {
+        plan: 'essentials',
+        cycle: 'monthly',
+        gateway: 'flutterwave',
+        currency: 'USD',
+      }),
+    ).rejects.toThrow('avoid overlapping payments');
   });
 });

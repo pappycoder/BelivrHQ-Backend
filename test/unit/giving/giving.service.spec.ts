@@ -48,11 +48,15 @@ describe('GivingService', () => {
     const handler: ProxyHandler<Record<string, unknown>> = {
       get(_target, prop: string) {
         if (prop === '$transaction') return $transactionMock;
+        if (prop === '$queryRaw') return jest.fn().mockResolvedValue([]);
         if (!models[prop]) {
           models[prop] = {
             findMany: jest.fn(),
             findUnique: jest.fn(),
             findFirst: jest.fn(),
+            findFirstOrThrow: jest.fn(),
+            updateMany: jest.fn(),
+            upsert: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
@@ -77,9 +81,12 @@ describe('GivingService', () => {
     return {
       isConfigured: jest.fn().mockReturnValue(true),
       initializeTransaction: jest.fn(),
-      verifyTransaction: jest
-        .fn()
-        .mockResolvedValue({ amount: 10000, currency: 'NGN', status: 'success' }),
+      verifyTransaction: jest.fn().mockResolvedValue({
+        reference: 'TITHSEED123abc',
+        amount: 10000,
+        currency: 'NGN',
+        status: 'success',
+      }),
       validateWebhookSignature: jest.fn().mockReturnValue(true),
       parseWebhookEvent: jest.fn().mockReturnValue({ event: '', reference: '' }),
       mapChannelToPaymentMethod: jest.fn().mockReturnValue('card'),
@@ -834,20 +841,39 @@ describe('GivingService', () => {
     });
   });
 
+  function setupPaymentLedger() {
+    prisma.$transaction.mockImplementation((callback: (tx: typeof prisma) => unknown) =>
+      callback(prisma),
+    );
+    model('transaction').findFirstOrThrow.mockImplementation(() =>
+      model('transaction').findFirst(),
+    );
+    model('transaction').findMany.mockImplementation(async () => {
+      const payment = await model('transaction').findFirst();
+      return payment ? [payment] : [];
+    });
+    model('transaction').updateMany.mockImplementation(async ({ data }) => {
+      const previous = await model('transaction').findFirst();
+      model('transaction').findFirst.mockResolvedValue({ ...previous, ...data });
+      return { count: 1 };
+    });
+  }
   describe('verifyPayment', () => {
+    beforeEach(setupPaymentLedger);
     it('should return existing successful transaction', async () => {
       model('transaction').findFirst.mockResolvedValue(mockTransaction);
 
       const result = await service.verifyPayment('TITHSEED123abc', mockChurchId);
 
       expect(result.status).toBe('success');
-      expect(paystack.verifyTransaction).not.toHaveBeenCalled();
+      expect(paystack.verifyTransaction).toHaveBeenCalled();
     });
 
     it('should verify pending transaction with correct gateway', async () => {
       const pendingTransaction = { ...mockTransaction, status: 'pending' };
       model('transaction').findFirst.mockResolvedValue(pendingTransaction);
       paystack.verifyTransaction.mockResolvedValue({
+        reference: 'TITHSEED123abc',
         amount: 10000,
         currency: 'NGN',
         status: 'success',
@@ -874,6 +900,7 @@ describe('GivingService', () => {
       };
       model('transaction').findFirst.mockResolvedValue(pendingTransaction);
       flutterwave.verifyTransaction.mockResolvedValue({
+        reference: 'TITHSEED123abc',
         amount: 10000,
         currency: 'NGN',
         status: 'success',
@@ -905,6 +932,7 @@ describe('GivingService', () => {
   // ─── WEBHOOK HANDLING ────────────────────────────────────────────
 
   describe('handleWebhook', () => {
+    beforeEach(setupPaymentLedger);
     it('should process charge.success event from paystack', async () => {
       paystack.parseWebhookEvent.mockReturnValue({
         event: 'charge.success',
@@ -958,6 +986,10 @@ describe('GivingService', () => {
     });
 
     it('should reject invalid webhook signature', async () => {
+      paystack.parseWebhookEvent.mockReturnValue({
+        event: 'charge.success',
+        reference: 'TITHSEED123abc',
+      });
       paystack.validateWebhookSignature.mockReturnValue(false);
       model('transaction').findFirst.mockResolvedValue({
         ...mockTransaction,

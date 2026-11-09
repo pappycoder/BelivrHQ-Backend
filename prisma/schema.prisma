@@ -1,5 +1,10 @@
 // ChurchOS Prisma Schema
-// PostgreSQL database with Supabase Auth for authentication
+// PostgreSQL database with Supabase Auth for authentication.
+// Order: client configuration, enums by feature, then models by feature.
+// Model fields: identifiers, data, audit timestamps, relations, constraints.
+// Enum values and compound field/index order are intentional; preserve them.
+
+// ─── Client and database configuration ───
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +15,33 @@ datasource db {
   // Connection URLs for Migrate are now configured in prisma.config.ts
 }
 
-// ─── Enums ───────────────────────────────────────────────
+// ─── Enums: Platform subscriptions ───
+
+enum SubscriptionPlan {
+  essentials
+  community
+  network
+  enterprise
+}
+
+enum BillingCycle {
+  monthly
+  annual
+}
+
+enum SubscriptionPaymentStatus {
+  pending
+  success
+  failed
+  reversed
+}
+
+enum SubscriptionGateway {
+  paystack
+  flutterwave
+}
+
+// ─── Enums: People ───
 
 enum MemberStatus {
   active
@@ -18,6 +49,8 @@ enum MemberStatus {
   suspended
   transferred
 }
+
+// ─── Enums: Giving and payments ───
 
 enum TransactionStatus {
   pending
@@ -38,6 +71,8 @@ enum PaymentGateway {
   manual
 }
 
+// ─── Enums: Events and ticketing ───
+
 enum EventType {
   service
   conference
@@ -46,10 +81,28 @@ enum EventType {
   social
 }
 
+enum RegistrationPaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum TicketStatus {
+  reserved
+  paid
+  cancelled
+  refunded
+}
+
+// ─── Enums: Communication ───
+
 enum MessageDirection {
   inbound
   outbound
 }
+
+// ─── Enums: Pastoral care ───
 
 enum RiskLevel {
   low
@@ -64,31 +117,7 @@ enum ConfidentialityLevel {
   restricted
 }
 
-enum FormStatus {
-  draft
-  published
-  closed
-}
-
-enum SubmissionStatus {
-  pending
-  approved
-  rejected
-}
-
-enum TicketStatus {
-  reserved
-  paid
-  cancelled
-  refunded
-}
-
-enum RegistrationPaymentStatus {
-  pending
-  paid
-  failed
-  refunded
-}
+// ─── Enums: Assets and inventory ───
 
 enum AssetStatus {
   active
@@ -124,118 +153,112 @@ enum AssetLoanStatus {
   overdue
 }
 
-enum SubscriptionPlan {
-  essentials
-  community
-  network
-  enterprise
+// ─── Enums: Forms ───
+
+enum FormStatus {
+  draft
+  published
+  closed
 }
 
-enum BillingCycle {
-  monthly
-  annual
-}
-
-enum SubscriptionPaymentStatus {
+enum SubmissionStatus {
   pending
-  success
-  failed
-  reversed
+  approved
+  rejected
 }
 
-enum SubscriptionGateway {
-  paystack
-  flutterwave
-}
-
-// ─── Church & branch structure ───
+// ─── Models: Church and branch structure ───
 
 model Church {
-  id           String    @id @default(uuid())
+  id String @id @default(uuid())
+
   name         String
   denomination String?
   address      String?
   city         String?
   state        String?
-  country      String    @default("Nigeria")
+  country      String  @default("Nigeria")
   phone        String?
   email        String?
   website      String?
   logo_url     String?
-  config       Json      @default("{}")
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  archived_at  DateTime? // Set when archived
+  config       Json    @default("{}")
 
-  intake_links                IntakeLink[]
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
+
   subscription                PlatformSubscription?
-  subscription_payments       SubscriptionPayment[]
-  company_email_notifications CompanyEmailNotification[]
   branches                    Branch[]
+  church_configs              ChurchConfig[]
+  subscription_payments       SubscriptionPayment[]
   profiles                    Profile[]
+  roles                       Role[]
+  church_role_permissions     ChurchRolePermission[]
   members                     Member[]
+  visitors                    Visitor[]
   families                    Family[]
+  custom_field_definitions    CustomFieldDefinition[]
+  intake_links                IntakeLink[]
   services                    Service[]
+  attendance_sessions         AttendanceSession[]
+  attendances                 Attendance[]
   giving_categories           GivingCategory[]
   transactions                Transaction[]
   events                      Event[]
-  messages                    Message[]
-  templates                   Template[]
-  forms                       Form[]
   departments                 Department[]
   cell_groups                 CellGroup[]
-  asset_categories            AssetCategory[]
-  assets                      Asset[]
-  audit_logs                  AuditLog[]
-  attendance_sessions         AttendanceSession[]
-  attendances                 Attendance[]
-  church_configs              ChurchConfig[]
+  messages                    Message[]
+  templates                   Template[]
+  broadcasts                  Broadcast[]
+  company_email_notifications CompanyEmailNotification[]
   integration_accounts        IntegrationAccount[]
   integration_channels        IntegrationChannel[]
   sermons                     Sermon[]
   media_assets                MediaAsset[]
-  broadcasts                  Broadcast[]
-  church_role_permissions     ChurchRolePermission[]
-  custom_field_definitions    CustomFieldDefinition[]
-  visitors                    Visitor[]
-  roles                       Role[]
+  asset_categories            AssetCategory[]
+  assets                      Asset[]
+  forms                       Form[]
+  audit_logs                  AuditLog[]
 
   @@map("churches")
 }
 
 model Branch {
-  id              String    @id @default(uuid())
-  church_id       String
+  id        String @id @default(uuid())
+  church_id String
+
   name            String
-  is_headquarters Boolean   @default(false)
+  is_headquarters Boolean @default(false)
   address         String?
   city            String?
   state           String?
-  country         String    @default("Nigeria")
+  country         String  @default("Nigeria")
   phone           String?
   email           String?
   photo_url       String?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-  archived_at     DateTime? // Set when archived
 
-  intake_links        IntakeLink[]
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
+
   church              Church              @relation(fields: [church_id], references: [id])
   profiles            Profile[]
   members             Member[]
   visitors            Visitor[]
-  attendance_sessions AttendanceSession[]
+  families            Family[]
+  intake_links        IntakeLink[]
   services            Service[]
+  attendance_sessions AttendanceSession[]
+  givingCategories    GivingCategory[]
   transactions        Transaction[]
   events              Event[]
-  assets              Asset[]
-  cellGroups          CellGroup[]
   departments         Department[]
-  families            Family[]
-  givingCategories    GivingCategory[]
+  cellGroups          CellGroup[]
   templates           Template[]
   sermons             Sermon[]
   mediaAssets         MediaAsset[]
+  assets              Asset[]
   forms               Form[]
 
   @@index([church_id])
@@ -243,10 +266,12 @@ model Branch {
 }
 
 model ChurchConfig {
-  id         String   @id @default(uuid())
-  church_id  String
-  key        String
-  value      Json
+  id        String @id @default(uuid())
+  church_id String
+
+  key   String
+  value Json
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -256,54 +281,69 @@ model ChurchConfig {
   @@map("church_configs")
 }
 
-// ─── Platform subscriptions · ChurchOS merchant account ───
+// ─── Models: Platform subscriptions and billing ───
 
 // Every church requires an explicit paid subscription for workspace access.
 model PlatformSubscription {
-  church_id         String            @id
+  church_id String @id
+
   plan              SubscriptionPlan
   cycle             BillingCycle
   paid_until        DateTime?
   period_started_at DateTime?
   scheduled_plan    SubscriptionPlan?
   scheduled_cycle   BillingCycle?
+  access_grants     Json?
   enterprise_limits Json?
-  created_at        DateTime          @default(now())
-  church            Church            @relation(fields: [church_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  church Church @relation(fields: [church_id], references: [id], onDelete: Cascade)
 
   @@map("platform_subscriptions")
 }
 
 // Immutable payment facts. The partial unique pending index is defined in SQL.
 model SubscriptionPayment {
-  reference          String                    @id
-  church_id          String
-  gateway            SubscriptionGateway
-  plan               SubscriptionPlan
-  cycle              BillingCycle
-  amount             Int
-  currency           String                    @default("NGN")
-  status             SubscriptionPaymentStatus @default(pending)
-  billing_email      String?
-  pricing_snapshot   Json?
-  checkout_url       String?
-  intent             String                    @default("renewal")
-  base_plan          SubscriptionPlan?
-  base_paid_until    DateTime?
-  target_paid_until  DateTime?
-  application_status String                    @default("pending")
-  verified_at        DateTime?
-  created_at         DateTime                  @default(now())
-  church             Church                    @relation(fields: [church_id], references: [id], onDelete: Restrict)
+  reference               String  @id
+  church_id               String
+  provider_transaction_id String?
+
+  gateway               SubscriptionGateway
+  plan                  SubscriptionPlan
+  cycle                 BillingCycle
+  amount                Int
+  currency              String                    @default("NGN")
+  status                SubscriptionPaymentStatus @default(pending)
+  provider_reference    String?
+  lifecycle             Json?
+  billing_email         String?
+  pricing_snapshot      Json?
+  checkout_closed_at    DateTime?
+  checkout_close_reason String?
+  checkout_url          String?
+  intent                String                    @default("renewal")
+  base_plan             SubscriptionPlan?
+  base_paid_until       DateTime?
+  target_paid_until     DateTime?
+  application_status    String                    @default("pending")
+  verified_at           DateTime?
+
+  created_at DateTime @default(now())
+
+  church Church @relation(fields: [church_id], references: [id], onDelete: Restrict)
 
   @@index([church_id, created_at])
+  @@index([gateway, provider_transaction_id])
+  @@index([gateway, provider_reference])
   @@map("subscription_payments")
 }
 
 model SubscriptionAlertKey {
-  id         String   @id
+  id         String @id
   church_id  String
   profile_id String
+
   resource   String
   threshold  Int
   period_end DateTime
@@ -312,35 +352,36 @@ model SubscriptionAlertKey {
   @@map("subscription_alert_keys")
 }
 
-// ─── Identity & access ───
+// ─── Models: Identity and access ───
 
 model Profile {
-  id                 String    @id @default(uuid())
-  user_id            String    @unique // Supabase Auth user ID
-  church_id          String
-  branch_id          String?
-  member_id          String?   @unique
-  role               String[]  @default([]) // ordered by rank desc; role[0] = primary
-  status             String    @default("active") // active, inactive (deactivated)
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+  user_id   String  @unique // Supabase Auth user ID
+  member_id String? @unique
+
+  role               String[] @default([]) // ordered by rank desc; role[0] = primary
+  status             String   @default("active") // active, inactive (deactivated)
   first_name         String
   last_name          String
   email              String?
   phone              String?
   avatar_url         String?
-  mfa_enabled        Boolean   @default(false)
-  two_factor_enabled Boolean   @default(false) // 2FA enabled; secrets and session assurance managed by backend
-  is_admin_hq        Boolean   @default(false) // HQ access override: see data from ALL branches in the church within the user's permission scope; defaulted ON for church_admin
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
-  archived_at        DateTime? // Set when archived
+  mfa_enabled        Boolean  @default(false)
+  two_factor_enabled Boolean  @default(false) // 2FA enabled; secrets and session assurance managed by backend
+  is_admin_hq        Boolean  @default(false) // HQ access override: see data from ALL branches in the church within the user's permission scope; defaulted ON for church_admin
 
-  church Church  @relation(fields: [church_id], references: [id])
-  branch Branch? @relation(fields: [branch_id], references: [id])
-  member Member? @relation(fields: [member_id], references: [id])
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
-  assigned_visitors Visitor[]             @relation("AssignedTo")
+  church            Church                @relation(fields: [church_id], references: [id])
+  branch            Branch?               @relation(fields: [branch_id], references: [id])
   authenticator     ProfileAuthenticator?
+  member            Member?               @relation(fields: [member_id], references: [id])
   mfa_sessions      VerifiedMfaSession[]
+  assigned_visitors Visitor[]             @relation("AssignedTo")
 
   @@index([church_id])
   @@index([user_id])
@@ -349,13 +390,16 @@ model Profile {
 
 // Server-only authenticator secrets; never returned in profile responses.
 model ProfileAuthenticator {
-  user_id           String   @id
+  user_id String @id
+
   secret_ciphertext String
   revision          String
   last_used_step    BigInt   @default(-1)
   recovery_hashes   String[] @default([])
-  created_at        DateTime @default(now())
-  profile           Profile  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  profile Profile @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@map("profile_authenticators")
 }
@@ -364,9 +408,11 @@ model ProfileAuthenticator {
 model VerifiedMfaSession {
   user_id    String
   session_id String
+
   revision   String
   expires_at DateTime
-  profile    Profile  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  profile Profile @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@id([user_id, session_id])
   @@index([expires_at])
@@ -375,10 +421,12 @@ model VerifiedMfaSession {
 
 // Seats reserved before calling an external authentication provider.
 model StaffInvitationReservation {
-  id         String   @id @default(uuid())
-  church_id  String
+  id        String @id @default(uuid())
+  church_id String
+
   email      String
   expires_at DateTime
+
   created_at DateTime @default(now())
 
   @@unique([church_id, email])
@@ -387,15 +435,17 @@ model StaffInvitationReservation {
 }
 
 model Role {
-  id          String           @id @default(uuid())
-  church_id   String? // null = global template available to all churches
+  id        String  @id @default(uuid())
+  church_id String? // null = global template available to all churches
+
   name        String
   label       String? // Human-friendly display name (custom roles); templates use frontend dictionary
   description String?
-  permissions RolePermission[]
-  created_at  DateTime         @default(now())
 
-  church Church? @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+
+  church      Church?          @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
 
   @@unique([church_id, name])
   @@index([church_id])
@@ -403,14 +453,17 @@ model Role {
 }
 
 model Permission {
-  id               String                 @id @default(uuid())
-  name             String                 @unique
-  description      String?
-  resource         String
-  action           String // create, read, update, delete
+  id String @id @default(uuid())
+
+  name        String  @unique
+  description String?
+  resource    String
+  action      String // create, read, update, delete
+
+  created_at DateTime @default(now())
+
   roles            RolePermission[]
   church_overrides ChurchRolePermission[]
-  created_at       DateTime               @default(now())
 
   @@map("permissions")
 }
@@ -430,25 +483,27 @@ model RolePermission {
 model ChurchRolePermission {
   id            String @id @default(uuid())
   church_id     String
-  role_name     String // matches Profile.role string (e.g., "secretary")
   permission_id String
+
+  role_name String // matches Profile.role string (e.g., "secretary")
+
+  created_at DateTime @default(now())
 
   church     Church     @relation(fields: [church_id], references: [id])
   permission Permission @relation(fields: [permission_id], references: [id])
-
-  created_at DateTime @default(now())
 
   @@unique([church_id, role_name, permission_id])
   @@index([church_id, role_name])
   @@map("church_role_permissions")
 }
 
-// ─── People & households ───
+// ─── Models: People and households ───
 
 model Member {
-  id              String       @id @default(uuid())
-  church_id       String
-  branch_id       String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   first_name      String
   last_name       String
   email           String?
@@ -464,31 +519,32 @@ model Member {
   photo_url       String?
   custom_fields   Json         @default("{}")
   notes           String?
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
-  archived_at     DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church                Church                 @relation(fields: [church_id], references: [id])
   branch                Branch?                @relation(fields: [branch_id], references: [id])
   profile               Profile?
+  converted_visitors    Visitor[]
   family_members        FamilyMember[]
   attendance            Attendance[]
   transactions          Transaction[]
+  recurring_giving      RecurringGiving[]
   event_registrations   EventRegistration[]
-  risk_scores           RiskScore[]
-  engagement_scores     EngagementScore[]
-  life_events           LifeEvent[]
+  department_members    DepartmentMember[]
+  department_attendance DepartmentAttendance[]
+  cell_group_members    CellGroupMember[]
+  cell_group_attendance CellGroupAttendance[]
+  sermon_bookmarks      SermonBookmark[]
   pastoral_notes_from   PastoralNote[]         @relation("Author")
   pastoral_notes_about  PastoralNote[]         @relation("Subject")
-  department_members    DepartmentMember[]
+  life_events           LifeEvent[]
+  risk_scores           RiskScore[]
+  engagement_scores     EngagementScore[]
   custodian_assets      Asset[]
   asset_loans           AssetLoan[]
-  converted_visitors    Visitor[]
-  sermon_bookmarks      SermonBookmark[]
-  cell_group_members    CellGroupMember[]
-  department_attendance DepartmentAttendance[]
-  cell_group_attendance CellGroupAttendance[]
-  recurring_giving      RecurringGiving[]
 
   @@index([church_id, branch_id, status])
   @@index([phone])
@@ -496,60 +552,29 @@ model Member {
   @@map("members")
 }
 
-model Family {
-  id          String    @id @default(uuid())
-  church_id   String
-  branch_id   String?
-  name        String
-  head_id     String?
+model Visitor {
+  id                  String  @id @default(uuid())
+  church_id           String
+  branch_id           String? // Branch the visitor was first received in (derived from the recording user at create time)
+  assigned_to_id      String? // Profile ID of follow-up team member
+  converted_member_id String? // Member ID if converted
+
+  first_name       String
+  last_name        String?
+  gender           String?
+  phone            String?
+  whatsapp_number  String?
+  email            String?
+  first_visit_date DateTime  @default(now())
+  follow_up_status String    @default("new") // new, contacted, follow_up_scheduled, interested, converted, dropped_off
+  notes            String?
+  custom_fields    Json      @default("{}")
+  converted_at     DateTime?
+
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   archived_at DateTime? // Set when archived
-
-  church         Church         @relation(fields: [church_id], references: [id])
-  branch         Branch?        @relation(fields: [branch_id], references: [id], onDelete: SetNull)
-  family_members FamilyMember[]
-
-  @@index([church_id, branch_id])
-  @@map("families")
-}
-
-model FamilyMember {
-  id           String   @id @default(uuid())
-  family_id    String
-  member_id    String
-  relationship String // e.g., "spouse", "child", "parent"
-  is_head      Boolean  @default(false)
-  created_at   DateTime @default(now())
-
-  family Family @relation(fields: [family_id], references: [id])
-  member Member @relation(fields: [member_id], references: [id])
-
-  @@unique([family_id, member_id])
-  @@map("family_members")
-}
-
-model Visitor {
-  id                  String    @id @default(uuid())
-  church_id           String
-  branch_id           String? // Branch the visitor was first received in (derived from the recording user at create time)
-  first_name          String
-  last_name           String?
-  gender              String?
-  phone               String?
-  whatsapp_number     String?
-  email               String?
-  first_visit_date    DateTime  @default(now())
-  follow_up_status    String    @default("new") // new, contacted, follow_up_scheduled, interested, converted, dropped_off
-  assigned_to_id      String? // Profile ID of follow-up team member
-  notes               String?
-  custom_fields       Json      @default("{}")
-  converted_member_id String? // Member ID if converted
-  converted_at        DateTime?
-  deleted_at          DateTime? // Set when converted to a member (soft-delete)
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-  archived_at         DateTime? // Set when archived
+  deleted_at  DateTime? // Set when converted to a member (soft-delete)
 
   church              Church                @relation(fields: [church_id], references: [id])
   branch              Branch?               @relation(fields: [branch_id], references: [id])
@@ -564,18 +589,57 @@ model Visitor {
   @@map("visitors")
 }
 
+model Family {
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+  head_id   String?
+
+  name String
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
+
+  church         Church         @relation(fields: [church_id], references: [id])
+  branch         Branch?        @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  family_members FamilyMember[]
+
+  @@index([church_id, branch_id])
+  @@map("families")
+}
+
+model FamilyMember {
+  id        String @id @default(uuid())
+  family_id String
+  member_id String
+
+  relationship String // e.g., "spouse", "child", "parent"
+  is_head      Boolean @default(false)
+
+  created_at DateTime @default(now())
+
+  member Member @relation(fields: [member_id], references: [id])
+  family Family @relation(fields: [family_id], references: [id])
+
+  @@unique([family_id, member_id])
+  @@map("family_members")
+}
+
 model CustomFieldDefinition {
-  id            String    @id @default(uuid())
-  church_id     String
+  id        String @id @default(uuid())
+  church_id String
+
   name          String
   field_type    String // text, number, date, dropdown, checkbox, textarea
-  options       Json      @default("[]") // dropdown options or validation config
-  is_required   Boolean   @default(false)
-  display_order Int       @default(0)
-  is_active     Boolean   @default(true)
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-  archived_at   DateTime? // Set when archived
+  options       Json    @default("[]") // dropdown options or validation config
+  is_required   Boolean @default(false)
+  display_order Int     @default(0)
+  is_active     Boolean @default(true)
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church Church @relation(fields: [church_id], references: [id])
 
@@ -584,12 +648,56 @@ model CustomFieldDefinition {
   @@map("custom_field_definitions")
 }
 
-// ─── Services & attendance ───
+// ─── Models: Public people registration ───
+
+// Branch-specific public people registration. Accepted receipts prevent repeat creation.
+model IntakeLink {
+  id        String @id @default(uuid())
+  church_id String
+  branch_id String
+
+  kind  String
+  token String @unique
+
+  created_at DateTime @default(now())
+
+  church      Church             @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  branch      Branch             @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  submissions IntakeSubmission[]
+
+  @@unique([church_id, branch_id, kind])
+  @@map("intake_links")
+}
+
+model IntakeSubmission {
+  id             String  @id @default(uuid())
+  church_id      String
+  branch_id      String
+  link_id        String
+  destination_id String?
+
+  kind        String
+  data        Json
+  search_text String
+  status      String    @default("pending")
+  reviewed_by String?
+  reviewed_at DateTime?
+
+  created_at DateTime @default(now())
+
+  link IntakeLink @relation(fields: [link_id], references: [id], onDelete: Cascade)
+
+  @@index([church_id, kind, status, branch_id, created_at])
+  @@map("intake_submissions")
+}
+
+// ─── Models: Services and attendance ───
 
 model Service {
-  id          String    @id @default(uuid())
-  church_id   String
-  branch_id   String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   name        String // e.g., "Sunday Service", "Wednesday Bible Study"
   category    String    @default("adult") // adult | children | mixed — mixed check-ins default to unspecified
   day_of_week Int? // 0=Sunday, 6=Saturday
@@ -599,14 +707,15 @@ model Service {
   start_time  DateTime? @db.Time(3)
   end_time    DateTime? @db.Time(3)
   is_active   Boolean   @default(true)
+
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   archived_at DateTime? // Set when archived
 
   church              Church              @relation(fields: [church_id], references: [id])
   branch              Branch?             @relation(fields: [branch_id], references: [id])
-  attendance          Attendance[]
   attendance_sessions AttendanceSession[]
+  attendance          Attendance[]
   transactions        Transaction[]
 
   @@index([church_id, branch_id])
@@ -614,21 +723,24 @@ model Service {
 }
 
 model AttendanceSession {
-  id                    String                 @id @default(uuid())
-  church_id             String
-  branch_id             String
-  service_id            String?
-  event_id              String?
-  department_id         String?
-  cell_group_id         String?
-  attendance_date       DateTime               @db.Date
-  total                 Int
-  adult_count           Int?
-  children_count        Int?
-  male_count            Int?
-  female_count          Int?
-  created_at            DateTime               @default(now())
-  updated_at            DateTime               @updatedAt
+  id            String  @id @default(uuid())
+  church_id     String
+  branch_id     String
+  service_id    String?
+  event_id      String?
+  department_id String?
+  cell_group_id String?
+
+  attendance_date DateTime @db.Date
+  total           Int
+  adult_count     Int?
+  children_count  Int?
+  male_count      Int?
+  female_count    Int?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
   church                Church                 @relation(fields: [church_id], references: [id])
   branch                Branch                 @relation(fields: [branch_id], references: [id])
   service               Service?               @relation(fields: [service_id], references: [id], onDelete: Restrict)
@@ -649,26 +761,28 @@ model AttendanceSession {
 }
 
 model Attendance {
-  id              String   @id @default(uuid())
-  church_id       String
-  service_id      String?
-  event_id        String?
-  member_id       String?
-  visitor_id      String?
+  id         String  @id @default(uuid())
+  church_id  String
+  service_id String?
+  event_id   String?
+  member_id  String?
+  visitor_id String?
+  session_id String?
+
   visitor_name    String?
   category        String   @default("adult") // adult | children | unspecified
   attendance_date DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
   checkin_at      DateTime @default(now())
   source          String   @default("manual") // manual, whatsapp, qr
-  created_at      DateTime @default(now())
 
-  church     Church             @relation(fields: [church_id], references: [id])
-  service    Service?           @relation(fields: [service_id], references: [id])
-  event      Event?             @relation(fields: [event_id], references: [id])
-  member     Member?            @relation(fields: [member_id], references: [id])
-  visitor    Visitor?           @relation(fields: [visitor_id], references: [id], onDelete: SetNull)
-  session_id String?
-  session    AttendanceSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  created_at DateTime @default(now())
+
+  church  Church             @relation(fields: [church_id], references: [id])
+  member  Member?            @relation(fields: [member_id], references: [id])
+  visitor Visitor?           @relation(fields: [visitor_id], references: [id], onDelete: SetNull)
+  service Service?           @relation(fields: [service_id], references: [id])
+  session AttendanceSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  event   Event?             @relation(fields: [event_id], references: [id])
 
   @@unique([service_id, member_id, attendance_date]) // One check-in per recurring service date per member
   @@unique([event_id, member_id]) // One check-in per event per member
@@ -681,22 +795,24 @@ model Attendance {
   @@map("attendance")
 }
 
-// ─── Giving & finance · church merchant accounts ───
+// ─── Models: Giving and church finance ───
 
 // Church-wide categories: migration 20261022120000 enforces branch_id IS NULL
 // and a unique (church_id, lower(trimmed name)) expression index, including archives.
 model GivingCategory {
-  id            String    @id @default(uuid())
-  church_id     String
-  branch_id     String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   name          String
   description   String?
-  display_order Int       @default(0)
-  is_recurring  Boolean   @default(false)
-  is_active     Boolean   @default(true)
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-  archived_at   DateTime? // Set when archived
+  display_order Int     @default(0)
+  is_recurring  Boolean @default(false)
+  is_active     Boolean @default(true)
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church       Church        @relation(fields: [church_id], references: [id])
   branch       Branch?       @relation(fields: [branch_id], references: [id], onDelete: SetNull)
@@ -707,36 +823,41 @@ model GivingCategory {
 }
 
 model Transaction {
-  id                     String              @id @default(uuid())
-  integration_account_id String?
-  integration_account    IntegrationAccount? @relation(fields: [integration_account_id], references: [id], onDelete: Restrict)
-  church_id              String
-  branch_id              String?
-  member_id              String?
-  category_id            String?
-  service_id             String? // Optional linkage: gift recorded against a service
-  event_id               String? // Optional linkage: gift recorded against an event
-  amount                 Float
-  currency               String              @default("NGN")
-  type                   TransactionType     @default(digital)
-  status                 TransactionStatus   @default(pending)
-  payment_reference      String?             @unique
-  payment_gateway        PaymentGateway      @default(paystack)
-  payment_method         String? // card, bank, ussd, mobile_money, cash, bank_transfer
-  receipt_number         String?
-  receipt_url            String?
-  metadata               Json                @default("{}")
-  notes                  String?
-  giving_date            DateTime            @default(now()) @db.Date
-  created_at             DateTime            @default(now())
-  updated_at             DateTime            @updatedAt
+  id                      String  @id @default(uuid())
+  church_id               String
+  branch_id               String?
+  integration_account_id  String?
+  member_id               String?
+  category_id             String?
+  service_id              String? // Optional linkage: gift recorded against a service
+  event_id                String? // Optional linkage: gift recorded against an event
+  provider_transaction_id String?
 
-  church   Church          @relation(fields: [church_id], references: [id])
-  branch   Branch?         @relation(fields: [branch_id], references: [id])
-  member   Member?         @relation(fields: [member_id], references: [id])
-  category GivingCategory? @relation(fields: [category_id], references: [id])
-  service  Service?        @relation(fields: [service_id], references: [id], onDelete: SetNull)
-  event    Event?          @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  amount             Float
+  currency           String            @default("NGN")
+  type               TransactionType   @default(digital)
+  status             TransactionStatus @default(pending)
+  payment_reference  String?           @unique
+  payment_gateway    PaymentGateway    @default(paystack)
+  provider_reference String?
+  lifecycle          Json?
+  payment_method     String? // card, bank, ussd, mobile_money, cash, bank_transfer
+  receipt_number     String?
+  receipt_url        String?
+  metadata           Json              @default("{}")
+  notes              String?
+  giving_date        DateTime          @default(now()) @db.Date
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  church              Church              @relation(fields: [church_id], references: [id])
+  branch              Branch?             @relation(fields: [branch_id], references: [id])
+  member              Member?             @relation(fields: [member_id], references: [id])
+  service             Service?            @relation(fields: [service_id], references: [id], onDelete: SetNull)
+  category            GivingCategory?     @relation(fields: [category_id], references: [id])
+  event               Event?              @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  integration_account IntegrationAccount? @relation(fields: [integration_account_id], references: [id], onDelete: Restrict)
 
   @@index([church_id, branch_id, created_at])
   @@index([church_id, branch_id, giving_date])
@@ -744,41 +865,46 @@ model Transaction {
   @@index([church_id, member_id, created_at])
   @@index([church_id, service_id])
   @@index([payment_reference])
+  @@index([payment_gateway, provider_transaction_id])
+  @@index([payment_gateway, provider_reference])
   @@map("transactions")
 }
 
 model RecurringGiving {
-  id                     String              @id @default(uuid())
-  integration_account_id String?
-  integration_account    IntegrationAccount? @relation(fields: [integration_account_id], references: [id], onDelete: Restrict)
+  id                     String  @id @default(uuid())
   church_id              String
+  integration_account_id String?
   member_id              String
   category_id            String
-  amount                 Float
-  currency               String              @default("NGN")
-  frequency              String // weekly, monthly, quarterly
-  payment_reference      String?
-  authorization_code     String? // Paystack authorization code
-  is_active              Boolean             @default(true)
-  paused_at              DateTime?
-  next_charge_date       DateTime?
-  last_charge_date       DateTime?
-  failed_attempt_count   Int                 @default(0)
-  created_at             DateTime            @default(now())
-  updated_at             DateTime            @updatedAt
 
-  member Member @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  amount               Float
+  currency             String    @default("NGN")
+  frequency            String // weekly, monthly, quarterly
+  payment_reference    String?
+  authorization_code   String? // Paystack authorization code
+  is_active            Boolean   @default(true)
+  paused_at            DateTime?
+  next_charge_date     DateTime?
+  last_charge_date     DateTime?
+  failed_attempt_count Int       @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  member              Member              @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  integration_account IntegrationAccount? @relation(fields: [integration_account_id], references: [id], onDelete: Restrict)
 
   @@index([church_id, member_id])
   @@map("recurring_giving")
 }
 
-// ─── Events & ticketing ───
+// ─── Models: Events and ticketing ───
 
 model Event {
-  id                  String    @id @default(uuid())
-  church_id           String
-  branch_id           String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   title               String
   description         String?
   type                EventType @default(service)
@@ -790,57 +916,36 @@ model Event {
   is_free             Boolean   @default(true)
   price               Float?
   registration_fields Json      @default("[]")
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-  archived_at         DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church              Church              @relation(fields: [church_id], references: [id])
   branch              Branch?             @relation(fields: [branch_id], references: [id])
+  attendance_sessions AttendanceSession[]
+  attendance          Attendance[]
+  transactions        Transaction[]
+  ticket_tiers        EventTicketTier[]
   registrations       EventRegistration[]
   tickets             Ticket[]
-  ticket_tiers        EventTicketTier[]
-  transactions        Transaction[]
-  attendance          Attendance[]
-  attendance_sessions AttendanceSession[]
 
   @@index([church_id, start_date])
   @@map("events")
 }
 
-model EventRegistration {
-  id                String                    @id @default(uuid())
-  church_id         String
-  event_id          String
-  member_id         String
-  custom_data       Json                      @default("{}")
-  payment_status    RegistrationPaymentStatus @default(pending)
-  payment_reference String?                   @unique
-  transaction_id    String?
-  ticket_id         String?
-  tier_id           String?
-  quantity          Int                       @default(1)
-  checked_in        Boolean                   @default(false)
-  checked_in_at     DateTime?
-  created_at        DateTime                  @default(now())
-
-  event  Event  @relation(fields: [event_id], references: [id])
-  member Member @relation(fields: [member_id], references: [id])
-
-  @@unique([event_id, member_id])
-  @@index([church_id, event_id])
-  @@map("event_registrations")
-}
-
 model EventTicketTier {
-  id            String    @id @default(uuid())
-  event_id      String
+  id       String @id @default(uuid())
+  event_id String
+
   name          String
   price         Float
   capacity      Int?
   description   String?
-  display_order Int       @default(0)
-  created_at    DateTime  @default(now())
-  archived_at   DateTime? // Set when archived
+  display_order Int     @default(0)
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime? // Set when archived
 
   event Event @relation(fields: [event_id], references: [id])
 
@@ -848,21 +953,49 @@ model EventTicketTier {
   @@map("event_ticket_tiers")
 }
 
+model EventRegistration {
+  id             String  @id @default(uuid())
+  church_id      String
+  event_id       String
+  member_id      String
+  transaction_id String?
+  ticket_id      String?
+  tier_id        String?
+
+  custom_data       Json                      @default("{}")
+  payment_status    RegistrationPaymentStatus @default(pending)
+  payment_reference String?                   @unique
+  quantity          Int                       @default(1)
+  checked_in        Boolean                   @default(false)
+  checked_in_at     DateTime?
+
+  created_at DateTime @default(now())
+
+  member Member @relation(fields: [member_id], references: [id])
+  event  Event  @relation(fields: [event_id], references: [id])
+
+  @@unique([event_id, member_id])
+  @@index([church_id, event_id])
+  @@map("event_registrations")
+}
+
 model Ticket {
-  id                String       @id @default(uuid())
-  event_id          String
+  id              String  @id @default(uuid())
+  event_id        String
+  member_id       String?
+  visitor_id      String?
+  registration_id String? @unique
+  transaction_id  String?
+
   code              String       @unique
-  member_id         String?
-  visitor_id        String?
-  registration_id   String?      @unique
   tier_name         String?
   price_paid        Float?
-  transaction_id    String?
   payment_reference String?      @unique
   status            TicketStatus @default(reserved)
   is_used           Boolean      @default(false)
   used_at           DateTime?
-  created_at        DateTime     @default(now())
+
+  created_at DateTime @default(now())
 
   event Event @relation(fields: [event_id], references: [id])
 
@@ -871,26 +1004,28 @@ model Ticket {
   @@map("tickets")
 }
 
-// ─── Departments & cell groups ───
+// ─── Models: Departments and cell groups ───
 
 model Department {
-  id             String    @id @default(uuid())
+  id             String  @id @default(uuid())
   church_id      String
   branch_id      String?
-  name           String
-  description    String?
   parent_id      String?
   head_member_id String? // Free-form head member id (mirrors CellGroup.leader_id)
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
-  archived_at    DateTime? // Set when archived
+
+  name        String
+  description String?
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church              Church                 @relation(fields: [church_id], references: [id])
   branch              Branch?                @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  attendance_sessions AttendanceSession[]
   department_members  DepartmentMember[]
   attendance          DepartmentAttendance[]
   assets              Asset[]
-  attendance_sessions AttendanceSession[]
 
   @@index([church_id])
   @@index([church_id, branch_id])
@@ -899,32 +1034,36 @@ model Department {
 }
 
 model DepartmentMember {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   department_id String
   member_id     String
-  role          String   @default("member")
-  joined_at     DateTime @default(now())
 
-  department Department @relation(fields: [department_id], references: [id])
+  role      String   @default("member")
+  joined_at DateTime @default(now())
+
   member     Member     @relation(fields: [member_id], references: [id])
+  department Department @relation(fields: [department_id], references: [id])
 
   @@unique([department_id, member_id])
   @@map("department_members")
 }
 
 model DepartmentAttendance {
-  id            String             @id @default(uuid())
+  id            String  @id @default(uuid())
   department_id String
   member_id     String?
-  visitor_name  String?
-  meeting_date  DateTime           @db.Date
-  status        String             @default("present")
-  notes         String?
-  created_at    DateTime           @default(now())
-  department    Department         @relation(fields: [department_id], references: [id], onDelete: Cascade)
-  member        Member?            @relation(fields: [member_id], references: [id], onDelete: Cascade)
   session_id    String?
-  session       AttendanceSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+
+  visitor_name String?
+  meeting_date DateTime @db.Date
+  status       String   @default("present")
+  notes        String?
+
+  created_at DateTime @default(now())
+
+  member     Member?            @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  session    AttendanceSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  department Department         @relation(fields: [department_id], references: [id], onDelete: Cascade)
 
   @@unique([department_id, member_id, meeting_date])
   @@index([department_id, meeting_date])
@@ -933,26 +1072,27 @@ model DepartmentAttendance {
 }
 
 model CellGroup {
-  id           String    @id @default(uuid())
-  church_id    String
-  branch_id    String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+  leader_id String?
+
   name         String
   address      String?
-  leader_id    String?
   latitude     Float?
   longitude    Float?
   meeting_day  String?
   meeting_time String?
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  archived_at  DateTime? // Set when archived
 
-  church Church  @relation(fields: [church_id], references: [id])
-  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
+  church              Church                @relation(fields: [church_id], references: [id])
+  branch              Branch?               @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  attendance_sessions AttendanceSession[]
   members             CellGroupMember[]
   attendance          CellGroupAttendance[]
-  attendance_sessions AttendanceSession[]
 
   @@index([church_id])
   @@index([church_id, branch_id])
@@ -960,14 +1100,15 @@ model CellGroup {
 }
 
 model CellGroupMember {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   cell_group_id String
   member_id     String
-  role          String   @default("member") // member, leader, assistant
-  joined_at     DateTime @default(now())
 
-  cell_group CellGroup @relation(fields: [cell_group_id], references: [id], onDelete: Cascade)
+  role      String   @default("member") // member, leader, assistant
+  joined_at DateTime @default(now())
+
   member     Member    @relation(fields: [member_id], references: [id])
+  cell_group CellGroup @relation(fields: [cell_group_id], references: [id], onDelete: Cascade)
 
   @@unique([cell_group_id, member_id])
   @@index([cell_group_id])
@@ -976,21 +1117,23 @@ model CellGroupMember {
 }
 
 model CellGroupAttendance {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   cell_group_id String
   member_id     String?
   visitor_id    String?
-  visitor_name  String?
-  meeting_date  DateTime @default(now())
-  status        String   @default("present") // present, absent, excused
-  notes         String?
-  created_at    DateTime @default(now())
+  session_id    String?
 
-  cell_group CellGroup          @relation(fields: [cell_group_id], references: [id], onDelete: Cascade)
+  visitor_name String?
+  meeting_date DateTime @default(now())
+  status       String   @default("present") // present, absent, excused
+  notes        String?
+
+  created_at DateTime @default(now())
+
   member     Member?            @relation(fields: [member_id], references: [id])
   visitor    Visitor?           @relation(fields: [visitor_id], references: [id], onDelete: SetNull)
-  session_id String?
   session    AttendanceSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  cell_group CellGroup          @relation(fields: [cell_group_id], references: [id], onDelete: Cascade)
 
   @@unique([cell_group_id, member_id, meeting_date])
   @@unique([cell_group_id, visitor_id, meeting_date])
@@ -1001,22 +1144,24 @@ model CellGroupAttendance {
   @@map("cell_group_attendance")
 }
 
-// ─── Communication ───
+// ─── Models: Communication and notifications ───
 
 model Message {
-  id                String           @id @default(uuid())
+  id                String  @id @default(uuid())
   church_id         String
   member_id         String?
-  phone             String
-  direction         MessageDirection
-  channel           String // whatsapp, sms, email
-  fallback_channel  String? // sms, email, etc.
   parent_message_id String? // ID of original message when this is a fallback
-  content           String?
-  media_url         String?
-  status            String           @default("sent") // sent, delivered, read, failed
-  metadata          Json             @default("{}")
-  created_at        DateTime         @default(now())
+
+  phone            String
+  direction        MessageDirection
+  channel          String // whatsapp, sms, email
+  fallback_channel String? // sms, email, etc.
+  content          String?
+  media_url        String?
+  status           String           @default("sent") // sent, delivered, read, failed
+  metadata         Json             @default("{}")
+
+  created_at DateTime @default(now())
 
   church Church @relation(fields: [church_id], references: [id])
 
@@ -1026,22 +1171,24 @@ model Message {
 }
 
 model Template {
-  id              String    @id @default(uuid())
-  church_id       String
-  branch_id       String?
+  id          String  @id @default(uuid())
+  church_id   String
+  branch_id   String?
+  external_id String? // WhatsApp template namespace/name
+
   name            String
   content         String
   channel         String // whatsapp, sms, email
-  language        String    @default("en")
-  status          String    @default("draft") // draft, published, archived
+  language        String  @default("en")
+  status          String  @default("draft") // draft, published, archived
   // WhatsApp-specific template fields
   category        String? // MARKETING, UTILITY, AUTHENTICATION (WhatsApp only)
-  variables       Json      @default("[]") // array of variable names for interpolation
-  external_id     String? // WhatsApp template namespace/name
+  variables       Json    @default("[]") // array of variable names for interpolation
   external_status String? // APPROVED, PENDING, REJECTED
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-  archived_at     DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church     Church      @relation(fields: [church_id], references: [id])
   branch     Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
@@ -1053,18 +1200,20 @@ model Template {
 }
 
 model Broadcast {
-  id               String    @id @default(uuid())
-  church_id        String
+  id          String @id @default(uuid())
+  church_id   String
+  template_id String
+
   name             String
-  template_id      String
   channel          String // whatsapp, sms, email
   audience_filter  Json      @default("{}")
   status           String    @default("draft") // draft, scheduled, sending, sent, cancelled, failed
   scheduled_at     DateTime?
   sent_at          DateTime?
   total_recipients Int       @default(0)
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   church     Church               @relation(fields: [church_id], references: [id])
   template   Template             @relation(fields: [template_id], references: [id])
@@ -1076,14 +1225,16 @@ model Broadcast {
 }
 
 model BroadcastRecipient {
-  id           String    @id @default(uuid())
+  id           String  @id @default(uuid())
   broadcast_id String
   member_id    String?
-  phone        String
-  status       String    @default("pending") // pending, sent, failed
-  sent_at      DateTime?
-  error        String?
-  created_at   DateTime  @default(now())
+
+  phone   String
+  status  String    @default("pending") // pending, sent, failed
+  sent_at DateTime?
+  error   String?
+
+  created_at DateTime @default(now())
 
   broadcast Broadcast @relation(fields: [broadcast_id], references: [id], onDelete: Cascade)
 
@@ -1094,29 +1245,35 @@ model BroadcastRecipient {
 
 // Internal inbox body. Recipient copies live in EmailRecipient.
 model EmailMessage {
-  id          String           @id @default(uuid())
+  id          String  @id @default(uuid())
   church_id   String
   sender_id   String // sender Profile.id
+  reply_to_id String? // reply threading
+
   sender_name String? // denormalized for list display
   subject     String
   body        String
-  reply_to_id String? // reply threading
-  deleted_at  DateTime? // set when the sender trashes their Sent copy
-  created_at  DateTime         @default(now())
-  recipients  EmailRecipient[]
+
+  created_at DateTime  @default(now())
+  deleted_at DateTime? // set when the sender trashes their Sent copy
+
+  recipients EmailRecipient[]
 
   @@index([church_id, created_at])
   @@map("email_messages")
 }
 
 model EmailRecipient {
-  id         String       @id @default(uuid())
+  id         String @id @default(uuid())
   message_id String
   profile_id String // recipient Profile.id
-  read_at    DateTime?
+
+  read_at DateTime?
+
+  created_at DateTime  @default(now())
   deleted_at DateTime? // set when the recipient trashes their Inbox copy
-  created_at DateTime     @default(now())
-  message    EmailMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  message EmailMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
 
   @@index([profile_id, read_at])
   @@index([message_id])
@@ -1125,9 +1282,11 @@ model EmailRecipient {
 
 // Server-only, durable organization account mail. No church email integration required.
 model CompanyEmailNotification {
-  id               String    @id @default(uuid())
+  id          String  @id @default(uuid())
+  church_id   String
+  provider_id String?
+
   event_key        String    @unique
-  church_id        String
   kind             String
   to_email         String
   from_email       String
@@ -1141,48 +1300,54 @@ model CompanyEmailNotification {
   lease_until      DateTime?
   first_attempt_at DateTime?
   sent_at          DateTime?
-  provider_id      String?
   last_error       String?
-  created_at       DateTime  @default(now())
-  church           Church    @relation(fields: [church_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+
+  church Church @relation(fields: [church_id], references: [id], onDelete: Cascade)
 
   @@index([status, available_at])
   @@map("company_email_notifications")
 }
 
 model Notification {
-  id         String    @id @default(uuid())
+  id         String @id @default(uuid())
   church_id  String
   profile_id String
-  type       String // system, attendance, giving, event, pastoral, broadcast
-  title      String
-  body       String
-  data       Json?
-  read_at    DateTime?
-  created_at DateTime  @default(now())
+
+  type    String // system, attendance, giving, event, pastoral, broadcast
+  title   String
+  body    String
+  data    Json?
+  read_at DateTime?
+
+  created_at DateTime @default(now())
 
   @@index([church_id, profile_id, read_at])
   @@index([church_id, profile_id, created_at])
   @@map("notifications")
 }
 
-// ─── Provider accounts & channel routing ───
+// ─── Models: Provider accounts and channel routing ───
 
 // Immutable encrypted credential versions; historical payments retain their account.
 model IntegrationAccount {
-  id                  String               @id @default(uuid())
-  church_id           String
+  id        String @id @default(uuid())
+  church_id String
+
   provider            String
   label               String
   ciphertext          String
-  verification_status String               @default("unchecked")
+  verification_status String    @default("unchecked")
   verified_at         DateTime?
-  archived_at         DateTime?
-  created_at          DateTime             @default(now())
-  church              Church               @relation(fields: [church_id], references: [id], onDelete: Cascade)
-  channels            IntegrationChannel[]
-  transactions        Transaction[]
-  recurring           RecurringGiving[]
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime?
+
+  church       Church               @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  recurring    RecurringGiving[]
+  channels     IntegrationChannel[]
 
   @@index([church_id, provider])
   @@map("integration_accounts")
@@ -1190,25 +1355,29 @@ model IntegrationAccount {
 
 model IntegrationChannel {
   church_id  String
-  channel    String
-  mode       String              @default("disabled")
-  provider   String?
   account_id String?
-  settings   Json                @default("{}")
-  updated_at DateTime            @updatedAt
-  church     Church              @relation(fields: [church_id], references: [id], onDelete: Cascade)
-  account    IntegrationAccount? @relation(fields: [account_id], references: [id], onDelete: Restrict)
+
+  channel  String
+  mode     String  @default("disabled")
+  provider String?
+  settings Json    @default("{}")
+
+  updated_at DateTime @updatedAt
+
+  church  Church              @relation(fields: [church_id], references: [id], onDelete: Cascade)
+  account IntegrationAccount? @relation(fields: [account_id], references: [id], onDelete: Restrict)
 
   @@id([church_id, channel])
   @@map("integration_channels")
 }
 
-// ─── Media & sermons ───
+// ─── Models: Media and sermons ───
 
 model Sermon {
-  id                  String    @id @default(uuid())
-  church_id           String
-  branch_id           String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   title               String
   speaker             String?
   sermon_date         DateTime
@@ -1219,13 +1388,13 @@ model Sermon {
   video_url           String?
   duration_seconds    Int?
   description         String?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-  archived_at         DateTime? // Set when archived
 
-  church Church  @relation(fields: [church_id], references: [id])
-  branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
+  church    Church           @relation(fields: [church_id], references: [id])
+  branch    Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
   bookmarks SermonBookmark[]
 
   @@index([church_id, sermon_date])
@@ -1233,10 +1402,11 @@ model Sermon {
 }
 
 model SermonBookmark {
-  id         String   @id @default(uuid())
-  church_id  String
-  member_id  String
-  sermon_id  String
+  id        String @id @default(uuid())
+  church_id String
+  member_id String
+  sermon_id String
+
   created_at DateTime @default(now())
 
   member Member @relation(fields: [member_id], references: [id], onDelete: Cascade)
@@ -1250,19 +1420,21 @@ model SermonBookmark {
 }
 
 model MediaAsset {
-  uploaded_by_user_id String?
-  storage_path        String?
-  storage_bucket      String?
-  id                  String   @id @default(uuid())
+  id                  String  @id @default(uuid())
   church_id           String
   branch_id           String?
-  filename            String
-  url                 String
-  mime_type           String
-  size_bytes          Int
-  folder              String   @default("general")
-  permissions         String   @default("members") // public, members, leadership
-  created_at          DateTime @default(now())
+  uploaded_by_user_id String?
+
+  storage_path   String?
+  storage_bucket String?
+  filename       String
+  url            String
+  mime_type      String
+  size_bytes     Int
+  folder         String  @default("general")
+  permissions    String  @default("members") // public, members, leadership
+
+  created_at DateTime @default(now())
 
   church Church  @relation(fields: [church_id], references: [id])
   branch Branch? @relation(fields: [branch_id], references: [id], onDelete: SetNull)
@@ -1271,19 +1443,21 @@ model MediaAsset {
   @@map("media_assets")
 }
 
-// ─── Pastoral care ───
+// ─── Models: Pastoral care ───
 
 model PastoralNote {
-  id              String               @id @default(uuid())
-  church_id       String
-  member_id       String
-  author_id       String
+  id        String @id @default(uuid())
+  church_id String
+  member_id String
+  author_id String
+
   content         String // Encrypted at application level
   confidentiality ConfidentialityLevel @default(standard)
   tags            String[]
-  created_at      DateTime             @default(now())
-  updated_at      DateTime             @updatedAt
-  archived_at     DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   member Member @relation("Subject", fields: [member_id], references: [id])
   author Member @relation("Author", fields: [author_id], references: [id])
@@ -1293,13 +1467,15 @@ model PastoralNote {
 }
 
 model LifeEvent {
-  id          String    @id @default(uuid())
-  church_id   String
-  member_id   String
-  type        String // birthday, wedding, death, dedication, baptism
-  date        DateTime
-  details     Json      @default("{}")
-  notified    Boolean   @default(false)
+  id        String @id @default(uuid())
+  church_id String
+  member_id String
+
+  type     String // birthday, wedding, death, dedication, baptism
+  date     DateTime
+  details  Json     @default("{}")
+  notified Boolean  @default(false)
+
   created_at  DateTime  @default(now())
   archived_at DateTime? // Set when archived
 
@@ -1310,9 +1486,10 @@ model LifeEvent {
 }
 
 model RiskScore {
-  id            String    @id @default(uuid())
-  church_id     String
-  member_id     String
+  id        String @id @default(uuid())
+  church_id String
+  member_id String
+
   score         Int // 0-100
   level         RiskLevel
   factors       Json      @default("{}")
@@ -1326,9 +1503,10 @@ model RiskScore {
 }
 
 model EngagementScore {
-  id            String   @id @default(uuid())
-  church_id     String
-  member_id     String
+  id        String @id @default(uuid())
+  church_id String
+  member_id String
+
   score         Int // 0-100
   factors       Json     @default("{}")
   calculated_at DateTime @default(now())
@@ -1342,20 +1520,22 @@ model EngagementScore {
 
 // Staff-to-pastor appointments; authorization and branch scope are service-enforced.
 model Appointment {
-  id           String    @id @default(uuid())
-  church_id    String
-  branch_id    String? // resolved birth context (the With pastor's branch)
-  pastor_id    String // With party — pastor Profile.id (branch_pastor | church_admin | senior_pastor)
-  person_id    String // Who party — person Profile.id (any staff/member)
-  visitor_id   String? // Who party when it's a visitor (null for profile Who)
+  id         String  @id @default(uuid())
+  church_id  String
+  branch_id  String? // resolved birth context (the With pastor's branch)
+  pastor_id  String // With party — pastor Profile.id (branch_pastor | church_admin | senior_pastor)
+  person_id  String // Who party — person Profile.id (any staff/member)
+  visitor_id String? // Who party when it's a visitor (null for profile Who)
+
   title        String
   scheduled_at DateTime
   location     String?
   notes        String?
-  status       String    @default("pending") // pending, confirmed, completed, cancelled
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  archived_at  DateTime? // set when archived
+  status       String   @default("pending") // pending, confirmed, completed, cancelled
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // set when archived
 
   @@index([church_id, scheduled_at])
   @@index([person_id])
@@ -1364,13 +1544,15 @@ model Appointment {
   @@map("appointments")
 }
 
-// ─── Assets & inventory ───
+// ─── Models: Assets and inventory ───
 
 model AssetCategory {
-  id          String    @id @default(uuid())
-  church_id   String
+  id        String @id @default(uuid())
+  church_id String
+
   name        String
   description String?
+
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   archived_at DateTime? // Set when archived
@@ -1384,19 +1566,20 @@ model AssetCategory {
 }
 
 model Asset {
-  id                  String             @id @default(uuid())
-  church_id           String
+  id            String  @id @default(uuid())
+  church_id     String
+  branch_id     String?
+  category_id   String?
+  department_id String?
+  custodian_id  String?
+
   asset_tag           String
   name                String
   description         String?
   image_url           String?
-  category_id         String?
   serial_number       String?
   brand               String?
   model               String?
-  department_id       String?
-  branch_id           String?
-  custodian_id        String?
   condition           AssetCondition     @default(good)
   status              AssetStatus        @default(active)
   purchase_date       DateTime?
@@ -1408,15 +1591,16 @@ model Asset {
   location            String?
   qr_code             String?
   notes               String?
-  created_at          DateTime           @default(now())
-  updated_at          DateTime           @updatedAt
-  archived_at         DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church       Church              @relation(fields: [church_id], references: [id])
-  category     AssetCategory?      @relation(fields: [category_id], references: [id])
   branch       Branch?             @relation(fields: [branch_id], references: [id])
-  department   Department?         @relation(fields: [department_id], references: [id])
   custodian    Member?             @relation(fields: [custodian_id], references: [id])
+  department   Department?         @relation(fields: [department_id], references: [id])
+  category     AssetCategory?      @relation(fields: [category_id], references: [id])
   maintenance  AssetMaintenance[]
   depreciation AssetDepreciation[]
   loans        AssetLoan[]
@@ -1432,8 +1616,9 @@ model Asset {
 }
 
 model AssetMaintenance {
-  id             String            @id @default(uuid())
-  asset_id       String
+  id       String @id @default(uuid())
+  asset_id String
+
   type           String
   description    String?
   status         MaintenanceStatus @default(scheduled)
@@ -1442,8 +1627,9 @@ model AssetMaintenance {
   cost           Float?
   performed_by   String?
   notes          String?
-  created_at     DateTime          @default(now())
-  updated_at     DateTime          @updatedAt
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   asset Asset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
 
@@ -1454,13 +1640,15 @@ model AssetMaintenance {
 }
 
 model AssetDepreciation {
-  id                  String   @id @default(uuid())
-  asset_id            String
+  id       String @id @default(uuid())
+  asset_id String
+
   year                Int
   opening_value       Float
   depreciation_amount Float
   closing_value       Float
-  created_at          DateTime @default(now())
+
+  created_at DateTime @default(now())
 
   asset Asset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
 
@@ -1470,9 +1658,10 @@ model AssetDepreciation {
 }
 
 model AssetLoan {
-  id                   String          @id @default(uuid())
-  asset_id             String
-  borrower_member_id   String?
+  id                 String  @id @default(uuid())
+  asset_id           String
+  borrower_member_id String?
+
   borrowed_by_name     String?
   loan_date            DateTime        @default(now())
   expected_return_date DateTime
@@ -1481,11 +1670,12 @@ model AssetLoan {
   condition_before     AssetCondition?
   condition_after      AssetCondition?
   notes                String?
-  created_at           DateTime        @default(now())
-  updated_at           DateTime        @updatedAt
 
-  asset  Asset   @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
   member Member? @relation(fields: [borrower_member_id], references: [id])
+  asset  Asset   @relation(fields: [asset_id], references: [id], onDelete: Cascade)
 
   @@index([asset_id])
   @@index([asset_id, status])
@@ -1493,12 +1683,14 @@ model AssetLoan {
 }
 
 model AssetScanLog {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   asset_id      String
   scanned_by_id String?
-  scan_type     String   @default("check") // check, loan, return, maintenance
-  metadata      Json     @default("{}")
-  created_at    DateTime @default(now())
+
+  scan_type String @default("check") // check, loan, return, maintenance
+  metadata  Json   @default("{}")
+
+  created_at DateTime @default(now())
 
   asset Asset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
 
@@ -1507,12 +1699,13 @@ model AssetScanLog {
   @@map("asset_scan_logs")
 }
 
-// ─── Forms ───
+// ─── Models: Forms and submissions ───
 
 model Form {
-  id               String     @id @default(uuid())
-  church_id        String
-  branch_id        String?
+  id        String  @id @default(uuid())
+  church_id String
+  branch_id String?
+
   title            String
   description      String?
   fields           Json       @default("[]") // Array of field definitions
@@ -1522,9 +1715,10 @@ model Form {
   public_token     String?    @unique
   unique_field     String? // Field key (e.g. "email") used to detect duplicate public submissions
   submission_limit Int        @default(0) // 0 = unlimited; >0 caps total submissions
-  created_at       DateTime   @default(now())
-  updated_at       DateTime   @updatedAt
-  archived_at      DateTime? // Set when archived
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  archived_at DateTime? // Set when archived
 
   church      Church           @relation(fields: [church_id], references: [id])
   branch      Branch?          @relation(fields: [branch_id], references: [id], onDelete: SetNull)
@@ -1537,17 +1731,19 @@ model Form {
 }
 
 model FormSubmission {
-  id               String           @id @default(uuid())
-  form_id          String
-  church_id        String
+  id             String  @id @default(uuid())
+  church_id      String
+  form_id        String
+  approved_by_id String?
+
   data             Json
   submitted_by     String?
   status           SubmissionStatus @default(pending)
-  approved_by_id   String?
   approved_at      DateTime?
   rejection_reason String?
   attachments      Json             @default("[]")
-  created_at       DateTime         @default(now())
+
+  created_at DateTime @default(now())
 
   form Form @relation(fields: [form_id], references: [id])
 
@@ -1557,33 +1753,36 @@ model FormSubmission {
   @@map("form_submissions")
 }
 
-// ─── Offline synchronization ───
+// ─── Models: Offline synchronization ───
 
-// Durable acknowledgements are independent of the expiring change feed.
-model OfflineReceipt {
-  id           String   @id @default(uuid())
-  church_id    String
-  profile_id   String
-  mutation_id  String
-  payload_hash String
-  result       Json
-  created_at   DateTime @default(now())
+model SyncDevice {
+  id        String @id @default(uuid())
+  church_id String
+  device_id String
 
-  @@unique([church_id, profile_id, mutation_id])
-  @@map("offline_receipts")
+  last_pull_cursor DateTime?
+  last_seen_at     DateTime  @default(now())
+
+  created_at DateTime @default(now())
+
+  @@unique([church_id, device_id])
+  @@index([church_id, last_pull_cursor])
+  @@map("sync_devices")
 }
 
 model SyncQueue {
-  id          String    @id @default(uuid())
+  id          String  @id @default(uuid())
   church_id   String
-  entity      String
   entity_id   String
   mutation_id String?
-  action      String // create, update, delete
-  data        Json
-  synced      Boolean   @default(false)
-  synced_at   DateTime?
-  created_at  DateTime  @default(now())
+
+  entity    String
+  action    String // create, update, delete
+  data      Json
+  synced    Boolean   @default(false)
+  synced_at DateTime?
+
+  created_at DateTime @default(now())
 
   @@unique([church_id, mutation_id])
   @@index([church_id, created_at, id])
@@ -1591,32 +1790,37 @@ model SyncQueue {
   @@map("sync_queue")
 }
 
-model SyncDevice {
-  id               String    @id @default(uuid())
-  church_id        String
-  device_id        String
-  last_pull_cursor DateTime?
-  last_seen_at     DateTime  @default(now())
-  created_at       DateTime  @default(now())
+// Durable acknowledgements are independent of the expiring change feed.
+model OfflineReceipt {
+  id          String @id @default(uuid())
+  church_id   String
+  profile_id  String
+  mutation_id String
 
-  @@unique([church_id, device_id])
-  @@index([church_id, last_pull_cursor])
-  @@map("sync_devices")
+  payload_hash String
+  result       Json
+
+  created_at DateTime @default(now())
+
+  @@unique([church_id, profile_id, mutation_id])
+  @@map("offline_receipts")
 }
 
-// ─── System & webhooks ───
+// ─── Models: Audit and outgoing webhooks ───
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  church_id  String
-  user_id    String?
+  id        String  @id @default(uuid())
+  church_id String
+  user_id   String?
+  entity_id String?
+
   action     String
   entity     String
-  entity_id  String?
   old_values Json?
   new_values Json?
   ip_address String?
   user_agent String?
+
   created_at DateTime @default(now())
 
   church Church @relation(fields: [church_id], references: [id])
@@ -1627,12 +1831,14 @@ model AuditLog {
 }
 
 model WebhookSubscription {
-  id          String    @id @default(uuid())
-  church_id   String
-  url         String
-  events      String[] // e.g. ["member.created", "transaction.completed"]
-  secret      String
-  is_active   Boolean   @default(true)
+  id        String @id @default(uuid())
+  church_id String
+
+  url       String
+  events    String[] // e.g. ["member.created", "transaction.completed"]
+  secret    String
+  is_active Boolean  @default(true)
+
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   archived_at DateTime? // Set when archived
@@ -1642,8 +1848,9 @@ model WebhookSubscription {
 }
 
 model WebhookDelivery {
-  id              String    @id @default(uuid())
+  id              String @id @default(uuid())
   subscription_id String
+
   event           String
   payload         Json
   status          String    @default("pending") // pending, success, failed
@@ -1651,43 +1858,9 @@ model WebhookDelivery {
   response_body   String?
   attempts        Int       @default(0)
   next_retry_at   DateTime?
-  created_at      DateTime  @default(now())
+
+  created_at DateTime @default(now())
 
   @@index([subscription_id, status])
   @@map("webhook_deliveries")
-}
-
-// Branch-specific public people registration. Accepted receipts prevent repeat creation.
-model IntakeLink {
-  id          String             @id @default(uuid())
-  church_id   String
-  branch_id   String
-  kind        String
-  token       String             @unique
-  created_at  DateTime           @default(now())
-  church      Church             @relation(fields: [church_id], references: [id], onDelete: Cascade)
-  branch      Branch             @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  submissions IntakeSubmission[]
-
-  @@unique([church_id, branch_id, kind])
-  @@map("intake_links")
-}
-
-model IntakeSubmission {
-  id             String     @id @default(uuid())
-  church_id      String
-  branch_id      String
-  kind           String
-  link_id        String
-  data           Json
-  search_text    String
-  status         String     @default("pending")
-  destination_id String?
-  reviewed_by    String?
-  reviewed_at    DateTime?
-  created_at     DateTime   @default(now())
-  link           IntakeLink @relation(fields: [link_id], references: [id], onDelete: Cascade)
-
-  @@index([church_id, kind, status, branch_id, created_at])
-  @@map("intake_submissions")
 }

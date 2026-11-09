@@ -34,9 +34,17 @@ describe('Payment settlement and merchant isolation', () => {
     const provider = new PaystackService(new ConfigService({ PAYSTACK_SECRET_KEY: secret }));
     update = jest.fn().mockResolvedValue({ ...transaction, status: 'success' });
     const prisma = {
-      transaction: { findFirst: jest.fn().mockResolvedValue(transaction), update },
+      transaction: {
+        findFirst: jest.fn().mockResolvedValue(transaction),
+        findFirstOrThrow: jest.fn().mockResolvedValue(transaction),
+        findMany: jest.fn().mockResolvedValue([transaction]),
+        updateMany: update,
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      eventRegistration: { findFirst: jest.fn().mockResolvedValue(null) },
       profile: { findFirst: jest.fn().mockResolvedValue(null) },
     };
+    Object.assign(prisma, { $transaction: (fn: (tx: typeof prisma) => unknown) => fn(prisma) });
     history = jest.fn().mockResolvedValue(provider);
     service = new GivingService(
       prisma as never,
@@ -80,6 +88,7 @@ describe('Payment settlement and merchant isolation', () => {
     expect(await service.handleWebhook(payload, signature, 'paystack')).toEqual({
       processed: true,
       event: 'charge.success',
+      reference,
     });
     expect(history).toHaveBeenCalledWith('church-a', 'paystack', 'original-account');
     expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
@@ -91,7 +100,9 @@ describe('Payment settlement and merchant isolation', () => {
   });
   it('rejects a platform/other merchant signature before making any payment mutation', async () => {
     const other = createHmac('sha512', 'platform-key').update(payload).digest('hex');
-    await expect(service.handleWebhook(payload, other, 'paystack')).rejects.toThrow('signature');
+    await expect(service.handleWebhook(payload, other, 'paystack')).rejects.toThrow(
+      'securely matched',
+    );
     expect(update).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -1,77 +1,70 @@
 import { PaymentReconciliationService } from '../../../src/billing/payment-reconciliation.service';
-import { PrismaService } from '../../../src/prisma/prisma.service';
-import { BillingService } from '../../../src/billing/billing.service';
-import { FlutterwaveService } from '../../../src/giving/services/flutterwave.service';
 import { workersEnabled } from '../../../src/queues/workers-enabled';
 jest.mock('../../../src/queues/workers-enabled', () => ({ workersEnabled: jest.fn(() => true) }));
 
-describe('subscription payment recovery', () => {
-  const findMany = jest.fn();
-  const reconcilePayment = jest.fn();
-  const isConfigured = jest.fn();
-  let recovery: PaymentReconciliationService;
+describe('payment recovery', () => {
+  const subscriptionFind = jest.fn(),
+    givingFind = jest.fn(),
+    expire = jest.fn();
+  const billing = { reconcilePayment: jest.fn(), reconcileAdjustments: jest.fn() };
+  const giving = { reconcilePayment: jest.fn(), reconcileAdjustments: jest.fn() };
+  let worker: PaymentReconciliationService;
   beforeEach(() => {
     jest.resetAllMocks();
     jest.mocked(workersEnabled).mockReturnValue(true);
-    isConfigured.mockReturnValue(true);
-    findMany.mockResolvedValue([]);
-    reconcilePayment.mockResolvedValue(undefined);
-    recovery = new PaymentReconciliationService(
-      { subscriptionPayment: { findMany } } as unknown as PrismaService,
-      { reconcilePayment } as unknown as BillingService,
-      { isConfigured } as unknown as FlutterwaveService,
+    subscriptionFind.mockResolvedValue([]);
+    givingFind.mockResolvedValue([]);
+    worker = new PaymentReconciliationService(
+      {
+        subscriptionPayment: { findMany: subscriptionFind, updateMany: expire },
+        transaction: { findMany: givingFind },
+      } as never,
+      billing as never,
+      { name: 'flutterwave', isConfigured: () => true } as never,
+      { name: 'paystack', isConfigured: () => true } as never,
+      giving as never,
     );
   });
-  it('rechecks pending and previously failed attempts through the same tenant-scoped verifier', async () => {
-    findMany.mockResolvedValue([
-      { reference: 'payment-a', church_id: 'church-a' },
-      { reference: 'payment-b', church_id: 'church-b' },
-    ]);
-    reconcilePayment.mockRejectedValueOnce(new Error('provider unavailable'));
-    await recovery.reconcile();
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          gateway: 'flutterwave',
-          status: { in: ['pending', 'failed'] },
-        }),
-        take: 25,
-      }),
-    );
-    expect(reconcilePayment).toHaveBeenNthCalledWith(1, 'church-a', 'payment-a');
-    expect(reconcilePayment).toHaveBeenNthCalledWith(2, 'church-b', 'payment-b');
+  it('recovers both gateways and all financial states without a seven-day cutoff', async () => {
+    subscriptionFind.mockResolvedValue([{ reference: 's', church_id: 'a' }]);
+    givingFind.mockResolvedValue([{ id: 'g', payment_reference: 'p', church_id: 'b' }]);
+    await worker.reconcile();
+    expect(subscriptionFind.mock.calls[0][0].where).toMatchObject({
+      gateway: { in: ['flutterwave', 'paystack'] },
+      status: { in: ['pending', 'failed', 'success', 'reversed'] },
+    });
+    expect(subscriptionFind.mock.calls[0][0].where).not.toHaveProperty('created_at');
+    expect(billing.reconcilePayment).toHaveBeenCalledWith('a', 's');
+    expect(billing.reconcileAdjustments).toHaveBeenCalledWith('a', 's');
+    expect(giving.reconcilePayment).toHaveBeenCalledWith('b', 'p');
+    expect(giving.reconcileAdjustments).toHaveBeenCalledWith('b', 'p');
+    expect(expire.mock.calls[0][0].data).toMatchObject({
+      checkout_close_reason: 'expired',
+      checkout_url: null,
+    });
   });
-  it('rotates bounded batches instead of repeatedly checking only the oldest payments', async () => {
-    findMany.mockResolvedValueOnce(
-      Array.from({ length: 25 }, (_, i) => ({ reference: `reference-${i}`, church_id: 'c' })),
+  it('rotates bounded batches and isolates individual provider failures', async () => {
+    subscriptionFind.mockResolvedValueOnce(
+      Array.from({ length: 25 }, (_, i) => ({ reference: `s${i}`, church_id: 'a' })),
     );
-    await recovery.reconcile();
-    await recovery.reconcile();
-    expect(findMany.mock.calls[1][0].where.reference).toEqual({ gt: 'reference-24' });
-    await recovery.reconcile();
-    expect(findMany.mock.calls[2][0].where).not.toHaveProperty('reference');
+    billing.reconcilePayment.mockRejectedValueOnce(new Error('outage'));
+    await worker.reconcile();
+    await worker.reconcile();
+    expect(billing.reconcilePayment).toHaveBeenCalledTimes(25);
+    expect(subscriptionFind.mock.calls[1][0].where.reference).toEqual({ gt: 's24' });
+    await worker.reconcile();
+    expect(subscriptionFind.mock.calls[2][0].where).not.toHaveProperty('reference');
   });
-  it('does not overlap scans and remains usable after a database failure', async () => {
-    let finish!: () => void;
-    findMany.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      }),
-    );
-    const first = recovery.reconcile();
-    await recovery.reconcile();
-    expect(findMany).toHaveBeenCalledTimes(1);
-    finish();
-    await first;
-    await recovery.reconcile();
-    expect(findMany).toHaveBeenCalledTimes(2);
-  });
-  it('does not run on HTTP-only serverless instances or without platform credentials', async () => {
+  it('does not run on HTTP-only instances', async () => {
     jest.mocked(workersEnabled).mockReturnValue(false);
-    await recovery.reconcile();
-    jest.mocked(workersEnabled).mockReturnValue(true);
-    isConfigured.mockReturnValue(false);
-    await recovery.reconcile();
-    expect(findMany).not.toHaveBeenCalled();
+    await worker.reconcile();
+    expect(subscriptionFind).not.toHaveBeenCalled();
+    expect(givingFind).not.toHaveBeenCalled();
+  });
+  it('continues after a failed scan', async () => {
+    subscriptionFind.mockRejectedValueOnce(new Error('database'));
+    await worker.reconcile();
+    await worker.reconcile();
+    expect(subscriptionFind).toHaveBeenCalledTimes(2);
   });
 });

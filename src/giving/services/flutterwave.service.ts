@@ -1,3 +1,4 @@
+import { record, parsePaymentEvent, PaymentAdjustment } from './payment-lifecycle';
 /**
  * @file flutterwave.service.ts
  * @description Flutterwave payment integration service.
@@ -15,6 +16,7 @@ import {
   BadRequestException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { PaymentVerificationPendingException } from './payment-verification-pending.exception';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import {
@@ -44,6 +46,7 @@ interface FlutterwaveVerifyResponse {
   data: {
     id: number;
     tx_ref: string;
+    flw_ref?: string;
     amount: number;
     currency: string;
     status: string;
@@ -53,7 +56,7 @@ interface FlutterwaveVerifyResponse {
       name: string;
       email: string;
     };
-  };
+  } | null;
 }
 
 /**
@@ -86,7 +89,11 @@ export class FlutterwaveService implements PaymentGatewayProvider {
    * so callers never surface an untyped Node `fetch` error. HTTP-level provider
    * errors are left for the caller to interpret from the parsed body.
    */
-  private async request<T>(url: string, init: RequestInit): Promise<T> {
+  private async request<T>(
+    url: string,
+    init: RequestInit,
+    onResponse?: (status: number) => void,
+  ): Promise<T> {
     let response: Response;
     try {
       response = await fetch(url, {
@@ -101,6 +108,7 @@ export class FlutterwaveService implements PaymentGatewayProvider {
       );
     }
 
+    onResponse?.(response.status ?? 200);
     try {
       return (await response.json()) as T;
     } catch {
@@ -182,6 +190,7 @@ export class FlutterwaveService implements PaymentGatewayProvider {
     // Flutterwave verify endpoint requires transaction ID, not tx_ref.
     // Official v3 reference endpoint (the similarly named verify_by_tx_ref
     // path returns an HTML page, even with HTTP 200).
+    let httpStatus = 200;
     const result = await this.request<FlutterwaveVerifyResponse>(
       `${this.baseUrl}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`,
       {
@@ -190,24 +199,114 @@ export class FlutterwaveService implements PaymentGatewayProvider {
           Authorization: `Bearer ${this.secretKey}`,
         },
       },
+      (status) => {
+        httpStatus = status;
+      },
     );
 
-    if (result.status !== 'success') {
-      this.logger.error(`Flutterwave verify failed: check provider configuration`);
-      throw new BadRequestException(`Payment verification failed: check provider configuration`);
+    if (httpStatus === 401 || httpStatus === 403) {
+      this.logger.error(`Flutterwave verification rejected: authentication (HTTP ${httpStatus})`);
+      throw new ServiceUnavailableException(
+        'Payment verification is unavailable. Contact ChurchOS support to check the Flutterwave account configuration.',
+      );
+    }
+    if (
+      [200, 400, 404].includes(httpStatus) &&
+      result?.status === 'error' &&
+      result.data == null &&
+      typeof result.message === 'string' &&
+      /^no transaction (?:was )?found(?: for this (?:id|ref|reference))?\.?$/i.test(
+        result.message.trim(),
+      )
+    ) {
+      throw new PaymentVerificationPendingException();
+    }
+    if (httpStatus >= 400 || result?.status !== 'success') {
+      this.logger.error(`Flutterwave verification rejected: provider_error (HTTP ${httpStatus})`);
+      throw new ServiceUnavailableException(
+        'Flutterwave could not confirm this payment. Please try again or contact support with your payment reference.',
+      );
+    }
+    if (
+      !result.data ||
+      typeof result.data.tx_ref !== 'string' ||
+      !result.data.tx_ref ||
+      typeof result.data.currency !== 'string' ||
+      !result.data.currency ||
+      typeof result.data.amount !== 'number' ||
+      !Number.isFinite(result.data.amount) ||
+      typeof result.data.status !== 'string'
+    ) {
+      this.logger.error('Flutterwave verification rejected: invalid_response');
+      throw new ServiceUnavailableException(
+        'Flutterwave returned incomplete payment details. Please try again.',
+      );
     }
 
     const status = this.mapFlutterwaveStatus(result.data.status);
 
     return {
+      providerTransactionId: result.data.id == null ? undefined : String(result.data.id),
+      providerReference: result.data.flw_ref,
       currency: result.data.currency,
       reference: result.data.tx_ref,
       amount: result.data.amount,
       status,
       paidAt: result.data.created_at,
       channel: result.data.payment_type,
-      customerEmail: result.data.customer.email,
+      customerEmail: result.data.customer?.email ?? '',
     };
+  }
+
+  async listAdjustments(payment: {
+    reference: string;
+    providerTransactionId: string;
+    providerReference?: string | null;
+    currency: string;
+    createdAt: Date;
+  }): Promise<PaymentAdjustment[]> {
+    const adjustments: PaymentAdjustment[] = [];
+    const from = payment.createdAt.toISOString().slice(0, 10);
+    const to = new Date().toISOString().slice(0, 10);
+    // Refund references identify the refund, not the original charge. Filter the
+    // returned original transaction IDs before associating any adjustment.
+    const paths = [
+      `refunds?from=${from}&to=${to}&currency=${encodeURIComponent(payment.currency)}`,
+      `chargebacks?from=${from}&to=${to}&currency=${encodeURIComponent(payment.currency)}${payment.providerReference ? `&flw_ref=${encodeURIComponent(payment.providerReference)}` : ''}`,
+    ];
+    for (const path of paths) {
+      for (let page = 1; page <= 100; page++) {
+        const result = await this.request<{
+          status: string;
+          data: unknown[];
+          meta?: { page_info?: { total_pages?: number } };
+        }>(`${this.baseUrl}/${path}&page=${page}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${this.secretKey}` },
+        });
+        if (result.status !== 'success' || !Array.isArray(result.data))
+          throw new ServiceUnavailableException('Payment adjustment recovery is unavailable');
+        for (const item of result.data) {
+          const data = record(item);
+          const parsed = parsePaymentEvent('flutterwave', {
+            event: path.startsWith('refunds') ? 'refund.update' : `chargeback.${data.status}`,
+            data,
+          });
+          if (
+            parsed.providerTransactionId !== payment.providerTransactionId &&
+            parsed.reference !== payment.reference &&
+            !(payment.providerReference && parsed.providerReference === payment.providerReference)
+          )
+            continue;
+          if (parsed.adjustment) adjustments.push(parsed.adjustment);
+        }
+        const lastPage = result.meta?.page_info?.total_pages;
+        if (!result.data.length || !lastPage || page >= lastPage) break;
+        if (page === 100)
+          throw new ServiceUnavailableException('Payment adjustment history requires review');
+      }
+    }
+    return adjustments;
   }
 
   /**
@@ -256,24 +355,21 @@ export class FlutterwaveService implements PaymentGatewayProvider {
   parseWebhookEvent(payload: string): WebhookEvent {
     try {
       const event = JSON.parse(payload) as Record<string, unknown>;
-      if (!event.event || !event.data) {
-        throw new BadRequestException('Invalid webhook payload structure');
-      }
-
-      const data = event.data as Record<string, unknown>;
-
-      if (
-        typeof (data.reference ?? data.tx_ref ?? '') !== 'string' ||
-        String(data.reference ?? data.tx_ref ?? '').length > 200
-      )
-        throw new BadRequestException('Invalid payment reference');
+      const normalized = parsePaymentEvent('flutterwave', event);
+      if (!normalized.event) throw new BadRequestException('Invalid webhook payload structure');
+      const data = normalized.data;
       return {
-        event: event.event as string,
-        reference: (data.tx_ref as string) || '',
+        event: normalized.event,
+        reference: normalized.reference,
+        providerTransactionId: normalized.providerTransactionId,
+        providerReference: normalized.providerReference,
+        adjustment: normalized.adjustment,
         amount: data.amount as number | undefined,
         channel: data.payment_type as string | undefined,
         customerEmail: (data.customer as Record<string, unknown>)?.email as string | undefined,
-        rawData: event as Record<string, unknown>,
+        authorizationCode: (data.authorization as Record<string, unknown>)?.authorization_code as
+          string | undefined,
+        rawData: event,
       };
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
@@ -293,8 +389,7 @@ export class FlutterwaveService implements PaymentGatewayProvider {
         return 'success';
       case 'charge.failed':
         return 'failed';
-      case 'refund.completed':
-        return 'reversed';
+
       default:
         return null;
     }

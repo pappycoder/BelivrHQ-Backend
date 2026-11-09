@@ -18,6 +18,7 @@ export type MockPrismaModel = {
   findMany: jest.Mock;
   findUnique: jest.Mock;
   findFirst: jest.Mock;
+  findFirstOrThrow: jest.Mock;
   create: jest.Mock;
   createMany: jest.Mock;
   update: jest.Mock;
@@ -35,6 +36,7 @@ function createMockModel(): MockPrismaModel {
     findMany: jest.fn(),
     findUnique: jest.fn(),
     findFirst: jest.fn(),
+    findFirstOrThrow: jest.fn(),
     create: jest.fn(),
     createMany: jest.fn(),
     update: jest.fn(),
@@ -70,9 +72,11 @@ function createMockModel(): MockPrismaModel {
 export function createPrismaMock(): MockPrismaModel & Record<string, MockPrismaModel> {
   const models: Record<string, MockPrismaModel> = {};
   const $transactionMock = jest.fn();
+  const $queryRawMock = jest.fn().mockResolvedValue([]);
 
   const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop: string) {
+      if (prop === '$queryRaw') return $queryRawMock;
       if (prop === '$transaction') {
         return $transactionMock;
       }

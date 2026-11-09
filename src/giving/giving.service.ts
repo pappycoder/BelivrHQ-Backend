@@ -1,3 +1,6 @@
+import { applyAdjustment, record } from './services/payment-lifecycle';
+import type { PaymentAdjustment } from './services/payment-lifecycle';
+import type { PaymentVerifyResult } from './services/payment-gateway.interface';
 import { parseGivingDate } from './giving-date';
 import { PaymentAccountsService } from './services/payment-accounts.service';
 /**
@@ -579,209 +582,329 @@ export class GivingService {
       throw new NotFoundException('Transaction not found');
     }
 
-    // If already successful, return as-is
-    if (transaction.status === 'success') {
-      return this.mapTransactionToDto(transaction);
-    }
-
-    // Resolve gateway from the transaction's stored gateway
-    const provider = await this.paymentAccounts.historical(
-      churchId,
-      transaction.payment_gateway,
-      transaction.integration_account_id,
-    );
-    if (!provider || !provider.isConfigured()) {
-      this.logger.warn(
-        `Gateway ${transaction.payment_gateway} not available for verification of ${reference}`,
-      );
-      return this.mapTransactionToDto(transaction);
-    }
-
-    try {
-      const verification = await provider.verifyTransaction(reference);
-
-      if (verification.status === 'success') {
-        if (
-          verification.amount !== transaction.amount ||
-          verification.currency !== transaction.currency ||
-          (verification.reference && verification.reference !== reference)
-        )
-          throw new BadRequestException(
-            'Payment does not match the expected amount, currency or reference',
-          );
-        const paymentMethod = provider.mapChannelToPaymentMethod(verification.channel);
-        const receiptNumber = await this.generateReceiptNumber(
-          transaction.category?.name ?? '',
-          churchId,
-        );
-
-        const updated = await this.prisma.transaction.update({
-          where: { id: transaction.id },
-          data: {
-            status: 'success',
-            payment_method: paymentMethod,
-            receipt_number: receiptNumber,
-          },
-          include: { category: true },
-        });
-
-        if (transaction.member_id) {
-          const memberProfile = await this.prisma.profile.findFirst({
-            where: { member_id: transaction.member_id, church_id: churchId },
-          });
-          if (memberProfile) {
-            const categoryName = transaction.category?.name ?? 'Offering';
-            await this.notifications
-              .createNotification(
-                churchId,
-                memberProfile.id,
-                'giving',
-                'Giving Confirmed',
-                `Your ${categoryName} of ${transaction.currency} ${transaction.amount.toLocaleString()} has been received. Receipt: ${receiptNumber}`,
-                { transactionId: transaction.id, receiptNumber },
-              )
-              .catch((err) => this.logger.warn(`Notification failed: ${(err as Error).message}`));
-          }
-        }
-
-        return this.mapTransactionToDto(updated);
-      }
-    } catch (error) {
-      this.logger.warn(
-        `${transaction.payment_gateway} verification failed for ${reference}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-
-    return this.mapTransactionToDto(transaction);
+    await this.reconcilePayment(churchId, reference);
+    const updated = await this.prisma.transaction.findFirstOrThrow({
+      where: { payment_reference: reference, church_id: churchId },
+      include: { category: true },
+    });
+    return this.mapTransactionToDto(updated);
   }
 
-  // ─── WEBHOOK HANDLING ────────────────────────────────────────────
+  /** Browser, webhook and worker share the same verified, locked settlement path. */
+  async reconcilePayment(churchId: string, reference: string): Promise<void> {
+    const payment = await this.prisma.transaction.findFirst({
+      where: { payment_reference: reference, church_id: churchId },
+      include: { category: true },
+    });
+    if (!payment || payment.payment_gateway === 'manual') return;
+    const provider = await this.paymentAccounts.historical(
+      churchId,
+      payment.payment_gateway,
+      payment.integration_account_id,
+    );
+    const verified = await provider.verifyTransaction(reference);
+    this.assertPaymentDetails(verified, payment);
+    if (verified.status === 'reversed') {
+      await this.adjustPayment(churchId, payment.id, {
+        id: `charge/${reference}`,
+        kind: 'reversal',
+        state: 'completed',
+        amount: payment.amount,
+        currency: payment.currency,
+      });
+      return;
+    }
+    if (verified.status === 'pending') return;
+    const receiptNumber =
+      verified.status === 'success' && !payment.receipt_number
+        ? await this.generateReceiptNumber(payment.category?.name ?? '', churchId)
+        : payment.receipt_number;
+    const changed = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
+      const current = await tx.transaction.findFirstOrThrow({
+        where: { id: payment.id, church_id: churchId },
+      });
+      const access = record(current.lifecycle).access;
+      if (current.status === 'reversed' || access === 'revoked' || access === 'review') {
+        await tx.transaction.updateMany({
+          where: { id: payment.id, church_id: churchId },
+          data: {
+            provider_transaction_id: verified.providerTransactionId,
+            provider_reference: verified.providerReference,
+            ...(verified.status === 'success'
+              ? {
+                  lifecycle: {
+                    ...record(current.lifecycle),
+                    chargeStatus: 'success',
+                  } as Prisma.InputJsonValue,
+                }
+              : {}),
+          },
+        });
+        return;
+      }
+      // An old failure cannot overwrite a settled charge. Failed attempts can recover.
+      if (current.status === 'success' && verified.status !== 'success') return;
+      await tx.transaction.updateMany({
+        where: { id: payment.id, church_id: churchId },
+        data: {
+          status: verified.status === 'success' ? 'success' : 'failed',
+          provider_transaction_id: verified.providerTransactionId,
+          provider_reference: verified.providerReference,
+          ...(verified.status === 'success'
+            ? {
+                receipt_number: current.receipt_number ?? receiptNumber,
+                payment_method: provider.mapChannelToPaymentMethod(verified.channel),
+              }
+            : {}),
+        },
+      });
+      if (verified.status === 'success')
+        await this.settleTicket(tx, churchId, reference, payment.id, payment.amount);
+      return current.status !== verified.status;
+    });
+    if (changed) {
+      await this.audit.log({
+        userId: 'payment-reconciliation',
+        churchId,
+        entity: 'transaction',
+        action: 'UPDATE',
+        entityId: payment.id,
+        oldValues: { status: payment.status },
+        newValues: { status: verified.status },
+      });
+      if (verified.status === 'success' && payment.member_id) {
+        const profile = await this.prisma.profile.findFirst({
+          where: { church_id: churchId, member_id: payment.member_id },
+        });
+        if (profile)
+          await this.notifications
+            .createNotification(
+              churchId,
+              profile.id,
+              'giving',
+              'Giving Confirmed',
+              `Your ${payment.category?.name ?? 'Offering'} of ${payment.currency} ${payment.amount.toLocaleString()} has been received. Receipt: ${receiptNumber ?? ''}`,
+              { transactionId: payment.id, receiptNumber },
+            )
+            .catch(() => this.logger.warn('Payment notification could not be delivered'));
+      }
+    }
+  }
 
-  /**
-   * Processes a webhook event from a payment gateway.
-   *
-   * Validates the signature using the correct gateway provider,
-   * parses the event, and updates the corresponding transaction.
-   *
-   * @param payload - Raw webhook body
-   * @param signature - Webhook signature header value
-   * @param gatewayName - Which gateway sent this webhook
-   * @returns Whether the event was processed successfully
-   */
+  private assertPaymentDetails(
+    verified: PaymentVerifyResult,
+    payment: { payment_reference: string | null; amount: number; currency: string },
+  ) {
+    if (
+      verified.reference !== payment.payment_reference ||
+      verified.currency !== payment.currency ||
+      !Number.isFinite(verified.amount) ||
+      verified.amount !== payment.amount
+    )
+      throw new BadRequestException('Payment amount, currency or reference does not match');
+  }
+
+  private async settleTicket(
+    tx: Prisma.TransactionClient,
+    churchId: string,
+    reference: string,
+    transactionId: string,
+    amount: number,
+  ) {
+    const registration = await tx.eventRegistration.findFirst({
+      where: { church_id: churchId, payment_reference: reference },
+    });
+    if (!registration || registration.payment_status === 'refunded') return;
+    const tier = registration.tier_id
+      ? await tx.eventTicketTier.findFirst({
+          where: { id: registration.tier_id, event: { church_id: churchId } },
+        })
+      : null;
+    // The unique registration key makes browser callbacks and webhook retries converge.
+    const existing = await tx.ticket.findFirst({
+      where: { registration_id: registration.id, event: { church_id: churchId } },
+    });
+    if (existing && ['cancelled', 'refunded'].includes(existing.status)) return;
+    await tx.eventRegistration.updateMany({
+      where: { id: registration.id, church_id: churchId },
+      data: { payment_status: 'paid' },
+    });
+    const ticket = await tx.ticket.upsert({
+      where: { registration_id: registration.id },
+      create: {
+        event_id: registration.event_id,
+        registration_id: registration.id,
+        member_id: registration.member_id,
+        code: `TKT-${randomBytes(12).toString('hex').toUpperCase()}`,
+        status: 'paid',
+        tier_name: tier?.name ?? 'General',
+        price_paid: amount,
+        transaction_id: transactionId,
+        payment_reference: reference,
+      },
+      update: { status: 'paid' },
+    });
+    await tx.eventRegistration.updateMany({
+      where: { id: registration.id, church_id: churchId },
+      data: { payment_status: 'paid', ticket_id: ticket.id },
+    });
+  }
+
+  async reconcileAdjustments(churchId: string, reference: string) {
+    const payment = await this.prisma.transaction.findFirst({
+      where: { church_id: churchId, payment_reference: reference },
+    });
+    if (!payment?.provider_transaction_id) return;
+    const provider = await this.paymentAccounts.historical(
+      churchId,
+      payment.payment_gateway,
+      payment.integration_account_id,
+    );
+    const adjustments = await provider.listAdjustments?.({
+      reference,
+      providerTransactionId: payment.provider_transaction_id,
+      providerReference: payment.provider_reference,
+      currency: payment.currency,
+      createdAt: payment.created_at,
+    });
+    for (const adjustment of adjustments ?? [])
+      await this.adjustPayment(churchId, payment.id, adjustment);
+  }
+
+  private async adjustPayment(churchId: string, id: string, adjustment: PaymentAdjustment) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
+      const payment = await tx.transaction.findFirstOrThrow({ where: { id, church_id: churchId } });
+      const lifecycle = applyAdjustment(
+        {
+          ...record(payment.lifecycle),
+          chargeStatus: record(payment.lifecycle).chargeStatus ?? payment.status,
+        },
+        adjustment,
+        payment.amount,
+        payment.currency,
+      );
+      const prior = record(payment.lifecycle);
+      const heldTickets = Array.isArray(prior.heldTicketIds)
+        ? prior.heldTicketIds.filter((item): item is string => typeof item === 'string')
+        : [];
+      if (lifecycle.access !== 'clear') {
+        const tickets = await tx.ticket.findMany({
+          where: { transaction_id: id, event: { church_id: churchId }, status: 'paid' },
+          select: { id: true },
+        });
+        heldTickets.push(...tickets.map((item) => item.id));
+      }
+      const savedLifecycle = { ...lifecycle, heldTicketIds: [...new Set(heldTickets)] };
+      // Held/refunded gifts stay out of successful-giving totals; the original amount is immutable.
+      const status = lifecycle.financialReversal
+        ? 'reversed'
+        : lifecycle.access === 'review'
+          ? 'pending'
+          : lifecycle.chargeStatus === 'success'
+            ? 'success'
+            : lifecycle.chargeStatus === 'pending' || lifecycle.chargeStatus === 'failed'
+              ? lifecycle.chargeStatus
+              : payment.status;
+      await tx.transaction.updateMany({
+        where: { id, church_id: churchId },
+        data: { lifecycle: savedLifecycle as unknown as Prisma.InputJsonValue, status },
+      });
+      if (lifecycle.access !== 'clear') {
+        await tx.eventRegistration.updateMany({
+          where: { church_id: churchId, transaction_id: id },
+          data: { payment_status: lifecycle.access === 'revoked' ? 'refunded' : 'pending' },
+        });
+        await tx.ticket.updateMany({
+          where: {
+            transaction_id: id,
+            event: { church_id: churchId },
+            status: { in: ['paid', 'reserved'] },
+          },
+          data: { status: lifecycle.access === 'revoked' ? 'refunded' : 'reserved' },
+        });
+      } else if (status === 'success' && payment.payment_reference) {
+        if (heldTickets.length) {
+          await tx.ticket.updateMany({
+            where: {
+              id: { in: heldTickets },
+              transaction_id: id,
+              event: { church_id: churchId },
+              status: { in: ['reserved', 'refunded'] },
+            },
+            data: { status: 'paid' },
+          });
+          await tx.eventRegistration.updateMany({
+            where: { church_id: churchId, transaction_id: id, ticket_id: { in: heldTickets } },
+            data: { payment_status: 'paid' },
+          });
+        }
+        await this.settleTicket(tx, churchId, payment.payment_reference, id, payment.amount);
+      }
+    });
+  }
+
   async handleWebhook(
     payload: string,
     signature: string,
     gatewayName: string,
-  ): Promise<{ processed: boolean; event?: string }> {
+  ): Promise<{ processed: boolean; event?: string; reference?: string }> {
     const parser = this.gatewayRegistry.get(gatewayName);
     if (!parser) throw new BadRequestException('Unknown payment gateway');
     const event = parser.parseWebhookEvent(payload);
-    const transaction = await this.prisma.transaction.findFirst({
-      where: { payment_reference: event.reference },
-      include: { category: true },
+    const identity = event.reference
+      ? { payment_reference: event.reference }
+      : event.providerTransactionId
+        ? { provider_transaction_id: event.providerTransactionId }
+        : event.providerReference
+          ? { provider_reference: event.providerReference }
+          : null;
+    if (!identity) return { processed: false, event: event.event };
+    const candidates = await this.prisma.transaction.findMany({
+      where: {
+        payment_gateway: gatewayName as 'paystack' | 'flutterwave',
+        ...identity,
+      },
+      take: 20,
     });
-    if (!transaction) return { processed: false, event: event.event };
-    const provider = await this.paymentAccounts.historical(
-      transaction.church_id,
-      gatewayName,
-      transaction.integration_account_id,
-    );
-    if (!provider.validateWebhookSignature(payload, signature))
-      throw new BadRequestException('Invalid webhook signature');
-    if (transaction.payment_gateway !== gatewayName)
-      throw new BadRequestException('Gateway does not match payment');
-    if (!event.event.startsWith('charge.') && !event.event.startsWith('chargecompleted'))
-      return { processed: false, event: event.event };
-    const status = provider.mapEventToStatus(event.event);
-    if (!status) return { processed: false, event: event.event };
-    if (status === 'success') {
-      const verified = await provider.verifyTransaction(event.reference);
-      if (
-        verified.status !== 'success' ||
-        verified.amount !== transaction.amount ||
-        verified.currency !== transaction.currency ||
-        (verified.reference && verified.reference !== event.reference)
-      )
-        throw new BadRequestException(
-          'Payment amount, currency, reference or status does not match',
-        );
-    }
-
-    // Idempotent — skip if already in terminal state
-    if (transaction.status === 'success' || transaction.status === 'failed') {
-      return { processed: true, event: event.event };
-    }
-
-    const paymentMethod = event.channel
-      ? provider.mapChannelToPaymentMethod(event.channel)
-      : undefined;
-
-    const updateData: Prisma.TransactionUpdateInput = {
-      status,
-    };
-
-    if (paymentMethod) {
-      updateData.payment_method = paymentMethod;
-    }
-
-    // Generate receipt number on success
-    if (status === 'success') {
-      updateData.receipt_number = await this.generateReceiptNumber(
-        transaction.category?.name ?? '',
-        transaction.church_id,
+    // Provider identifiers are merchant-scoped. Authenticate against the stored historical account.
+    const matches = [];
+    for (const candidate of candidates) {
+      const signer = await this.paymentAccounts.historical(
+        candidate.church_id,
+        gatewayName,
+        candidate.integration_account_id,
       );
+      if (signer.validateWebhookSignature(payload, signature)) matches.push(candidate);
     }
-
-    await this.prisma.transaction.update({
-      where: { id: transaction.id },
-      data: updateData,
-    });
-
-    await this.audit.log({
-      userId: 'webhook',
-      churchId: transaction.church_id,
-      entity: 'transaction',
-      action: 'UPDATE',
-      entityId: transaction.id,
-      oldValues: { status: transaction.status },
-      newValues: { status, paymentMethod },
-    });
-
-    this.logger.log(
-      `Webhook processed (${gatewayName}): ${event.event} → ${status} (${event.reference})`,
-    );
-
-    if (status === 'success' && transaction.member_id) {
-      const memberProfile = await this.prisma.profile.findFirst({
-        where: { member_id: transaction.member_id, church_id: transaction.church_id },
-      });
-      if (memberProfile) {
-        const categoryName = transaction.category?.name ?? 'Offering';
-        await this.notifications
-          .createNotification(
-            transaction.church_id,
-            memberProfile.id,
-            'giving',
-            'Giving Confirmed',
-            `Your ${categoryName} of ${transaction.currency} ${transaction.amount.toLocaleString()} has been received. Receipt: ${updateData.receipt_number || ''}`,
-            { transactionId: transaction.id, receiptNumber: updateData.receipt_number },
-          )
-          .catch((err) => this.logger.warn(`Notification failed: ${(err as Error).message}`));
+    if (matches.length !== 1) {
+      if (!candidates.length && !event.adjustment) return { processed: false, event: event.event };
+      throw new BadRequestException('Payment callback could not be securely matched');
+    }
+    const payment = matches[0];
+    if (event.adjustment) await this.adjustPayment(payment.church_id, payment.id, event.adjustment);
+    else if (event.event.startsWith('charge.')) {
+      await this.reconcilePayment(payment.church_id, payment.payment_reference!);
+      if (event.event === 'charge.success' && event.authorizationCode && payment.member_id) {
+        const settled = await this.prisma.transaction.findFirst({
+          where: { id: payment.id, church_id: payment.church_id, status: 'success' },
+        });
+        if (settled)
+          await this.captureAuthorizationCode(
+            payment.church_id,
+            payment.member_id,
+            payment.category_id,
+            event.authorizationCode,
+            payment.integration_account_id,
+          );
       }
-    }
-
-    // Capture authorization_code for recurring giving (Paystack charge.success)
-    if (status === 'success' && event.authorizationCode && transaction.member_id) {
-      await this.captureAuthorizationCode(
-        transaction.church_id,
-        transaction.member_id,
-        transaction.category_id,
-        event.authorizationCode,
-        transaction.integration_account_id,
-      );
-    }
-
-    return { processed: true, event: event.event };
+    } else return { processed: false, event: event.event };
+    return {
+      processed: true,
+      event: event.event,
+      reference: payment.payment_reference ?? undefined,
+    };
   }
 
   // ─── CASH/BANK GIVING ────────────────────────────────────────────
@@ -2198,6 +2321,7 @@ export class GivingService {
     service_id?: string | null;
     event_id?: string | null;
     metadata?: Prisma.JsonValue;
+    lifecycle?: Prisma.JsonValue;
     amount: number;
     currency: string;
     type: string;
@@ -2271,6 +2395,8 @@ export class GivingService {
       currency: transaction.currency,
       type: transaction.type,
       status: transaction.status,
+      paymentReview: record(transaction.lifecycle).access === 'review',
+      refundedAmount: Number(record(transaction.lifecycle).refundedAmount ?? 0),
       paymentReference: transaction.payment_reference || undefined,
       paymentGateway: transaction.payment_gateway,
       paymentMethod: transaction.payment_method || undefined,

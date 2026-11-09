@@ -86,6 +86,7 @@ export const PROVIDERS: ProviderDefinition[] = [
     channels: ['payment'],
     fields: [
       { key: 'secretKey', label: 'Secret key', secret: true },
+      { key: 'webhookSecret', label: 'Webhook signing secret', secret: true, optional: true },
       { key: 'publicKey', label: 'Public key', optional: true },
     ],
     help: 'Use matching test or live Paystack keys. Credential verification does not charge a card.',

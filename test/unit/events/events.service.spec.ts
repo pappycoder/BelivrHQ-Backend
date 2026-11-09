@@ -649,6 +649,10 @@ describe('EventsService', () => {
     });
 
     it('should atomically settle a pending registration and issue one ticket', async () => {
+      (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw = jest.fn().mockResolvedValue([]);
+      (prisma.transaction as unknown as { findFirstOrThrow: jest.Mock }).findFirstOrThrow = jest
+        .fn()
+        .mockResolvedValue({ status: 'pending' });
       prisma.eventRegistration.findFirst.mockResolvedValue(paidRegistration);
       prisma.eventRegistration.updateMany.mockResolvedValue({ count: 1 });
       prisma.eventTicketTier.findUnique.mockResolvedValue(null);
@@ -663,7 +667,11 @@ describe('EventsService', () => {
       const result = await service.confirmTicketPayment(paymentReference);
 
       expect(prisma.eventRegistration.updateMany).toHaveBeenCalledWith({
-        where: { id: mockRegistration.id, payment_status: 'pending' },
+        where: {
+          id: mockRegistration.id,
+          church_id: mockChurchId,
+          payment_status: { in: ['pending', 'failed'] },
+        },
         data: { payment_status: 'paid' },
       });
       expect(prisma.ticket.create).toHaveBeenCalledTimes(1);
@@ -672,6 +680,10 @@ describe('EventsService', () => {
     });
 
     it('should return the existing ticket when a concurrent delivery already settled it', async () => {
+      (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw = jest.fn().mockResolvedValue([]);
+      (prisma.transaction as unknown as { findFirstOrThrow: jest.Mock }).findFirstOrThrow = jest
+        .fn()
+        .mockResolvedValue({ status: 'pending' });
       prisma.eventRegistration.findFirst.mockResolvedValue(paidRegistration);
       prisma.eventRegistration.updateMany.mockResolvedValue({ count: 0 });
       prisma.eventRegistration.findUnique.mockResolvedValue({

@@ -9,6 +9,7 @@
  * @since 1.0.0
  */
 
+import { PaymentVerificationPendingException } from '../../../src/giving/services/payment-verification-pending.exception';
 import { FlutterwaveService } from '../../../src/giving/services/flutterwave.service';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
@@ -168,6 +169,92 @@ describe('FlutterwaveService', () => {
     });
   });
 
+  describe('verification recovery', () => {
+    it.each([200, 400, 404])(
+      'keeps a missing provider transaction pending at HTTP %s',
+      async (status) => {
+        global.fetch = jest.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              status: 'error',
+              message: 'No transaction was found for this id',
+              data: null,
+            }),
+            { status },
+          ),
+        );
+        await expect(service.verifyTransaction('pending-ref')).rejects.toBeInstanceOf(
+          PaymentVerificationPendingException,
+        );
+      },
+    );
+
+    it.each([401, 403])(
+      'does not treat an authentication rejection as pending at HTTP %s',
+      async (status) => {
+        global.fetch = jest.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              status: 'error',
+              message: 'No transaction was found for this id',
+              data: null,
+            }),
+            { status },
+          ),
+        );
+        const error = await service.verifyTransaction('ref').catch((error) => error);
+        expect(error).toBeInstanceOf(ServiceUnavailableException);
+        expect(error.message).toContain('Flutterwave account configuration');
+      },
+    );
+
+    it.each([429, 503])(
+      'keeps HTTP %s provider errors retryable without inventing a payment status',
+      async (status) => {
+        global.fetch = jest.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              status: 'error',
+              message: 'No transaction found',
+              data: null,
+            }),
+            { status },
+          ),
+        );
+        await expect(service.verifyTransaction('ref')).rejects.toBeInstanceOf(
+          ServiceUnavailableException,
+        );
+      },
+    );
+
+    it('rejects incomplete successful responses instead of crediting them', async () => {
+      global.fetch = jest.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: 'success',
+            data: { status: 'successful', tx_ref: 'ref' },
+          }),
+        ),
+      );
+      await expect(service.verifyTransaction('ref')).rejects.toThrow('incomplete payment details');
+    });
+
+    it('does not expose provider response bodies or keys through errors and logs', async () => {
+      const { Logger } = await import('@nestjs/common');
+      const log = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+      const privateMessage = 'merchant-secret-and-customer-data';
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ status: 'error', message: privateMessage })),
+        );
+      await expect(service.verifyTransaction('ref')).rejects.toThrow(
+        'could not confirm this payment',
+      );
+      expect(JSON.stringify(log.mock.calls)).not.toContain(privateMessage);
+    });
+  });
+
   describe('validateWebhookSignature', () => {
     beforeEach(() => {
       config.get.mockImplementation((key: string) =>
@@ -240,8 +327,8 @@ describe('FlutterwaveService', () => {
       expect(service.mapEventToStatus('charge.failed')).toBe('failed');
     });
 
-    it('should map refund.completed to reversed', () => {
-      expect(service.mapEventToStatus('refund.completed')).toBe('reversed');
+    it('does not infer refund settlement from its event name', () => {
+      expect(service.mapEventToStatus('refund.completed')).toBeNull();
     });
 
     it('should return null for unknown events', () => {

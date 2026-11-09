@@ -1,3 +1,4 @@
+import { record } from '../giving/services/payment-lifecycle';
 import { attendanceConflict, isAttendanceDuplicate } from '../attendance/attendance-duplicates';
 import { contentBranch } from '../common/services/content-branch';
 import { attendanceDay } from '../attendance/attendance-day';
@@ -1252,6 +1253,11 @@ export class EventsService {
       where: { payment_reference: reference },
     });
     if (!payment) throw new NotFoundException('Payment not found');
+    if (
+      payment.status === 'reversed' ||
+      ['review', 'revoked'].includes(String(record(payment.lifecycle).access))
+    )
+      throw new BadRequestException('Ticket payment is held or refunded');
     const provider = await this.paymentAccounts.historical(
       payment.church_id,
       payment.payment_gateway,
@@ -1287,15 +1293,28 @@ export class EventsService {
       });
     }
 
-    if (registration.payment_status !== 'pending') {
+    if (!['pending', 'failed'].includes(registration.payment_status)) {
       throw new BadRequestException(`Registration is in "${registration.payment_status}" state`);
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM churches WHERE id = ${payment.church_id} FOR UPDATE`;
+      const current = await tx.transaction.findFirstOrThrow({
+        where: { id: payment.id, church_id: payment.church_id },
+      });
+      if (
+        current.status === 'reversed' ||
+        ['review', 'revoked'].includes(String(record(current.lifecycle).access))
+      )
+        throw new BadRequestException('Ticket payment is held or refunded');
       // Atomically claim the pending registration. A concurrent webhook sees a
       // zero count and returns the ticket created by the request that won.
       const claim = await tx.eventRegistration.updateMany({
-        where: { id: registration.id, payment_status: 'pending' },
+        where: {
+          id: registration.id,
+          church_id: payment.church_id,
+          payment_status: { in: ['pending', 'failed'] },
+        },
         data: { payment_status: 'paid' },
       });
 
@@ -1698,7 +1717,7 @@ export class EventsService {
       return { valid: false };
     }
 
-    if (ticket.status === 'cancelled' || ticket.status === 'refunded') {
+    if (ticket.status !== 'paid') {
       return { valid: false };
     }
 

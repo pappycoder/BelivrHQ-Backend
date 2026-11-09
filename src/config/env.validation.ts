@@ -53,6 +53,7 @@ const envSchema = z
         /^(USD|NGN|EUR|GBP|CAD|GHS|KES|ZAR|UGX|XAF|XOF)(,(USD|NGN|EUR|GBP|CAD|GHS|KES|ZAR|UGX|XAF|XOF))*$/,
       )
       .default('NGN'),
+    PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
     PAYSTACK_SECRET_KEY: z.string().optional(),
     PAYSTACK_PUBLIC_KEY: z.string().optional(),
     FLUTTERWAVE_SECRET_KEY: z.string().optional(),

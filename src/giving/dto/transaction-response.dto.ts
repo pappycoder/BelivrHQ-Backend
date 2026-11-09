@@ -7,6 +7,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class TransactionResponseDto {
+  @ApiProperty({ description: 'Payment held for review after a partial refund or dispute' })
+  paymentReview!: boolean;
+  @ApiProperty({ description: 'Total completed refunds in the original payment currency' })
+  refundedAmount!: number;
   @ApiProperty({ description: 'Giving source', enum: ['normal', 'cell_group'] })
   givingType!: string;
   @ApiPropertyOptional({ description: 'Giving record title' })

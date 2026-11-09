@@ -311,7 +311,11 @@ export class GivingController {
     @Req() request: RawBodyRequest<ExpressRequest>,
   ) {
     const rawBody = this.getRawBody(request);
-    return this.givingService.handleWebhook(rawBody, signature || '', 'paystack');
+    return this.givingService.handleWebhook(
+      rawBody,
+      String(request.headers?.['paystack-signature'] ?? signature ?? ''),
+      'paystack',
+    );
   }
 
   /**

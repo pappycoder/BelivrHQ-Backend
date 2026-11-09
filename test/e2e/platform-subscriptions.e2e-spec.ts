@@ -519,6 +519,8 @@ describe('Platform subscription checkout (PostgreSQL + HTTP)', () => {
         prisma,
         app.get(BillingService),
         app.get(FlutterwaveService),
+        { isConfigured: () => false } as never,
+        { reconcilePayment: async () => {}, reconcileAdjustments: async () => {} } as never,
       );
       await recovery.reconcile();
       const confirmed = await result(

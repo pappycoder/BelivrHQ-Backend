@@ -25,6 +25,8 @@ export interface PaymentInitializeResult {
  * Result of verifying a payment with a gateway.
  */
 export interface PaymentVerifyResult {
+  providerTransactionId?: string;
+  providerReference?: string;
   currency?: string;
   reference?: string;
   /** Amount in Naira */
@@ -82,6 +84,9 @@ export interface WebhookEvent {
   authorizationCode?: string;
   /** Raw event data for gateway-specific processing */
   rawData: Record<string, unknown>;
+  providerTransactionId?: string;
+  providerReference?: string;
+  adjustment?: import('./payment-lifecycle').PaymentAdjustment;
 }
 
 /**
@@ -109,6 +114,14 @@ export interface PaymentGatewayProvider {
 
   /** Verify a payment by reference */
   verifyTransaction(reference: string): Promise<PaymentVerifyResult>;
+
+  listAdjustments?(payment: {
+    reference: string;
+    providerTransactionId: string;
+    providerReference?: string | null;
+    currency: string;
+    createdAt: Date;
+  }): Promise<import('./payment-lifecycle').PaymentAdjustment[]>;
 
   /** Validate that a webhook payload was signed by this gateway */
   validateWebhookSignature(payload: string, signature: string): boolean;
