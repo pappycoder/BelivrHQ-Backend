@@ -1,5 +1,5 @@
 /**
- * ESLint Configuration for ChurchOS Backend
+ * ESLint Configuration for BelivrHQ Backend
  *
  * Uses @typescript-eslint for TypeScript-specific linting rules
  * and Prettier for code formatting integration.

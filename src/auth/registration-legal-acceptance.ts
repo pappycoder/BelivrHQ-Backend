@@ -11,7 +11,7 @@ export function registrationLegalAcceptance(input: {
   if (input.termsAccepted === undefined && input.acceptedTermsVersion === undefined)
     return undefined;
   if (input.termsAccepted !== true || input.acceptedTermsVersion !== REGISTRATION_LEGAL_VERSION) {
-    throw new BadRequestException('Accept the current ChurchOS terms before creating an account');
+    throw new BadRequestException('Accept the current BelivrHQ terms before creating an account');
   }
   return {
     termsOfServiceVersion: REGISTRATION_LEGAL_VERSION,

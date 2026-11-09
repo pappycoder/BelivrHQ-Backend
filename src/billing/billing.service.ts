@@ -63,7 +63,7 @@ export class BillingService {
       name === 'paystack' ? this.paystack : name === 'flutterwave' ? this.flutterwave : null;
     if (!gateway?.isConfigured())
       throw new ServiceUnavailableException(
-        'Subscription checkout is unavailable for this gateway. Please choose another or contact ChurchOS.',
+        'Subscription checkout is unavailable for this gateway. Please choose another or contact BelivrHQ.',
       );
     return gateway;
   }
@@ -183,7 +183,7 @@ export class BillingService {
       )
     )
       throw new ConflictException(
-        'Your paid periods require ChurchOS review before another checkout. Contact support to avoid overlapping payments.',
+        'Your paid periods require BelivrHQ review before another checkout. Contact support to avoid overlapping payments.',
       );
     const price = SUBSCRIPTION_PLANS[plan][cycle];
     if (!active)
@@ -378,7 +378,7 @@ export class BillingService {
       return tx.subscriptionPayment.create({
         data: {
           church_id: churchId,
-          reference: `COSUB_${randomBytes(16).toString('hex')}`,
+          reference: `BHQSUB_${randomBytes(16).toString('hex')}`,
           billing_email: email,
           gateway: dto.gateway,
           plan: dto.plan,
@@ -403,7 +403,7 @@ export class BillingService {
         email,
         attempt.amount,
         attempt.reference,
-        { purpose: 'churchos_subscription', churchId },
+        { purpose: 'belivrhq_subscription', churchId },
         { callbackUrl: callback, currency: attempt.currency },
       );
       const url = this.checkoutUrl(result.authorizationUrl);
@@ -428,7 +428,7 @@ export class BillingService {
   private assertSubscriptionGateway(gateway: string) {
     if (gateway !== 'flutterwave')
       throw new BadRequestException(
-        'ChurchOS subscriptions use Flutterwave. Refresh Plan & Billing.',
+        'BelivrHQ subscriptions use Flutterwave. Refresh Plan & Billing.',
       );
   }
 
@@ -461,7 +461,7 @@ export class BillingService {
     if (reason.trim().length < 10 || reason.length > 500)
       throw new BadRequestException('Provide a review reason between 10 and 500 characters');
     if (!reviewer.roles.includes('super_admin'))
-      throw new ForbiddenException('ChurchOS review is required');
+      throw new ForbiddenException('BelivrHQ review is required');
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
       const payment = await tx.subscriptionPayment.findFirstOrThrow({
@@ -563,7 +563,7 @@ export class BillingService {
       verified.amount * 100 !== payment.amount * 100
     )
       throw new BadRequestException(
-        'Payment details do not match this subscription. Contact ChurchOS with your reference.',
+        'Payment details do not match this subscription. Contact BelivrHQ with your reference.',
       );
     if (
       payment.status === 'reversed' ||

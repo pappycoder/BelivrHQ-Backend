@@ -1,4 +1,4 @@
-# Live ChurchOS capacity measurements — 24 October 2026
+# Live BelivrHQ capacity measurements — 24 October 2026
 
 Target: `https://church-os-web.vercel.app/api/backend`. These measurements describe the current live HTTP path from this test machine, using one authorized account in Grace Community Church. They do not establish an exact deployment-wide maximum or a maximum number of distinct users.
 

@@ -14,7 +14,7 @@ export class QrResponseDto {
 
   @ApiProperty({
     description: 'QR code data string',
-    example: 'CHURCHOS:ASSET:11111111-1111-1111-1111-111111111111',
+    example: 'BELIVRHQ:ASSET:11111111-1111-1111-1111-111111111111',
   })
   qrData!: string;
 }

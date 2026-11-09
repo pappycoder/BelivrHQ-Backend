@@ -89,7 +89,7 @@ async function fetchAllAuthEmails(): Promise<Map<string, string>> {
 // ─── Main ────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log(`\n${bold('CHURCHOS — Backfill profile emails')}`);
+  console.log(`\n${bold('BELIVRHQ — Backfill profile emails')}`);
   console.log(`${'─'.repeat(45)}`);
 
   await prisma.$connect();

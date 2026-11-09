@@ -64,7 +64,7 @@ export class CreateTemplateDto {
 
   @ApiPropertyOptional({
     description: 'External template ID/name from WhatsApp (e.g. namespace:template_name)',
-    example: 'churchos:welcome_message',
+    example: 'belivrhq:welcome_message',
   })
   @IsOptional()
   @IsString()

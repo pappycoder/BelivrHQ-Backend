@@ -12,7 +12,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class CreateWebhookSubscriptionDto {
   @ApiProperty({
     description: 'URL to receive webhook payloads',
-    example: 'https://example.com/webhooks/churchos',
+    example: 'https://example.com/webhooks/belivrhq',
   })
   @IsUrl({ protocols: ['https'], require_protocol: true, disallow_auth: true })
   @IsNotEmpty()

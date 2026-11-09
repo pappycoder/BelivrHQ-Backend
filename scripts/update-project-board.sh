@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Updates ChurchOS GitHub Project board — marks completed backend tasks as Done.
+# Updates BelivrHQ GitHub Project board — marks completed backend tasks as Done.
 # Requires: gh CLI authenticated with read:project,project scopes
 # Run: bash scripts/update-project-board.sh
 #
@@ -86,7 +86,7 @@ TOTAL=${#ITEM_IDS[@]}
 SUCCESS=0
 FAILED=0
 
-echo "Updating $TOTAL items on ChurchOS GitHub Project board..."
+echo "Updating $TOTAL items on BelivrHQ GitHub Project board..."
 
 for ((i=0; i<TOTAL; i+=BATCH_SIZE)); do
   MUTATION=""

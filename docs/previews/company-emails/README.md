@@ -1,6 +1,6 @@
 # System email previews
 
-Fictional examples of the shared ChurchOS email design. Run `npm run email:preview` to regenerate HTML. PNGs show local desktop browser renders with the repository's opaque logo asset.
+Fictional examples of the shared BelivrHQ email design. Run `npm run email:preview` to regenerate HTML. PNGs show local desktop browser renders with the repository's opaque logo asset.
 
 | Email | HTML | Preview |
 | --- | --- | --- |

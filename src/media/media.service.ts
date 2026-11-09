@@ -1,3 +1,4 @@
+import { LEGACY_BRAND } from '../brand/brand';
 import { assertPlanFeature } from '../billing/entitlements';
 import { featureForMediaFolder } from '../billing/feature-policy';
 /**
@@ -122,7 +123,7 @@ export class MediaService {
 
   private signUpload(payload: string) {
     return createHmac('sha256', this.config.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY'))
-      .update(`churchos-direct-upload:${payload}`)
+      .update(`${LEGACY_BRAND.uploadDomain}${payload}`)
       .digest('base64url');
   }
 

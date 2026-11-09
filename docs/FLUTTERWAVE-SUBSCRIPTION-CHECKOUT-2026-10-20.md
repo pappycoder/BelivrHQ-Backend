@@ -1,6 +1,6 @@
 # Flutterwave subscription checkout and registration sessions
 
-New ChurchOS subscription quotes and checkouts accept only `flutterwave`.
+New BelivrHQ subscription quotes and checkouts accept only `flutterwave`.
 The status response advertises only that gateway and its approved currencies;
 the browser shows one fixed Flutterwave provider. Church-owned giving integrations
 are unchanged. Historical Paystack ledger records, verification and signed callbacks
@@ -12,7 +12,7 @@ The configured Flutterwave test key returned HTTP 200 with a hosted URL on
 `checkout-v2.dev-flutterwave.com`. Our exact-host allowlist rejected this, causing
 the reported “The payment provider returned an invalid checkout” 503. The diagnostic
 link was immediately disabled through Flutterwave's API; no charge was made and no
-ChurchOS database record was created.
+BelivrHQ database record was created.
 
 Both API and browser now recognize that exact development checkout host alongside
 `checkout.flutterwave.com` and `ravemodal.flutterwave.com`. The API permits the

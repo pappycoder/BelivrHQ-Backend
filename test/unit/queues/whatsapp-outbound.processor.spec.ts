@@ -49,7 +49,7 @@ describe('WhatsAppOutboundProcessor', () => {
       name: 'send',
       data: {
         to: '+2348012345678',
-        message: 'Hello from ChurchOS',
+        message: 'Hello from BelivrHQ',
         churchId: 'church-1',
         memberId: 'member-1',
         ...(overrides?.messageId ? { messageId: overrides.messageId } : {}),
@@ -69,7 +69,7 @@ describe('WhatsAppOutboundProcessor', () => {
 
       expect(whatsappService.sendMessage).toHaveBeenCalledWith(
         '+2348012345678',
-        'Hello from ChurchOS',
+        'Hello from BelivrHQ',
         'church-1',
         'member-1',
       );
@@ -88,7 +88,7 @@ describe('WhatsAppOutboundProcessor', () => {
 
       expect(termiiService.sendSms).toHaveBeenCalledWith(
         '+2348012345678',
-        'Hello from ChurchOS',
+        'Hello from BelivrHQ',
         'church-1',
         'wa-msg-id',
       );
@@ -101,6 +101,21 @@ describe('WhatsAppOutboundProcessor', () => {
       await processor.onFailed(job as unknown as Job, new Error('WhatsApp failed'));
 
       expect(termiiService.sendSms).not.toHaveBeenCalled();
+    });
+
+    it.each(['false', '', undefined])(
+      'keeps SMS fallback off for an environment value of %s',
+      async (value) => {
+        configService.get.mockReturnValue(value);
+        await processor.onFailed(createJob() as unknown as Job, new Error('WhatsApp failed'));
+        expect(termiiService.sendSms).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts an explicit true environment value for SMS fallback', async () => {
+      configService.get.mockReturnValue('true');
+      await processor.onFailed(createJob() as unknown as Job, new Error('WhatsApp failed'));
+      expect(termiiService.sendSms).toHaveBeenCalledTimes(1);
     });
 
     it('should not send SMS fallback on non-final attempt', async () => {

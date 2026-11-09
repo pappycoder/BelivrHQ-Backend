@@ -1,0 +1,11 @@
+{
+  "src/brand/brand.ts": "Explicit compatibility aliases and immutable security realms.",
+  "src/config/env.validation.ts": "Legacy environment fallback before defaults.",
+  "scripts/docker-compose.cjs": "Detect existing physical volumes and project ownership.",
+  "docker-compose.legacy.yml": "Retained installation database credentials and volumes.",
+  "test/unit/brand/compatibility.spec.ts": "Compatibility fixtures.",
+  "test/unit/company-email/company-email.spec.ts": "Provider idempotency contract fixture.",
+  "scripts/audit-brand.mjs": "Audit detector patterns.",
+  "docs/REBRAND-2026-11-09.md": "Explicit retained infrastructure and rollout/rollback inventory.",
+  "test/ops/docker-storage.test.cjs": "Existing physical-volume compatibility fixtures."
+}

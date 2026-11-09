@@ -8,11 +8,11 @@ const { spawnSync, spawn } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const core = require('../../scripts/ops/core.cjs');
 const actions = require('../../scripts/ops/actions.cjs');
-const web = require('../../package.json').name === 'churchos-web';
-const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'churchos-ops-test-'));
+const web = require('../../package.json').name === 'belivrhq-web';
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'belivrhq-ops-test-'));
 const environment = path.join(directory, 'selected env');
 const local = {
-  DATABASE_URL: 'postgresql://operator:p%40ss@127.0.0.1:55439/churchos_console_test',
+  DATABASE_URL: 'postgresql://operator:p%40ss@127.0.0.1:55439/belivrhq_console_test',
   SUPABASE_URL: 'http://127.0.0.1:54321',
 };
 fs.writeFileSync(

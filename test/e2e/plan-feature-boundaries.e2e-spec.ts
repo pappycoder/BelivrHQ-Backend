@@ -33,7 +33,7 @@ describe('Plan feature SQL and persistence boundaries', () => {
     async (plan) => {
       const id = await church(plan);
       for (const [feature, level] of Object.entries(FEATURE_LEVELS)) {
-        const { rows } = await db.query('SELECT churchos_has_feature($1,$2) AS allowed', [
+        const { rows } = await db.query('SELECT belivrhq_has_feature($1,$2) AS allowed', [
           id,
           feature,
         ]);
@@ -44,7 +44,7 @@ describe('Plan feature SQL and persistence boundaries', () => {
         [id],
       );
       expect(
-        (await db.query("SELECT churchos_has_feature($1,'media') AS allowed", [id])).rows[0]
+        (await db.query("SELECT belivrhq_has_feature($1,'media') AS allowed", [id])).rows[0]
           .allowed,
       ).toBe(false);
     },

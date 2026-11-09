@@ -1,7 +1,7 @@
 {
-  "name": "churchos-backend",
+  "name": "belivrhq-backend",
   "version": "0.1.0",
-  "description": "ChurchOS Backend API \u2014 NestJS + Prisma + Supabase Auth",
+  "description": "BelivrHQ Backend API \u2014 NestJS + Prisma + Supabase Auth",
   "private": true,
   "license": "GPL-3.0",
   "scripts": {
@@ -32,8 +32,8 @@
     "subscription:test": "ts-node -P tsconfig.scripts.json scripts/set-test-subscription.ts",
     "backfill-profile-emails": "ts-node -P tsconfig.scripts.json scripts/backfill-profile-emails.ts",
     "update-project-board": "bash scripts/update-project-board.sh",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
+    "docker:up": "node scripts/docker-compose.cjs up",
+    "docker:down": "node scripts/docker-compose.cjs down",
     "start:worker": "node dist/worker",
     "storage:migrate-private": "ts-node -P tsconfig.scripts.json scripts/migrate-private-media.ts",
     "pastoral:rotate-key": "ts-node -P tsconfig.scripts.json scripts/rotate-pastoral-key.ts",
@@ -45,7 +45,9 @@
     "email:preview": "ts-node -P tsconfig.scripts.json scripts/preview-company-emails.ts",
     "load:test": "node test/load/run.mjs",
     "load:local": "node test/load/local-server.cjs",
-    "load:check": "node --test test/load/config.test.mjs"
+    "load:check": "node --test test/load/config.test.mjs",
+    "docker:status": "node scripts/docker-compose.cjs status",
+    "brand:audit": "node scripts/audit-brand.mjs"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

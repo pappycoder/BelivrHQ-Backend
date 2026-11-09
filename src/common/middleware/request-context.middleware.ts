@@ -124,7 +124,7 @@ export class RequestContextMiddleware implements NestMiddleware {
         ) {
           next(
             new HttpException(
-              'A ChurchOS subscription is required. Your administrator can complete checkout.',
+              'A BelivrHQ subscription is required. Your administrator can complete checkout.',
               402,
             ),
           );

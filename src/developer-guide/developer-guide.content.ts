@@ -24,7 +24,7 @@ const ALL_FLOWS: Flow[] = [
     category: 'Getting Started',
     title: 'Authentication',
     description:
-      'The ChurchOS API uses Supabase Auth with JWT Bearer tokens. All protected endpoints require a valid token in the Authorization header. This flow covers the complete auth lifecycle: creating an account, logging in, refreshing expired tokens, and logging out.',
+      'The BelivrHQ API uses Supabase Auth with JWT Bearer tokens. All protected endpoints require a valid token in the Authorization header. This flow covers the complete auth lifecycle: creating an account, logging in, refreshing expired tokens, and logging out.',
     prerequisites: 'None: registration is publicly accessible.',
     steps: [
       {
@@ -473,7 +473,7 @@ const ALL_FLOWS: Flow[] = [
   "success": true,
   "data": {
     "authorizationUrl": "https://checkout.paystack.com/abc123",
-    "reference": "CHURCHOS-1712345678",
+    "reference": "BELIVRHQ-1712345678",
     "accessCode": "abc123",
     "transactionId": "txn-uuid"
   }
@@ -497,7 +497,7 @@ const ALL_FLOWS: Flow[] = [
         method: 'GET',
         path: '/giving/verify/:reference',
         title: 'Verify payment after redirect',
-        curl: `curl -X GET http://localhost:3001/api/v1/giving/verify/CHURCHOS-1712345678 \\
+        curl: `curl -X GET http://localhost:3001/api/v1/giving/verify/BELIVRHQ-1712345678 \\
   -H "Authorization: Bearer eyJhbGciOi..."`,
         response: `{
   "success": true,
@@ -877,7 +877,7 @@ Building Project,400000,8,16.0`,
     "registrationId": "reg-uuid",
     "status": "pending_payment",
     "authorizationUrl": "https://checkout.paystack.com/xyz789",
-    "reference": "CHURCHOS-EVT-1712345678"
+    "reference": "BELIVRHQ-EVT-1712345678"
   }
 }`,
         note: 'For paid events, registration creates a "pending_payment" status. The member is redirected to the payment gateway. The registration confirms after successful payment.',
@@ -1507,11 +1507,11 @@ abc123challengetoken`,
         response: `{
   "success": true,
   "data": {
-    "qrData": "CHURCHOS:ASSET:asset-uuid",
-    "qrImageUrl": "https://api.qrserver.com/v1/create-qr-code/?data=CHURCHOS%3AASSET%3Aasset-uuid"
+    "qrData": "BELIVRHQ:ASSET:asset-uuid",
+    "qrImageUrl": "https://api.qrserver.com/v1/create-qr-code/?data=BELIVRHQ%3AASSET%3Aasset-uuid"
   }
 }`,
-        note: 'The QR code encodes a standard format: CHURCHOS:ASSET:<asset-id>. This can be scanned using the POST /assets/scan endpoint for field audits.',
+        note: 'The QR code encodes a standard format: BELIVRHQ:ASSET:<asset-id>. This can be scanned using the POST /assets/scan endpoint for field audits.',
       },
       {
         method: 'POST',
@@ -1521,7 +1521,7 @@ abc123challengetoken`,
   -H "Authorization: Bearer eyJhbGciOi..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "qrData": "CHURCHOS:ASSET:asset-uuid",
+    "qrData": "BELIVRHQ:ASSET:asset-uuid",
     "location": "Main Auditorium"
   }'`,
         response: `{
@@ -1727,7 +1727,7 @@ abc123challengetoken`,
   -H "Authorization: Bearer eyJhbGciOi..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "url": "https://my-app.com/webhooks/churchos",
+    "url": "https://my-app.com/webhooks/belivrhq",
     "events": ["member.created", "transaction.completed"],
     "secret": "my-webhook-secret"
   }'`,
@@ -1735,12 +1735,12 @@ abc123challengetoken`,
   "success": true,
   "data": {
     "id": "webhook-uuid",
-    "url": "https://my-app.com/webhooks/churchos",
+    "url": "https://my-app.com/webhooks/belivrhq",
     "events": ["member.created", "transaction.completed"],
     "isActive": true
   }
 }`,
-        note: 'The secret is used to sign the payload with HMAC-SHA256. Your endpoint receives the signature in the x-churchos-signature header. Verify it to ensure the request came from ChurchOS.',
+        note: 'The secret is used to sign the payload with HMAC-SHA256. Your endpoint receives the signature in the x-webhook-signature header. Verify it to ensure the request came from BelivrHQ.',
       },
       {
         method: 'POST',
@@ -3723,7 +3723,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
       'Register church assets with detailed information including purchase details, location, custodian, and condition tracking.',
     prerequisites: 'Asset category must exist. Church_admin or branch_pastor role required.',
     businessRule:
-      'Asset tags are unique per church (format: CHURCHOS-XXX-001). Condition tracking: new, good, fair, poor, damaged. Status: active, maintenance, retired, lost.',
+      'Asset tags are unique per church (format: BELIVRHQ-XXX-001). Condition tracking: new, good, fair, poor, damaged. Status: active, maintenance, retired, lost.',
     steps: [
       {
         method: 'POST',
@@ -3749,7 +3749,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
   "success": true,
   "data": {
     "id": "ast_001",
-    "assetTag": "CHURCHOS-001-001",
+    "assetTag": "BELIVRHQ-001-001",
     "name": "Yamaha Keyboard P-125",
     "category": "Musical Instruments",
     "condition": "good",
@@ -3768,7 +3768,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
         response: `{
   "success": true,
   "data": [
-    { "id": "ast_001", "assetTag": "CHURCHOS-001-001", "name": "Yamaha Keyboard P-125", "condition": "good", "status": "active", "custodian": "Chioma Okafor" }
+    { "id": "ast_001", "assetTag": "BELIVRHQ-001-001", "name": "Yamaha Keyboard P-125", "condition": "good", "status": "active", "custodian": "Chioma Okafor" }
   ],
   "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
 }`,
@@ -3847,7 +3847,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
       'Loan assets to members or external parties with return tracking. Generate QR codes for quick asset identification and scan logging.',
     prerequisites: 'Asset must be registered and in "active" status.',
     businessRule:
-      'An asset on loan cannot be loaned again until returned. QR codes use format CHURCHOS:ASSET:<assetId>. Scan logs record timestamp, location, and scanner identity.',
+      'An asset on loan cannot be loaned again until returned. QR codes use format BELIVRHQ:ASSET:<assetId>. Scan logs record timestamp, location, and scanner identity.',
     steps: [
       {
         method: 'POST',
@@ -3906,7 +3906,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
         response: `{
   "success": true,
   "data": {
-    "qrData": "CHURCHOS:ASSET:ast_001",
+    "qrData": "BELIVRHQ:ASSET:ast_001",
     "qrImageUrl": "https://storage.churchos.com/qr/ast_001.png"
   }
 }`,
@@ -3920,7 +3920,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
   -H "Authorization: Bearer eyJhbGciOi..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "qr_data": "CHURCHOS:ASSET:ast_001",
+    "qr_data": "BELIVRHQ:ASSET:ast_001",
     "location": "Main Sanctuary",
     "notes": "Routine scan during inventory"
   }'`,
@@ -4761,7 +4761,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
     category: 'Webhooks',
     title: 'Webhook Subscription Management',
     description:
-      'Create and manage outbound webhook subscriptions to receive real-time event notifications from the ChurchOS platform.',
+      'Create and manage outbound webhook subscriptions to receive real-time event notifications from the BelivrHQ platform.',
     prerequisites: 'Requires church_admin or senior_pastor role.',
     businessRule:
       'Webhook payloads are signed with HMAC-SHA256. Delivery uses BullMQ with 3 retries and exponential backoff (5s, 25s, 125s). Supported events: member.created, member.updated, transaction.success, etc.',
@@ -4774,7 +4774,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
   -H "Authorization: Bearer eyJhbGciOi..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "url": "https://myapp.example.com/churchos-webhook",
+    "url": "https://myapp.example.com/belivrhq-webhook",
     "events": ["member.created", "transaction.success", "attendance.recorded"],
     "description": "Sync members to external CRM",
     "secret": "my_webhook_secret_key"
@@ -4783,7 +4783,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
   "success": true,
   "data": {
     "id": "wh_001",
-    "url": "https://myapp.example.com/churchos-webhook",
+    "url": "https://myapp.example.com/belivrhq-webhook",
     "events": ["member.created", "transaction.success", "attendance.recorded"],
     "status": "active",
     "createdAt": "2026-07-22T08:00:00+01:00"
@@ -4800,7 +4800,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
         response: `{
   "success": true,
   "data": [
-    { "id": "wh_001", "url": "https://myapp.example.com/churchos-webhook", "events": ["member.created", "transaction.success"], "status": "active", "lastDelivery": { "status": "success", "at": "2026-07-22T08:00:00+01:00" } }
+    { "id": "wh_001", "url": "https://myapp.example.com/belivrhq-webhook", "events": ["member.created", "transaction.success"], "status": "active", "lastDelivery": { "status": "success", "at": "2026-07-22T08:00:00+01:00" } }
   ],
   "meta": { "page": 1, "limit": 20, "total": 2, "totalPages": 1 }
 }`,
@@ -4839,7 +4839,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
         response: `{
   "success": true,
   "data": [
-    { "id": "del_001", "event": "member.created", "url": "https://myapp.example.com/churchos-webhook", "status": "failed", "httpStatus": 500, "attempt": 2, "duration": 2500, "error": "Connection timed out", "sentAt": "2026-07-22T08:00:05+01:00" }
+    { "id": "del_001", "event": "member.created", "url": "https://myapp.example.com/belivrhq-webhook", "status": "failed", "httpStatus": 500, "attempt": 2, "duration": 2500, "error": "Connection timed out", "sentAt": "2026-07-22T08:00:05+01:00" }
   ],
   "meta": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 }
 }`,
@@ -4856,7 +4856,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
   "data": {
     "deliveryId": "del_test_001",
     "event": "test",
-    "url": "https://myapp.example.com/churchos-webhook",
+    "url": "https://myapp.example.com/belivrhq-webhook",
     "status": "success",
     "httpStatus": 200,
     "duration": 340
@@ -5233,7 +5233,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChurchOS API: Developer Guide</title>
+  <title>BelivrHQ API: Developer Guide</title>
   <style>
     :root {
       --bg-primary: #0b1120;
@@ -5500,7 +5500,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
   <div class="sidebar-header">
     <div class="top-row">
       <div class="title-block">
-        <h1>ChurchOS API</h1>
+        <h1>BelivrHQ API</h1>
         <div class="subtitle">Developer Integration Guide</div>
       </div>
       <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -5524,7 +5524,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
   <div class="hero">
     <h1>Developer <span>Guide</span></h1>
     <p>
-      A comprehensive integration guide for the ChurchOS API. This guide walks through
+      A comprehensive integration guide for the BelivrHQ API. This guide walks through
       each feature flow step-by-step, showing the exact API calls, request formats,
       response shapes, and important business rules you need to know when building
       your frontend integration.
@@ -5552,7 +5552,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
   ${contentHtml}
 
   <div class="footer">
-    ChurchOS: Church Management &amp; Digital Ministry Platform &bull;
+    BelivrHQ: Church Management &amp; Digital Ministry Platform &bull;
     <a href="${escapeHtml(swaggerUrl)}" target="_blank">Interactive Swagger Docs</a> &bull;
     Built with NestJS + Prisma
   </div>

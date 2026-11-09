@@ -1,6 +1,6 @@
 # Form bot protection
 
-ChurchOS uses self-hosted ALTCHA proof of work and a honeypot. Protected forms show an explicit verification checkbox. The browser loads the npm widget only on protected forms; challenge generation and verification stay in the existing NestJS API and Redis. No ALTCHA account or external CAPTCHA API is required.
+BelivrHQ uses self-hosted ALTCHA proof of work and a honeypot. Protected forms show an explicit verification checkbox. The browser loads the npm widget only on protected forms; challenge generation and verification stay in the existing NestJS API and Redis. No ALTCHA account or external CAPTCHA API is required.
 
 ## Protected requests
 

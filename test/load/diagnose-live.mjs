@@ -10,8 +10,8 @@ for (let round = 1; round <= 2; round++) {
     const started = performance.now();
     const response = await fetch(`${origin}${path}`, {
       headers: {
-        Cookie: `churchos_token=${session.token}`,
-        'x-churchos-client': 'web',
+        Cookie: `belivrhq_token=${session.token}`,
+        'x-belivrhq-client': 'web',
         Origin: origin,
         'Sec-Fetch-Site': 'same-origin',
       },

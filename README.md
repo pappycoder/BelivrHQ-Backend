@@ -1,10 +1,10 @@
-# ChurchOS Backend
+# BelivrHQ Backend
 
-NestJS API for ChurchOS — Church Management & Digital Ministry Platform.
+NestJS API for BelivrHQ — Church Management & Digital Ministry Platform.
 
 ## Overview
 
-This repository contains the backend API for ChurchOS. It is built with:
+This repository contains the backend API for BelivrHQ. It is built with:
 
 - **NestJS** — Modular TypeScript backend framework
 - **Prisma** — Type-safe ORM for PostgreSQL
@@ -18,7 +18,7 @@ This repository contains the backend API for ChurchOS. It is built with:
 ## Repository Structure
 
 ```text
-ChurchOS-Backend/
+BelivrHQ-Backend/
 ├── .github/
 │   └── workflows/
 │       └── populate-project-issues.yml  # Auto-create GitHub issues from CSV
@@ -44,7 +44,7 @@ ChurchOS-Backend/
 │   ├── supabase/                        # Supabase client (auth + storage only)
 │   ├── common/                          # Guards, interceptors, filters
 │   └── config/                          # Environment configuration
-├── churchos_github_projects_import.csv  # Project tasks
+├── belivrhq_github_projects_import.csv  # Project tasks
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
@@ -75,29 +75,10 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
-Required variables:
-
-```env
-NODE_ENV=development
-PORT=3001
-DATABASE_URL=postgresql://user:password@localhost:5432/churchos
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SUPABASE_ANON_KEY=your-anon-key
-# Optional: Only needed for legacy HS256 tokens. ES256 tokens (default) use JWKS.
-# SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase-dashboard
-REDIS_URL=redis://localhost:6379
-PAYSTACK_SECRET_KEY=
-PAYSTACK_PUBLIC_KEY=
-FLUTTERWAVE_SECRET_KEY=
-TERMII_API_KEY=
-TERMII_WHATSAPP_DEVICE_ID=
-TERMII_WEBHOOK_SECRET=
-TERMII_DEFAULT_CHURCH_ID=
-RESEND_API_KEY=
-OPENAI_API_KEY=
-WEB_URL=http://localhost:3000
-```
+The example contains the required connection settings and commented feature-specific
+secrets. Leave standard defaults out of `.env`; see [Environment configuration](docs/ENVIRONMENT.md)
+for runtime defaults, optional overrides and production requirements. Church-owned
+payment and messaging credentials belong in Integrations.
 
 ### Running Locally
 
@@ -162,7 +143,7 @@ npx prisma db seed
 The database schema is defined in `prisma/schema.prisma`. Key models include:
 
 - **Churches & Branches** — Multi-tenant structure
-- **Profiles** — Links Supabase Auth users to ChurchOS roles
+- **Profiles** — Links Supabase Auth users to BelivrHQ roles
 - **Members** — Church member records with full contact info
 - **Families** — Family groupings and relationships
 - **Services & Attendance** — Service scheduling and check-in tracking
@@ -193,7 +174,7 @@ The 21 archivable models are members, profiles, visitors, families, events, even
 
 ## GitHub Project Automation
 
-This repo includes a GitHub Actions workflow that automatically creates issues from `churchos_github_projects_import.csv` and adds them to the central ChurchOS GitHub Project.
+This repo includes a GitHub Actions workflow that automatically creates issues from `belivrhq_github_projects_import.csv` and adds them to the central BelivrHQ GitHub Project.
 
 ### Setup
 
@@ -206,7 +187,7 @@ This repo includes a GitHub Actions workflow that automatically creates issues f
    | `ORG_NAME` | `pappycoder` |
    | `PROJECT_NUMBER` | `2` |
 
-3. The workflow runs automatically when `churchos_github_projects_import.csv` is pushed to `main`
+3. The workflow runs automatically when `belivrhq_github_projects_import.csv` is pushed to `main`
 4. You can also trigger it manually from the **Actions** tab
 
 ### Creating the PAT
@@ -224,7 +205,7 @@ This repo includes a GitHub Actions workflow that automatically creates issues f
 
 To update or add new tasks:
 
-1. Edit `churchos_github_projects_import.csv`
+1. Edit `belivrhq_github_projects_import.csv`
 2. Commit and push to `main`
 3. The workflow will:
    - Create new issues
@@ -246,13 +227,13 @@ The project is configured for deployment on Railway / Render / Fly.io via the in
 
 ## Related Repositories
 
-- [ChurchOS-Web](https://github.com/pappycoder/ChurchOS-Web) — Next.js PWA
-- [ChurchOS-Mobile](https://github.com/pappycoder/ChurchOS-Mobile) — Flutter mobile app
-- [ChurchOS Project Board](https://github.com/orgs/pappycoder/projects/2)
+- [BelivrHQ-Web](https://github.com/pappycoder/BelivrHQ-Web) — Next.js PWA
+- [BelivrHQ-Mobile](https://github.com/pappycoder/BelivrHQ-Mobile) — Flutter mobile app
+- [BelivrHQ Project Board](https://github.com/orgs/pappycoder/projects/2)
 
 ---
 
-*ChurchOS Backend — Built for Nigerian churches.*
+*BelivrHQ Backend — Built for Nigerian churches.*
 
 ## Interactive operations console
 

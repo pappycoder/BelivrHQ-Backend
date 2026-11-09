@@ -1,6 +1,6 @@
 # Pending subscription payment recovery
 
-ChurchOS keeps Plan & Billing open and opens the validated Flutterwave hosted URL
+BelivrHQ keeps Plan & Billing open and opens the validated Flutterwave hosted URL
 in a separate window. The window is opened during the button click so browsers can
 allow it before the asynchronous checkout request completes. It has no opener, and
 pop-up blocking does not create a payment attempt. A failed initialization closes

@@ -1060,8 +1060,8 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
-    // QR data format: CHURCHOS:MEMBER:<id>
-    const qrData = `CHURCHOS:MEMBER:${member.id}`;
+    // QR data format: BELIVRHQ:MEMBER:<id>
+    const qrData = `BELIVRHQ:MEMBER:${member.id}`;
 
     return { qrData, memberId: member.id };
   }

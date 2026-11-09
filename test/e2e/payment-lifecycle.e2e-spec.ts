@@ -55,7 +55,7 @@ describe('Payment lifecycle with PostgreSQL', () => {
     return id;
   }
   async function subscription(churchId: string, extras: Record<string, unknown> = {}) {
-    const reference = `COSUB_${randomUUID().replaceAll('-', '')}`;
+    const reference = `BHQSUB_${randomUUID().replaceAll('-', '')}`;
     return prisma.subscriptionPayment.create({
       data: {
         reference,
@@ -144,7 +144,7 @@ describe('Payment lifecycle with PostgreSQL', () => {
     });
     expect(saved.lifecycle).toMatchObject({ refundedAmount: 30, access: 'review' });
     expect((await churchEntitlements(prisma, id)).active).toBe(false);
-    expect(await prisma.$queryRaw`SELECT churchos_has_feature(${id}, 'giving') AS allowed`).toEqual(
+    expect(await prisma.$queryRaw`SELECT belivrhq_has_feature(${id}, 'giving') AS allowed`).toEqual(
       [{ allowed: false }],
     );
     await billing.webhook('flutterwave', adjustment(payment.reference, 2, 30, 'failed'), 'valid');
@@ -191,7 +191,7 @@ describe('Payment lifecycle with PostgreSQL', () => {
     });
     expect((await churchEntitlements(prisma, id)).active).toBe(false);
   });
-  it('allows only a ChurchOS reviewer to release a partial-refund hold and preserves that decision on duplicate callbacks', async () => {
+  it('allows only a BelivrHQ reviewer to release a partial-refund hold and preserves that decision on duplicate callbacks', async () => {
     const id = await church(),
       payment = await subscription(id);
     verified(payment.reference);
@@ -206,7 +206,7 @@ describe('Payment lifecycle with PostgreSQL', () => {
         'release',
         'Reviewed provider evidence',
       ),
-    ).rejects.toThrow('ChurchOS review');
+    ).rejects.toThrow('BelivrHQ review');
     await billing.reviewPayment(
       id,
       { id: 'operator', roles: ['super_admin'] },

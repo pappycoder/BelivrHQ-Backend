@@ -161,7 +161,7 @@ async function checkHealth(raw, proxy = false, timeoutMs = 10000) {
     : `${prefix}${prefix.endsWith('/api/v1') ? '' : '/api/v1'}/health`;
   const url = new URL(proxy ? '/api/backend/health' : endpoint, base.origin);
   const headers = proxy
-    ? { origin: base.origin, 'x-churchos-client': 'web', 'sec-fetch-site': 'same-origin' }
+    ? { origin: base.origin, 'x-belivrhq-client': 'web', 'sec-fetch-site': 'same-origin' }
     : {};
   let response;
   try {

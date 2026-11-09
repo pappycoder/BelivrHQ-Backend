@@ -9,7 +9,7 @@ import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 export class ChangePasswordDto {
   @ApiProperty({
     description: 'Current password for verification',
-    example: 'ChurchOS2026!',
+    example: 'BelivrHQ2026!',
   })
   @IsString()
   @IsNotEmpty()

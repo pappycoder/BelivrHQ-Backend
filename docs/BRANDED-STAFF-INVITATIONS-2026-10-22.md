@@ -1,6 +1,6 @@
 # Branded staff invitations
 
-Both church staff invitation APIs now generate a Supabase invitation token without sending Supabase's default email. They create the scoped church profile and a private company email outbox entry in one transaction, then deliver the existing ChurchOS design through the company Resend sender. Existing role validation, branch scope, staff limits and audit logging still apply. Delivery failures retain the outbox for bounded worker retries.
+Both church staff invitation APIs now generate a Supabase invitation token without sending Supabase's default email. They create the scoped church profile and a private company email outbox entry in one transaction, then deliver the existing BelivrHQ design through the company Resend sender. Existing role validation, branch scope, staff limits and audit logging still apply. Delivery failures retain the outbox for bounded worker retries.
 
 `WEB_URL` is the sole backend website setting. Invitations build `/accept-invitation` directly from that origin and ignore the provider-generated action URL, avoiding stale Supabase Site URL redirects. No additional URL variable is needed. Production requires a public HTTPS origin. Existing organization Resend settings are used; missing delivery configuration rejects creation before creating an Auth identity.
 

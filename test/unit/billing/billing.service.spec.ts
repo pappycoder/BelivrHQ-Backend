@@ -11,7 +11,7 @@ import { subscriptionEnd, SUBSCRIPTION_PLANS } from '../../../src/billing/plans'
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { PaystackService } from '../../../src/giving/services/paystack.service';
 import { FlutterwaveService } from '../../../src/giving/services/flutterwave.service';
-const reference = 'COSUB_' + 'a'.repeat(32);
+const reference = 'BHQSUB_' + 'a'.repeat(32);
 describe('Platform subscriptions', () => {
   let service: BillingService;
   let prisma: any;
@@ -99,7 +99,7 @@ describe('Platform subscriptions', () => {
     service = new BillingService(
       prisma as PrismaService,
       {
-        getOrThrow: () => 'https://churchos.example',
+        getOrThrow: () => 'https://belivrhq.example',
         get: () => 'FLWSECK_TEST-fixture-X',
       } as unknown as ConfigService,
       gateway as PaystackService,
@@ -123,10 +123,10 @@ describe('Platform subscriptions', () => {
         expect(gateway.initializeTransaction).toHaveBeenLastCalledWith(
           'admin@example.org',
           prices[cycle],
-          expect.stringMatching(/^COSUB_[a-f0-9]{32}$/),
-          { purpose: 'churchos_subscription', churchId: 'church-a' },
+          expect.stringMatching(/^BHQSUB_[a-f0-9]{32}$/),
+          { purpose: 'belivrhq_subscription', churchId: 'church-a' },
           {
-            callbackUrl: 'https://churchos.example/subscription?payment_window=1',
+            callbackUrl: 'https://belivrhq.example/subscription?payment_window=1',
             currency: 'USD',
           },
         );
@@ -416,7 +416,7 @@ describe('Platform subscriptions', () => {
     prisma.subscriptionPayment.findFirst.mockResolvedValue({
       ...payment,
       currency: 'USD',
-      pricing_snapshot: { quoteId: 'COSQ_' + 'c'.repeat(32) },
+      pricing_snapshot: { quoteId: 'BHQQUOTE_' + 'c'.repeat(32) },
       checkout_url: 'https://checkout.flutterwave.com/other-tab',
     });
     await expect(
@@ -445,7 +445,7 @@ describe('Platform subscriptions', () => {
       15002,
       expect.any(String),
       expect.any(Object),
-      { callbackUrl: 'https://churchos.example/subscription?payment_window=1', currency: 'NGN' },
+      { callbackUrl: 'https://belivrhq.example/subscription?payment_window=1', currency: 'NGN' },
     );
     expect(prisma.subscriptionPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({

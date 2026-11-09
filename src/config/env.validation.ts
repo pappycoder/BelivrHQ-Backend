@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import { databasePoolDefaults } from '../prisma/pool-config';
+
+const databaseDefaults = databasePoolDefaults(process.env);
+
+// Empty feature-key slots are unconfigured; production requirements still apply.
+function optionalSetting<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
 
 /**
  * Zod schema for validating environment variables at application startup.
@@ -21,10 +29,23 @@ const envSchema = z
     DATABASE_URL: z.string().startsWith('postgresql://', {
       message: 'DATABASE_URL must be a valid PostgreSQL connection string',
     }),
-    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
-    DB_SERVERLESS_POOL_MAX: z.coerce.number().int().min(1).max(10).default(1),
-    DB_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(10000),
-    DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(0).default(0),
+    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(databaseDefaults.persistentMax),
+    DB_SERVERLESS_POOL_MAX: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .default(databaseDefaults.serverlessMax),
+    DB_IDLE_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .default(databaseDefaults.idleTimeoutMillis),
+    DB_CONNECT_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(databaseDefaults.connectionTimeoutMillis),
 
     // ─── Supabase (Auth + Storage only) ───────────────────────
     SUPABASE_URL: z.url({
@@ -32,7 +53,6 @@ const envSchema = z
     }),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
     SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
-    SUPABASE_JWT_SECRET: z.string().optional(),
 
     // ─── Redis (Cache + Queue) ────────────────────────────────
     REDIS_URL: z
@@ -55,11 +75,10 @@ const envSchema = z
       .default('NGN'),
     PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
     PAYSTACK_SECRET_KEY: z.string().optional(),
-    PAYSTACK_PUBLIC_KEY: z.string().optional(),
     FLUTTERWAVE_SECRET_KEY: z.string().optional(),
 
     // ─── Church provider accounts and callback verification ───
-    PUBLIC_API_URL: z.url().optional(),
+    PUBLIC_API_URL: optionalSetting(z.url()),
     FLUTTERWAVE_WEBHOOK_SECRET: z.string().optional(),
     INTEGRATIONS_ENCRYPTION_KEY: z.preprocess(
       (value) => (value === '' ? undefined : value),
@@ -82,14 +101,12 @@ const envSchema = z
     // ─── Storage (Supabase Storage) ──────────────────────────
     SUPABASE_STORAGE_BUCKET: z.string().default('media'),
     SUPABASE_PRIVATE_STORAGE_BUCKET: z.string().default('media-private'),
-    INTERNAL_PROXY_SECRET: z.string().min(32).optional(),
-    MAX_FILE_SIZE_MB: z.coerce.number().default(5),
+    INTERNAL_PROXY_SECRET: optionalSetting(z.string().min(32)),
 
     // AES-256-GCM key for encrypting pastoral note content at rest
-    PASTORAL_ENCRYPTION_KEY: z
-      .string()
-      .min(16, 'PASTORAL_ENCRYPTION_KEY must be at least 16 characters')
-      .optional(),
+    PASTORAL_ENCRYPTION_KEY: optionalSetting(
+      z.string().min(16, 'PASTORAL_ENCRYPTION_KEY must be at least 16 characters'),
+    ),
 
     // Dedicated 32-byte hex key; no development fallback for authenticator secrets.
     TWO_FACTOR_ENCRYPTION_KEY: z.preprocess(
@@ -135,7 +152,14 @@ export type Env = z.infer<typeof envSchema>;
  * Throws a descriptive error if validation fails.
  */
 function validateEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const settings = { ...process.env };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('ASK_CHURCHOS_')) {
+      const current = key.replace('ASK_CHURCHOS_', 'ASK_BELIVRHQ_');
+      if (settings[current] === undefined) settings[current] = value;
+    }
+  }
+  const parsed = envSchema.safeParse(settings);
 
   if (!parsed.success) {
     console.error('❌ Invalid environment variables:');

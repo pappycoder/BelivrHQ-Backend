@@ -7,7 +7,7 @@ describe('Unified church messaging delivery', () => {
   const prisma = { message: { create: jest.fn() } };
   const config = new ConfigService({
     RESEND_API_KEY: 'organization-only',
-    RESEND_FROM: 'system@churchos.example',
+    RESEND_FROM: 'system@belivrhq.example',
   });
   const email = new EmailDeliveryService(
     prisma as never,

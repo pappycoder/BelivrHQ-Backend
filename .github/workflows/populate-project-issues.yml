@@ -1,10 +1,10 @@
-name: Populate ChurchOS Project Issues
+name: Populate BelivrHQ Project Issues
 
 on:
   push:
     branches: [main]
     paths:
-      - 'churchos_github_projects_import.csv'
+      - 'belivrhq_github_projects_import.csv'
   workflow_dispatch:
 
 jobs:
@@ -32,4 +32,4 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
           ORG_NAME: ${{ secrets.ORG_NAME }}
           PROJECT_NUMBER: ${{ secrets.PROJECT_NUMBER }}
-          CSV_PATH: churchos_github_projects_import.csv
+          CSV_PATH: belivrhq_github_projects_import.csv

@@ -10,7 +10,7 @@ Previous test fixtures reproduced the same incorrect URL and missed the defect.
 Flutterwave's documented endpoint is
 `/v3/transactions/verify_by_reference?tx_ref=...`. Using it returned JSON with
 `successful` status and exactly matching references, amounts and currencies for
-two records still pending in ChurchOS. The adapter and integration fixtures now use
+two records still pending in BelivrHQ. The adapter and integration fixtures now use
 this route. The provider unit regression independently requires that exact route
 and returns HTML for other paths, so the original defect fails the test.
 

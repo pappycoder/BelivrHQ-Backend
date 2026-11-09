@@ -11,20 +11,20 @@ const input = {
   cycle: 'monthly' as const,
   amount: 10,
   currency: 'USD',
-  reference: 'COSUB_example',
+  reference: 'BHQSUB_example',
   paidUntil: new Date('2026-11-22T12:00:00Z'),
 };
 
-describe('ChurchOS company email presentation', () => {
+describe('BelivrHQ company email presentation', () => {
   it.each(['welcome', 'activation', 'renewal', 'upgrade'] as CompanyEmailKind[])(
     'renders a branded %s email with a plain-text equivalent',
     (kind) => {
-      const mail = companyEmail({ ...input, kind }, 'https://churchos.example');
-      expect(mail.html).toContain('ChurchOS');
+      const mail = companyEmail({ ...input, kind }, 'https://belivrhq.example');
+      expect(mail.html).toContain('BelivrHQ');
       expect(mail.html).toContain('#c8f169');
       expect(mail.html).toContain('#123c35');
       expect(mail.html).toContain('Grace Church');
-      expect(mail.html).toContain('https://churchos.example/');
+      expect(mail.html).toContain('https://belivrhq.example/');
       expect(mail.text).toContain('Essentials');
       expect(mail.text).toContain('Monthly');
       if (kind === 'welcome') {
@@ -33,7 +33,7 @@ describe('ChurchOS company email presentation', () => {
         expect(mail.subject).not.toContain('is active');
       } else {
         expect(mail.text).toContain('Amount paid: USD');
-        expect(mail.text).toContain('COSUB_example');
+        expect(mail.text).toContain('BHQSUB_example');
         expect(mail.text).toContain('22 November 2026');
       }
     },
@@ -46,7 +46,7 @@ describe('ChurchOS company email presentation', () => {
         firstName: '<script>bad()</script>',
         churchName: '<img src=x onerror=bad()> & "Church"',
       },
-      'https://churchos.example',
+      'https://belivrhq.example',
     );
     expect(mail.html).not.toContain('<script>');
     expect(mail.html).not.toContain('<img src=x');
@@ -57,13 +57,13 @@ describe('ChurchOS company email presentation', () => {
     expect(
       companyEmail(
         { ...input, kind: 'welcome', requiresEmailConfirmation: true },
-        'https://churchos.example',
+        'https://belivrhq.example',
       ).text,
     ).toContain('Complete the email verification');
-    expect(companyEmail({ ...input, kind: 'upgrade' }, 'https://churchos.example').text).toContain(
+    expect(companyEmail({ ...input, kind: 'upgrade' }, 'https://belivrhq.example').text).toContain(
       'billing cycle and renewal date stay the same',
     );
-    expect(companyEmail({ ...input, kind: 'renewal' }, 'https://churchos.example').text).toContain(
+    expect(companyEmail({ ...input, kind: 'renewal' }, 'https://belivrhq.example').text).toContain(
       'renewal is manual',
     );
   });
@@ -77,7 +77,7 @@ describe('Persistent company email dispatch', () => {
     id: 'notification-id',
     event_key: 'registration/user',
     to_email: 'admin@example.org',
-    from_email: 'ChurchOS <team@example.org>',
+    from_email: 'BelivrHQ <team@example.org>',
     subject: 'Welcome',
     html: '<p>Welcome</p>',
     text: 'Welcome',
@@ -100,7 +100,7 @@ describe('Persistent company email dispatch', () => {
       new ConfigService({
         RESEND_API_KEY: 'test-key',
         RESEND_FROM: 'team@example.org',
-        WEB_URL: 'https://churchos.example',
+        WEB_URL: 'https://belivrhq.example',
       }),
     );
   });
@@ -169,7 +169,7 @@ describe('Persistent company email dispatch', () => {
     const unconfigured = new CompanyEmailService(
       prisma as never,
       email as never,
-      new ConfigService({ WEB_URL: 'https://churchos.example' }),
+      new ConfigService({ WEB_URL: 'https://belivrhq.example' }),
     );
     await unconfigured.dispatch(row.event_key);
     expect(email.sendEmail).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe('Persistent company email dispatch', () => {
           event_key: 'registration/user',
           kind: 'welcome',
           to_email: 'admin@example.org',
-          from_email: 'ChurchOS <team@example.org>',
+          from_email: 'BelivrHQ <team@example.org>',
           text: expect.stringContaining('complete payment to activate'),
         }),
       ],
@@ -212,7 +212,7 @@ describe('Persistent company email dispatch', () => {
         prisma as never,
         {
           ...input,
-          reference: 'COSUB_ref',
+          reference: 'BHQSUB_ref',
           church_id: 'church',
           billing_email: 'payer@example.org',
           intent: 'renewal',
@@ -224,7 +224,7 @@ describe('Persistent company email dispatch', () => {
         expect.objectContaining({
           data: [
             expect.objectContaining({
-              event_key: 'subscription/COSUB_ref',
+              event_key: 'subscription/BHQSUB_ref',
               to_email: 'payer@example.org',
               kind,
             }),
@@ -252,7 +252,7 @@ describe('Organization email transport', () => {
       await expect(
         sender.sendEmail('admin@example.org', 'Welcome', '<p>Welcome</p>', '', undefined, {
           text: 'Welcome',
-          from: 'ChurchOS <team@example.org>',
+          from: 'BelivrHQ <team@example.org>',
           idempotencyKey: 'company/event',
         }),
       ).resolves.toBe('accepted-id');
@@ -261,7 +261,7 @@ describe('Organization email transport', () => {
         expect.objectContaining({ 'Idempotency-Key': 'company/event' }),
       );
       expect(JSON.parse(String(options.body))).toMatchObject({
-        from: 'ChurchOS <team@example.org>',
+        from: 'BelivrHQ <team@example.org>',
         to: ['admin@example.org'],
         text: 'Welcome',
       });

@@ -103,7 +103,7 @@ export async function seedSystem(prisma: PrismaClient, churchId: string): Promis
     const subscription = await prisma.webhookSubscription.create({
       data: {
         church_id: churchId,
-        url: 'https://hooks.example.com/churchos',
+        url: 'https://hooks.example.com/belivrhq',
         events: ['member.created', 'transaction.completed'],
         secret: 'seed-webhook-secret',
         is_active: true,

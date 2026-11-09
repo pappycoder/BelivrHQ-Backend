@@ -1,0 +1,166 @@
+SortOrder,Repo,Phase,Module,Title,Description,Priority,Labels,Status,Iteration,StartDate,TargetDate
+1,BelivrHQ-Backend,Phase 0,Prisma,Initialize Prisma project and define schema,"Set up Prisma with PostgreSQL, define all core models (churches, branches, profiles, members, families, services, attendance, transactions, events, messages, pastoral_notes, audit_logs).",High,"prisma,database,backend",Done,Phase 0,2026-07-14,2026-07-14
+2,BelivrHQ-Backend,Phase 0,Prisma,Run initial Prisma migration and seed data,"Run prisma migrate dev, create seed script with dev churches, branches, members, services, giving categories, and users.",High,"prisma,database,backend",Done,Phase 0,2026-07-15,2026-07-15
+3,BelivrHQ-Backend,Phase 0,Project Setup,Configure environment variables and validation,"Create .env.example, ConfigModule with Zod validation for all env vars. Fails fast on missing required vars.",High,"setup,backend",Done,Phase 0,2026-07-15,2026-07-15
+4,BelivrHQ-Backend,Phase 0,Project Setup,Initialize NestJS project with TypeScript strict mode,"Set up NestJS project structure, configure tsconfig, eslint, prettier, and initial module folders.",High,"setup,backend",Done,Phase 0,2026-07-14,2026-07-14
+5,BelivrHQ-Backend,Phase 0,API,Set up Swagger/OpenAPI documentation,"Install @nestjs/swagger, configure SwaggerModule, set up /api/v1/docs endpoint, add API tags, configure auth bearer token.",High,"api,docs,backend",Done,Phase 0,2026-07-15,2026-07-15
+6,BelivrHQ-Backend,Phase 0,Prisma,Create PrismaModule and PrismaService for NestJS,Implement PrismaService extending PrismaClient with onModuleInit/onModuleDestroy lifecycle hooks and transaction support.,High,"prisma,backend",Done,Phase 0,2026-07-14,2026-07-14
+7,BelivrHQ-Backend,Phase 0,Common,Add global exception filter and response interceptor,Standardize API responses and errors across all endpoints. Exception filter and response interceptor done.,High,"api,backend",Done,Phase 0,2026-07-15,2026-07-15
+8,BelivrHQ-Backend,Phase 0,Common,Add request logging and audit logging middleware,Implement structured JSON logging and audit log triggers.,Medium,"logging,backend",Done,Phase 0,2026-07-15,2026-07-15
+9,BelivrHQ-Backend,Phase 0,Auth,Create Supabase Auth module and JWT guard,"Implement SupabaseModule, SupabaseService, and SupabaseAuthGuard to validate JWT tokens from Supabase Auth.",High,"auth,supabase,backend",Done,Phase 0,2026-07-15,2026-07-15
+10,BelivrHQ-Backend,Phase 0,Auth,Implement RBAC decorators and guard,Create @RequireRoles decorator and RolesGuard.,High,"auth,rbac,backend",Done,Phase 0,2026-07-15,2026-07-15
+11,BelivrHQ-Backend,Phase 0,DevOps,Create Dockerfile for backend service,Write production-ready Dockerfile with multi-stage build.,Medium,"devops,backend",Done,Phase 0,2026-07-15,2026-07-15
+12,BelivrHQ-Backend,Phase 0,DevOps,Add GitHub Actions CI/CD workflow,"Create workflow for lint, test, build, and deploy on push to main/develop.",Medium,"devops,backend",Done,Phase 0,2026-07-15,2026-07-15
+13,BelivrHQ-Backend,Phase 1,Auth,Implement church registration endpoint,"POST /auth/register creates Supabase user, then creates church, branch, profile via Prisma with church_admin role.",High,"auth,backend",Done,Phase 1,2026-07-15,2026-07-16
+14,BelivrHQ-Backend,Phase 1,Auth,Implement MFA setup and verification endpoints,POST /auth/mfa/setup returns QR code; verify TOTP codes via Supabase Auth.,Medium,"auth,backend",Todo,Phase 1,2026-08-04,2026-08-08
+15,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Auth endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to Auth controllers and DTOs. Swagger examples standardized across all DTOs.",High,"api,docs,backend",Done,Phase 1,2026-07-16,2026-07-16
+15a,BelivrHQ-Backend,Phase 1,Auth,Implement login endpoint,"POST /auth/login — Supabase signInWithPassword, profile lookup, audit log, returns tokens.",High,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15b,BelivrHQ-Backend,Phase 1,Auth,Implement logout endpoint,"POST /auth/logout — token blacklist in Redis, audit log.",High,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15c,BelivrHQ-Backend,Phase 1,Auth,Implement forgot-password endpoint,"POST /auth/forgot-password — Supabase resetPasswordForEmail, always returns success to prevent email enumeration.",Medium,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15d,BelivrHQ-Backend,Phase 1,Auth,Implement reset-password endpoint,PATCH /auth/reset-password — Supabase updateUser with recovery token.,Medium,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15e,BelivrHQ-Backend,Phase 1,Auth,Implement change-password endpoint,"PUT /auth/password — authenticated, verify current password then update via Supabase.",High,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15f,BelivrHQ-Backend,Phase 1,Auth,Implement update-profile endpoint,"PATCH /auth/me — partial updates to Profile record in Prisma, audit log.",High,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+15g,BelivrHQ-Backend,Phase 1,Auth,Implement session refresh endpoint,"POST /auth/refresh — Supabase refreshSession, returns new tokens.",High,"auth,backend",Done,Phase 1,2026-07-16,2026-07-16
+16,BelivrHQ-Backend,Phase 1,Members,Implement member CRUD service,"Create MembersService with Prisma: create, update, soft delete, find by id, and list with filters.",High,"members,prisma,backend",Done,Phase 1,2026-08-11,2026-08-15
+17,BelivrHQ-Backend,Phase 1,Members,Implement member API endpoints,"Create REST endpoints: GET /members, POST /members, GET /members/:id, PATCH /members/:id, DELETE /members/:id.",High,"members,api,backend",Done,Phase 1,2026-08-11,2026-08-15
+18,BelivrHQ-Backend,Phase 1,Members,Implement member search and pagination,"Add full-text search via Prisma $queryRaw, status filters, branch filters, and pagination.",High,"members,prisma,backend",Done,Phase 1,2026-08-11,2026-08-15
+19,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Members endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty, @ApiQuery, @ApiParam decorators to Members controllers and DTOs.",High,"api,docs,backend",Done,Phase 1,2026-08-11,2026-08-15
+20,BelivrHQ-Backend,Phase 1,Members,Implement CSV bulk import endpoint,"POST /members/bulk-import with validation, dry-run, and error reporting.",Medium,"members,backend",Done,Phase 1,2026-08-11,2026-08-15
+21,BelivrHQ-Backend,Phase 1,Members,Implement QR code generation for members,Generate QR codes encoding member ID + checksum.,Medium,"members,qr,backend",Done,Phase 1,2026-08-11,2026-08-15
+22,BelivrHQ-Backend,Phase 1,Members,Implement family management endpoints,Create families and family_members endpoints with relationship types via Prisma.,Medium,"members,family,prisma,backend",Done,Phase 1,2026-08-11,2026-08-15
+23,BelivrHQ-Backend,Phase 1,Attendance,Implement services CRUD,Create service scheduling endpoints via Prisma.,High,"attendance,prisma,backend",Done,Phase 1,2026-08-18,2026-08-22
+24,BelivrHQ-Backend,Phase 1,Attendance,Implement attendance recording endpoints,POST /attendance and POST /attendance/bulk with duplicate detection via Prisma.,High,"attendance,prisma,backend",Done,Phase 1,2026-08-18,2026-08-22
+25,BelivrHQ-Backend,Phase 1,Attendance,Implement attendance summary and trends,GET /attendance/summary and GET /attendance/trends with charts data via Prisma aggregation.,High,"attendance,prisma,backend",Done,Phase 1,2026-08-18,2026-08-22
+26,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Attendance endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to Attendance controllers and DTOs.",High,"api,docs,backend",Done,Phase 1,2026-08-18,2026-08-22
+27,BelivrHQ-Backend,Phase 1,Attendance,Implement visitor attendance recording,Record visitors without member accounts and auto-create follow-up tasks.,Medium,"attendance,backend",Done,Phase 1,2026-08-18,2026-08-22
+28,BelivrHQ-Backend,Phase 1,Giving,Implement giving categories CRUD,Create and manage giving categories per church via Prisma.,High,"giving,prisma,backend",Done,Phase 1,2026-08-25,2026-08-29
+29,BelivrHQ-Backend,Phase 1,Giving,Integrate Paystack initialization endpoint,POST /giving/initialize creates pending transaction via Prisma and returns Paystack URL.,High,"giving,payments,backend",Done,Phase 1,2026-08-25,2026-08-29
+30,BelivrHQ-Backend,Phase 1,Giving,Implement Paystack webhook handler,"Verify signature, process charge.success with idempotency, update transaction via Prisma.",High,"giving,payments,webhook,backend",Done,Phase 1,2026-08-25,2026-08-29
+31,BelivrHQ-Backend,Phase 1,Giving,Implement cash giving recording endpoint,POST /giving/cash records cash transactions via Prisma and generates receipt numbers.,High,"giving,prisma,backend",Done,Phase 1,2026-08-25,2026-08-29
+32,BelivrHQ-Backend,Phase 1,Giving,Implement giving summary report endpoint,"GET /giving/reports/summary returns totals, categories, trends via Prisma aggregation.",High,"giving,reports,prisma,backend",Done,Phase 1,2026-08-25,2026-08-29
+33,BelivrHQ-Backend,Phase 1,Giving,Implement PDF receipt generation service,Generate branded PDF receipts and store URLs in transaction via Prisma.,High,"giving,backend",Done,Phase 1,2026-08-25,2026-08-29
+34,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Giving endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to Giving controllers and DTOs.",High,"api,docs,backend",Done,Phase 1,2026-08-25,2026-08-29
+35,BelivrHQ-Backend,Phase 1,WhatsApp,Set up 360dialog webhook endpoint,POST /webhooks/whatsapp receives and parses inbound messages.,High,"whatsapp,backend",Done,Phase 1,2026-09-01,2026-09-05
+36,BelivrHQ-Backend,Phase 1,WhatsApp,Implement command router,"Route CHECKIN, GIVE, HELP commands to handlers.",High,"whatsapp,backend",Done,Phase 1,2026-09-01,2026-09-05
+37,BelivrHQ-Backend,Phase 1,WhatsApp,Implement CHECKIN command handler,"Validate member via Prisma, find service, record attendance via Prisma, send confirmation.",High,"whatsapp,attendance,prisma,backend",Done,Phase 1,2026-09-01,2026-09-05
+38,BelivrHQ-Backend,Phase 1,WhatsApp,Implement GIVE command handler,Generate Paystack payment link and send via WhatsApp.,High,"whatsapp,giving,backend",Done,Phase 1,2026-09-01,2026-09-05
+39,BelivrHQ-Backend,Phase 1,WhatsApp,Implement HELP command handler,Return list of available commands.,Medium,"whatsapp,backend",Done,Phase 1,2026-09-01,2026-09-05
+40,BelivrHQ-Backend,Phase 1,WhatsApp,Implement message logging,Store all inbound/outbound messages in messages table via Prisma.,Medium,"whatsapp,prisma,backend",Done,Phase 1,2026-09-01,2026-09-05
+41,BelivrHQ-Backend,Phase 1,WhatsApp,Implement outbound message queue,Queue outbound messages via BullMQ with rate limiting.,Medium,"whatsapp,backend",Done,Phase 1,2026-09-01,2026-09-05
+42,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to WhatsApp endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to WhatsApp controllers and DTOs.",High,"api,docs,backend",Done,Phase 1,2026-09-01,2026-09-05
+43,BelivrHQ-Backend,Phase 1,Events,Implement event CRUD endpoints,"Create events with metadata, capacity, pricing via Prisma.",High,"events,prisma,backend",Done,Phase 1,2026-09-08,2026-09-12
+44,BelivrHQ-Backend,Phase 1,Events,Implement free event registration,POST /events/:id/register creates registration via Prisma.,High,"events,prisma,backend",Done,Phase 1,2026-09-08,2026-09-12
+45,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Events endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to Events controllers and DTOs.",Medium,"api,docs,backend",Done,Phase 1,2026-09-08,2026-09-12
+46,BelivrHQ-Backend,Phase 1,Media,Implement sermon upload endpoint,Upload audio to Supabase Storage and create sermon record via Prisma.,Medium,"media,backend",Done,Phase 1,2026-09-08,2026-09-12
+47,BelivrHQ-Backend,Phase 1,Media,Implement sermon listing and search,GET /sermons with search and filters via Prisma.,Medium,"media,prisma,backend",Done,Phase 1,2026-09-08,2026-09-12
+48,BelivrHQ-Backend,Phase 1,API,Add Swagger decorators to Media endpoints,"Add @ApiTags, @ApiOperation, @ApiResponse, @ApiBearerAuth, @ApiProperty decorators to Media controllers and DTOs.",Medium,"api,docs,backend",Done,Phase 1,2026-09-08,2026-09-12
+49,BelivrHQ-Backend,Phase 2,Admin,Implement multi-branch support,"Branch CRUD, member transfer, headquarters dashboard via Prisma.",High,"admin,prisma,backend",Todo,Phase 2,2026-10-01,2026-10-09
+50,BelivrHQ-Backend,Phase 2,Giving,Integrate Flutterwave initialization and webhook,Add Flutterwave as secondary payment processor.,High,"giving,payments,backend",Done,Phase 2,2026-10-01,2026-10-09
+51,BelivrHQ-Backend,Phase 2,Giving,Implement payment processor failover,Fallback to Flutterwave if Paystack fails.,High,"giving,payments,backend",Done,Phase 2,2026-10-01,2026-10-09
+52,BelivrHQ-Backend,Phase 2,Giving,Implement recurring giving setup,Store authorization codes and schedule charges via Prisma.,High,"giving,prisma,backend",Done,Phase 2,2026-10-01,2026-10-09
+53,BelivrHQ-Backend,Phase 2,Giving,Implement recurring giving cron job,Daily job charges active recurring giving plans via Prisma.,High,"giving,prisma,backend",Done,Phase 2,2026-10-01,2026-10-09
+54,BelivrHQ-Backend,Phase 2,WhatsApp,Implement broadcast creation endpoint,POST /broadcasts with filters and scheduling.,High,"whatsapp,backend",Done,Phase 2,2026-10-13,2026-10-23
+55,BelivrHQ-Backend,Phase 2,WhatsApp,Implement broadcast queue processor,Process broadcast jobs in batches with rate limiting.,High,"whatsapp,backend",Done,Phase 2,2026-10-13,2026-10-23
+56,BelivrHQ-Backend,Phase 2,WhatsApp,Implement template management endpoints,"CRUD for message templates via Prisma. Includes publish endpoint and optional status on create.",Medium,"whatsapp,prisma,backend",Done,Phase 2,2026-10-13,2026-10-23
+57,BelivrHQ-Backend,Phase 2,WhatsApp,Integrate Termii SMS fallback,Send SMS when WhatsApp delivery fails.,Medium,"whatsapp,sms,backend",Done,Phase 2,2026-10-13,2026-10-23
+58,BelivrHQ-Backend,Phase 2,WhatsApp,Implement AI chatbot integration,Use OpenAI/Groq for FAQ and intent classification with RAG.,Medium,"whatsapp,ai,backend",Todo,Phase 2,2026-10-13,2026-10-23
+59,BelivrHQ-Backend,Phase 2,Events,Implement paid event registration and ticketing,Generate QR tickets with HMAC and payment integration via Prisma.,High,"events,prisma,backend",Done,Phase 2,2026-10-13,2026-10-23
+60,BelivrHQ-Backend,Phase 2,Events,Implement ticket validation endpoint,POST /events/:id/tickets/validate.,High,"events,backend",Done,Phase 2,2026-10-13,2026-10-23
+61,BelivrHQ-Backend,Phase 3,Pastoral,Implement pastoral notes CRUD with encryption,"AES-256-GCM encryption for counseling notes, stored via Prisma.",High,"pastoral,prisma,backend",Done,Phase 3,2026-11-02,2026-11-13
+62,BelivrHQ-Backend,Phase 3,Pastoral,Implement risk score calculation,Nightly job calculates member risk scores via Prisma.,High,"pastoral,prisma,backend",Done,Phase 3,2026-11-02,2026-11-13
+63,BelivrHQ-Backend,Phase 3,Pastoral,Implement engagement score calculation,Nightly job calculates member engagement scores via Prisma.,High,"pastoral,prisma,backend",Done,Phase 3,2026-11-02,2026-11-13
+64,BelivrHQ-Backend,Phase 3,Pastoral,Implement life event tracking and workflows,"Detect birthdays, bereavements, trigger alerts via Prisma.",Medium,"pastoral,prisma,backend",Done,Phase 3,2026-11-02,2026-11-13
+65,BelivrHQ-Backend,Phase 3,Operations,Implement department management,Department CRUD and member assignments via Prisma.,Medium,"operations,prisma,backend",Done,Phase 3,2026-11-17,2026-11-27
+66,BelivrHQ-Backend,Phase 3,Operations,Implement cell group management,"Cell group CRUD, nearest group recommendation via Prisma.",Medium,"operations,prisma,backend",Done,Phase 3,2026-11-17,2026-11-27
+67,BelivrHQ-Backend,Phase 3,Operations,Implement asset and inventory management,Asset register with QR codes and maintenance tracking via Prisma.,Low,"operations,prisma,backend",Done,Phase 3,2026-11-17,2026-11-27
+68,BelivrHQ-Backend,Phase 4,Sync,Implement offline sync push/pull endpoints,POST /sync/push and GET /sync/pull with conflict resolution via Prisma.,High,"sync,backend",Todo,Phase 4,2026-12-01,2026-12-11
+69,BelivrHQ-Backend,Phase 4,Sync,Implement sync queue processing,Process sync jobs with idempotency and retry logic via Prisma.,High,"sync,backend",Todo,Phase 4,2026-12-01,2026-12-11
+70,BelivrHQ-Backend,Phase 4,API,Create third-party developer API portal,"Public API documentation, API key management, rate limiting, developer onboarding.",Medium,"api,backend",Todo,Phase 4,2026-12-01,2026-12-11
+71,BelivrHQ-Web,Phase 0,Project Setup,Configure environment variables,"Create .env.example for Supabase Auth URL, anon key, API URL.",High,"setup,frontend",Done,Phase 0,2026-07-21,2026-07-21
+72,BelivrHQ-Web,Phase 0,Project Setup,Initialize Next.js 14 project with shadcn/ui,"Set up Next.js App Router, TypeScript, Tailwind, shadcn/ui.",High,"setup,frontend",In Progress,Phase 0,2026-07-21,2026-07-25
+73,BelivrHQ-Web,Phase 0,Design,Configure Tailwind theme with BelivrHQ design tokens,"Set colors, typography, spacing, shadows in tailwind.config.",High,"design,frontend",In Progress,Phase 0,2026-07-21,2026-07-25
+74,BelivrHQ-Web,Phase 0,Design,Install base shadcn/ui components,"Install button, input, card, dialog, table, form, select, toast, etc.",High,"design,frontend",In Progress,Phase 0,2026-07-21,2026-07-25
+75,BelivrHQ-Web,Phase 0,State,Set up TanStack Query for server state,Configure React Query client and API hooks pattern.,High,"state,frontend",In Progress,Phase 0,2026-07-28,2026-08-01
+76,BelivrHQ-Web,Phase 0,State,Set up Zustand for global UI state,"Create auth store, sidebar store, notification store.",Medium,"state,frontend",In Progress,Phase 0,2026-07-28,2026-08-01
+77,BelivrHQ-Web,Phase 0,Auth,Configure Supabase Auth SSR client,Create server and client Supabase auth clients with middleware. All data fetching goes through NestJS REST API.,High,"auth,supabase,frontend",In Progress,Phase 0,2026-07-28,2026-08-01
+78,BelivrHQ-Web,Phase 0,API,Create API client with interceptors,Axios/fetch wrapper with auth header and error handling for NestJS backend.,High,"api,frontend",In Progress,Phase 0,2026-07-28,2026-08-01
+79,BelivrHQ-Web,Phase 0,Project Setup,Set up PWA configuration,"Configure next-pwa, manifest.json, service worker, app icons.",Medium,"setup,pwa,frontend",In Progress,Phase 0,2026-08-04,2026-08-08
+80,BelivrHQ-Web,Phase 0,DevOps,Create Dockerfile for web,Production Dockerfile for Next.js.,Medium,"devops,frontend",In Progress,Phase 0,2026-08-04,2026-08-08
+81,BelivrHQ-Web,Phase 0,DevOps,Add GitHub Actions CI/CD workflow,"Lint, test, build, deploy to Vercel.",Medium,"devops,frontend",In Progress,Phase 0,2026-08-04,2026-08-08
+82,BelivrHQ-Web,Phase 1,Auth,Build login page,Create /login with email/password form and Supabase auth.,High,"auth,frontend",Todo,Phase 1,2026-08-11,2026-08-15
+83,BelivrHQ-Web,Phase 1,Auth,Build church registration page,Create /register with multi-step church onboarding wizard.,High,"auth,frontend",Todo,Phase 1,2026-08-11,2026-08-15
+84,BelivrHQ-Web,Phase 1,Auth,Build password reset pages,Create /forgot-password and /reset-password.,Medium,"auth,frontend",Todo,Phase 1,2026-08-11,2026-08-15
+85,BelivrHQ-Web,Phase 1,Auth,Build MFA setup page,Display TOTP QR code and verification input.,Medium,"auth,frontend",Todo,Phase 1,2026-08-11,2026-08-15
+86,BelivrHQ-Web,Phase 1,Layout,Build app shell with sidebar and topbar,"Collapsible sidebar, role-based navigation, church/branch switcher.",High,"layout,frontend",Todo,Phase 1,2026-08-18,2026-08-22
+87,BelivrHQ-Web,Phase 1,Layout,Build responsive mobile navigation,"Mobile menu, touch-friendly targets.",High,"layout,frontend",Todo,Phase 1,2026-08-18,2026-08-22
+88,BelivrHQ-Web,Phase 1,Dashboard,Build pastor home dashboard,"Key metrics cards, attendance chart, giving chart, at-risk widget, activity feed.",High,"dashboard,frontend",Todo,Phase 1,2026-08-18,2026-08-22
+89,BelivrHQ-Web,Phase 1,Members,Build members list page,"Search, filters, pagination, data table with shadcn/ui.",High,"members,frontend",Todo,Phase 1,2026-08-25,2026-08-29
+90,BelivrHQ-Web,Phase 1,Members,Build member detail page,"Tabs for profile, attendance, giving, notes.",High,"members,frontend",Todo,Phase 1,2026-08-25,2026-08-29
+91,BelivrHQ-Web,Phase 1,Members,Build add/edit member forms,Form validation with React Hook Form + Zod.,High,"members,frontend",Todo,Phase 1,2026-08-25,2026-08-29
+92,BelivrHQ-Web,Phase 1,Members,Build bulk import page,CSV upload with preview and error report.,Medium,"members,frontend",Todo,Phase 1,2026-08-25,2026-08-29
+93,BelivrHQ-Web,Phase 1,Members,Build QR code download page,Generate and print member QR codes.,Medium,"members,frontend",Todo,Phase 1,2026-08-25,2026-08-29
+94,BelivrHQ-Web,Phase 1,Attendance,Build service scheduling page,Create and manage church services.,High,"attendance,frontend",Todo,Phase 1,2026-09-01,2026-09-05
+95,BelivrHQ-Web,Phase 1,Attendance,Build manual attendance recording page,Search member and mark present.,High,"attendance,frontend",Todo,Phase 1,2026-09-01,2026-09-05
+96,BelivrHQ-Web,Phase 1,Attendance,Build bulk attendance entry page,Data table for marking multiple members.,High,"attendance,frontend",Todo,Phase 1,2026-09-01,2026-09-05
+97,BelivrHQ-Web,Phase 1,Attendance,Build attendance summary dashboard,Charts and reports.,High,"attendance,frontend",Todo,Phase 1,2026-09-01,2026-09-05
+98,BelivrHQ-Web,Phase 1,Giving,Build giving dashboard,"Summary cards, trend chart, category breakdown.",High,"giving,frontend",Todo,Phase 1,2026-09-08,2026-09-12
+99,BelivrHQ-Web,Phase 1,Giving,Build cash giving recording form,"Select member/category, enter amount.",High,"giving,frontend",Todo,Phase 1,2026-09-08,2026-09-12
+100,BelivrHQ-Web,Phase 1,Giving,Build transactions list page,Recent transactions table with status.,High,"giving,frontend",Todo,Phase 1,2026-09-08,2026-09-12
+101,BelivrHQ-Web,Phase 1,Giving,Build receipt viewer/download page,Display PDF receipts.,Medium,"giving,frontend",Todo,Phase 1,2026-09-08,2026-09-12
+102,BelivrHQ-Web,Phase 1,Events,Build events list and calendar page,List/calendar view of events.,Medium,"events,frontend",Todo,Phase 1,2026-09-15,2026-09-19
+103,BelivrHQ-Web,Phase 1,Events,Build event creation form,Create events with metadata and custom fields.,Medium,"events,frontend",Todo,Phase 1,2026-09-15,2026-09-19
+104,BelivrHQ-Web,Phase 1,Events,Build event registration page,Register members for events.,Medium,"events,frontend",Todo,Phase 1,2026-09-15,2026-09-19
+105,BelivrHQ-Web,Phase 1,Media,Build sermon library page,List sermons with search and filters.,Medium,"media,frontend",Todo,Phase 1,2026-09-15,2026-09-19
+106,BelivrHQ-Web,Phase 1,Media,Build sermon player page,Audio player with metadata.,Medium,"media,frontend",Todo,Phase 1,2026-09-15,2026-09-19
+107,BelivrHQ-Web,Phase 1,WhatsApp,Build broadcast creation page,Create broadcasts with filters and scheduling.,Medium,"whatsapp,frontend",Todo,Phase 1,2026-09-22,2026-09-26
+108,BelivrHQ-Web,Phase 1,WhatsApp,Build template management page,Manage WhatsApp templates.,Medium,"whatsapp,frontend",Todo,Phase 1,2026-09-22,2026-09-26
+109,BelivrHQ-Web,Phase 1,Settings,Build church settings page,"Update church details, colors, service times.",Medium,"settings,frontend",Todo,Phase 1,2026-09-22,2026-09-26
+110,BelivrHQ-Web,Phase 1,Settings,Build user management page,"Invite users, assign roles.",Medium,"settings,frontend",Todo,Phase 1,2026-09-22,2026-09-26
+111,BelivrHQ-Web,Phase 2,Admin,Build multi-branch management page,"Create branches, transfer members, headquarters view.",High,"admin,frontend",Todo,Phase 2,2026-10-06,2026-10-16
+112,BelivrHQ-Web,Phase 2,Giving,Build recurring giving management page,"Setup, pause, resume recurring giving.",Medium,"giving,frontend",Todo,Phase 2,2026-10-06,2026-10-16
+113,BelivrHQ-Web,Phase 2,Finance,Build department budget page,Allocate and track budgets.,Medium,"finance,frontend",Todo,Phase 2,2026-10-06,2026-10-16
+114,BelivrHQ-Web,Phase 2,Finance,Build expense tracking page,Submit and approve expenses.,Medium,"finance,frontend",Todo,Phase 2,2026-10-06,2026-10-16
+115,BelivrHQ-Web,Phase 2,Finance,Build bank reconciliation page,Match deposits with transactions.,Medium,"finance,frontend",Todo,Phase 2,2026-10-06,2026-10-16
+116,BelivrHQ-Web,Phase 2,Events,Build ticket validation page,Scan/validate QR tickets.,Medium,"events,frontend",Todo,Phase 2,2026-10-20,2026-10-30
+117,BelivrHQ-Web,Phase 2,Attendance,Build PWA usher QR check-in page,Camera-based QR scanning for ushers.,High,"attendance,pwa,frontend",Todo,Phase 2,2026-10-20,2026-10-30
+118,BelivrHQ-Web,Phase 3,Pastoral,Build at-risk members dashboard,List members by risk score with actions.,High,"pastoral,frontend",Todo,Phase 3,2026-11-03,2026-11-13
+119,BelivrHQ-Web,Phase 3,Pastoral,Build pastoral notes page,Encrypted notes with confidentiality levels.,High,"pastoral,frontend",Todo,Phase 3,2026-11-03,2026-11-13
+120,BelivrHQ-Web,Phase 3,Pastoral,Build spiritual growth dashboard,Engagement distribution and lists.,Medium,"pastoral,frontend",Todo,Phase 3,2026-11-03,2026-11-13
+121,BelivrHQ-Web,Phase 3,Operations,Build department management page,CRUD departments and assignments.,Medium,"operations,frontend",Todo,Phase 3,2026-11-17,2026-11-27
+122,BelivrHQ-Web,Phase 3,Operations,Build cell group management page,"Map view, member assignment.",Medium,"operations,frontend",Todo,Phase 3,2026-11-17,2026-11-27
+123,BelivrHQ-Web,Phase 4,PWA,Implement offline fallback page,Show cached data when offline.,Medium,"pwa,frontend",Todo,Phase 4,2026-12-01,2026-12-11
+124,BelivrHQ-Web,Phase 4,PWA,Implement web push notifications,Subscribe and receive push notifications.,Medium,"pwa,frontend",Todo,Phase 4,2026-12-01,2026-12-11
+125,BelivrHQ-Mobile,Phase 0,Project Setup,Initialize Flutter project,Set up Flutter 3.22+ project with folder structure.,High,"setup,mobile",Todo,Phase 0,2026-08-03,2026-08-07
+126,BelivrHQ-Mobile,Phase 0,Project Setup,Configure pubspec.yaml dependencies,"Add http, dio, supabase_flutter, riverpod, flutter_secure_storage, sqflite, workmanager, mobile_scanner, local_auth, etc.",High,"setup,mobile",Todo,Phase 0,2026-08-03,2026-08-07
+127,BelivrHQ-Mobile,Phase 0,Project Setup,Configure app icons and splash screen,Add BelivrHQ logo and splash assets.,Medium,"setup,mobile",Todo,Phase 0,2026-08-03,2026-08-07
+128,BelivrHQ-Mobile,Phase 0,State,Set up Riverpod for state management,"Create providers for auth, members, giving, etc.",High,"state,mobile",Todo,Phase 0,2026-08-10,2026-08-14
+129,BelivrHQ-Mobile,Phase 0,Auth,Configure Supabase Auth client,Initialize Supabase for authentication only. All data from NestJS REST API.,High,"auth,supabase,mobile",Todo,Phase 0,2026-08-10,2026-08-14
+130,BelivrHQ-Mobile,Phase 0,Database,Set up local SQLite database,"Create tables for offline members, attendance, transactions.",High,"database,mobile",Todo,Phase 0,2026-08-10,2026-08-14
+131,BelivrHQ-Mobile,Phase 0,Database,Set up Hive for cache,"Cache settings, sync metadata.",Medium,"database,mobile",Todo,Phase 0,2026-08-10,2026-08-14
+132,BelivrHQ-Mobile,Phase 0,DevOps,Add GitHub Actions workflow,"Analyze, test, build Android APK/AAB.",Medium,"devops,mobile",Todo,Phase 0,2026-08-17,2026-08-21
+133,BelivrHQ-Mobile,Phase 4,Auth,Build login screen,Email/password login with Supabase auth.,High,"auth,mobile",Todo,Phase 4,2026-12-01,2026-12-05
+134,BelivrHQ-Mobile,Phase 4,Auth,Build onboarding screens,"Language selection, welcome.",Medium,"auth,mobile",Todo,Phase 4,2026-12-01,2026-12-05
+135,BelivrHQ-Mobile,Phase 4,Auth,Implement biometric authentication,Fingerprint/face unlock option.,Medium,"auth,mobile",Todo,Phase 4,2026-12-01,2026-12-05
+136,BelivrHQ-Mobile,Phase 4,Home,Build member home dashboard,"Quick actions, next service, sermon, events, giving summary.",High,"home,mobile",Todo,Phase 4,2026-12-08,2026-12-12
+137,BelivrHQ-Mobile,Phase 4,Members,Build my profile screen,View and edit profile.,High,"profile,mobile",Todo,Phase 4,2026-12-08,2026-12-12
+138,BelivrHQ-Mobile,Phase 4,Members,Build family members view,Display family relationships.,Medium,"profile,mobile",Todo,Phase 4,2026-12-08,2026-12-12
+139,BelivrHQ-Mobile,Phase 4,Giving,Build give screen,"Category selection, amount, payment method.",High,"giving,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+140,BelivrHQ-Mobile,Phase 4,Giving,Build giving history screen,List past giving with receipts.,High,"giving,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+141,BelivrHQ-Mobile,Phase 4,Attendance,Build QR check-in screen,Scan QR code for attendance.,High,"attendance,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+142,BelivrHQ-Mobile,Phase 4,Attendance,Build manual attendance entry screen,Search member and mark present.,Medium,"attendance,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+143,BelivrHQ-Mobile,Phase 4,Attendance,Build offline attendance queue screen,View pending attendance scans.,High,"attendance,offline,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+144,BelivrHQ-Mobile,Phase 4,Attendance,Implement background sync,Use WorkManager/background_fetch to sync offline data.,High,"sync,offline,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+145,BelivrHQ-Mobile,Phase 4,Giving,Build cash giving recording screen,Ushers record cash giving offline.,High,"giving,offline,mobile",Todo,Phase 4,2026-12-15,2026-12-19
+146,BelivrHQ-Mobile,Phase 4,Events,Build events list screen,Browse and register for events.,Medium,"events,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+147,BelivrHQ-Mobile,Phase 4,Events,Build ticket QR screen,Display event ticket QR code.,Medium,"events,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+148,BelivrHQ-Mobile,Phase 4,Sermons,Build sermon library screen,List and search sermons.,Medium,"sermons,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+149,BelivrHQ-Mobile,Phase 4,Sermons,Build sermon player screen,Audio player with offline download.,Medium,"sermons,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+150,BelivrHQ-Mobile,Phase 4,Sermons,Implement offline sermon download,"Download audio over WiFi, store locally, auto-delete after 30 days.",Medium,"sermons,offline,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+151,BelivrHQ-Mobile,Phase 4,Prayer,Build prayer request screen,Submit prayer requests.,Medium,"prayer,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+152,BelivrHQ-Mobile,Phase 4,Notifications,Implement push notifications,Firebase Cloud Messaging integration.,Medium,"notifications,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+153,BelivrHQ-Mobile,Phase 4,Quality,Optimize APK size below 20MB,"Reduce dependencies, lazy loading.",High,"performance,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+154,BelivrHQ-Mobile,Phase 4,Quality,Test on low-end devices,"Test on Tecno, Infinix, Samsung devices.",High,"testing,mobile",Todo,Phase 4,2026-12-22,2026-12-28
+155,BelivrHQ-Mobile,Phase 4,Distribution,Configure Firebase App Distribution,Set up beta testing for pilot churches.,Medium,"distribution,mobile",Todo,Phase 4,2026-12-29,2026-12-31
+156,BelivrHQ-Mobile,Phase 4,Distribution,Build release APK and AAB,Configure signing for Play Store.,High,"distribution,mobile",Todo,Phase 4,2026-12-29,2026-12-31
+157,BelivrHQ-Mobile,Phase 4,Distribution,Submit to Google Play Store,"Create store listing, screenshots, release.",Medium,"distribution,mobile",Todo,Phase 4,2026-12-29,2026-12-31
+158,BelivrHQ-Mobile,Phase 4,Distribution,Build iOS app and submit to App Store,"Configure Xcode, certificates, App Store submission.",Low,"distribution,mobile",Todo,Phase 4,2026-12-29,2026-12-31

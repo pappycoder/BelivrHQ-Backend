@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# ChurchOS Database Backup Script
+# BelivrHQ Database Backup Script
 # =============================================================================
 # Backs up the PostgreSQL database using pg_dump.
 # Supports local Docker and remote (Railway/Fly.io) databases.
@@ -13,14 +13,14 @@
 #   ./scripts/backup-database.sh remote
 #
 #   # Restore from a backup file
-#   ./scripts/backup-database.sh restore ./backups/churchos_2026-07-22.sql.gz
+#   ./scripts/backup-database.sh restore ./backups/belivrhq_2026-07-22.sql.gz
 # =============================================================================
 
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-BACKUP_FILE="${BACKUP_DIR}/churchos_${TIMESTAMP}.sql.gz"
+BACKUP_FILE="${BACKUP_DIR}/belivrhq_${TIMESTAMP}.sql.gz"
 LOG_FILE="${BACKUP_DIR}/backup_${TIMESTAMP}.log"
 
 # Ensure backup directory exists
@@ -51,12 +51,12 @@ backup_local() {
 
     local DB_HOST="${DB_HOST:-localhost}"
     local DB_PORT="${DB_PORT:-5433}"
-    local DB_NAME="${DB_NAME:-churchos}"
-    local DB_USER="${DB_USER:-churchos}"
+    local DB_NAME="${DB_NAME:-belivrhq}"
+    local DB_USER="${DB_USER:-belivrhq}"
 
     log "Database: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
-    PGPASSWORD="${DB_PASSWORD:-churchos}" pg_dump \
+    PGPASSWORD="${DB_PASSWORD:-belivrhq}" pg_dump \
         -h "${DB_HOST}" \
         -p "${DB_PORT}" \
         -U "${DB_USER}" \
@@ -109,8 +109,8 @@ restore_backup() {
 
     local DB_HOST="${DB_HOST:-localhost}"
     local DB_PORT="${DB_PORT:-5433}"
-    local DB_NAME="${DB_NAME:-churchos}"
-    local DB_USER="${DB_USER:-churchos}"
+    local DB_NAME="${DB_NAME:-belivrhq}"
+    local DB_USER="${DB_USER:-belivrhq}"
 
     warn "⚠️  This will DROP existing data and replace it with the backup!"
     warn "   Database: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
@@ -123,14 +123,14 @@ restore_backup() {
     fi
 
     if [[ "${RESTORE_FILE}" == *.gz ]]; then
-        zcat "${RESTORE_FILE}" | PGPASSWORD="${DB_PASSWORD:-churchos}" psql \
+        zcat "${RESTORE_FILE}" | PGPASSWORD="${DB_PASSWORD:-belivrhq}" psql \
             -h "${DB_HOST}" \
             -p "${DB_PORT}" \
             -U "${DB_USER}" \
             -d "${DB_NAME}" \
             2>>"${LOG_FILE}"
     else
-        PGPASSWORD="${DB_PASSWORD:-churchos}" psql \
+        PGPASSWORD="${DB_PASSWORD:-belivrhq}" psql \
             -h "${DB_HOST}" \
             -p "${DB_PORT}" \
             -U "${DB_USER}" \
@@ -157,7 +157,7 @@ case "${1:-help}" in
         restore_backup "${2}"
         ;;
     help|*)
-        echo "ChurchOS Database Backup Script"
+        echo "BelivrHQ Database Backup Script"
         echo ""
         echo "Usage:"
         echo "  $0 local              Backup local Docker PostgreSQL"
@@ -168,13 +168,13 @@ case "${1:-help}" in
         echo "Environment variables (local):"
         echo "  DB_HOST       Database host (default: localhost)"
         echo "  DB_PORT       Database port (default: 5433)"
-        echo "  DB_NAME       Database name (default: churchos)"
-        echo "  DB_USER       Database user (default: churchos)"
-        echo "  DB_PASSWORD   Database password (default: churchos)"
+        echo "  DB_NAME       Database name (default: belivrhq)"
+        echo "  DB_USER       Database user (default: belivrhq)"
+        echo "  DB_PASSWORD   Database password (default: belivrhq)"
         echo ""
         echo "Examples:"
         echo "  ./scripts/backup-database.sh local"
         echo "  DATABASE_URL=\$(grep DATABASE_URL .env | cut -d= -f2-) ./scripts/backup-database.sh remote"
-        echo "  ./scripts/backup-database.sh restore ./backups/churchos_2026-07-22.sql.gz"
+        echo "  ./scripts/backup-database.sh restore ./backups/belivrhq_2026-07-22.sql.gz"
         ;;
 esac

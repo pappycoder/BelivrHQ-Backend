@@ -1,3 +1,4 @@
+import { ASSET_QR } from '../brand/brand';
 import { ListAssetWorklistDto } from './dto/list-asset-worklist.dto';
 import { RequestContextService } from '../common/services/request-context.service';
 /**
@@ -444,7 +445,7 @@ export class AssetsService {
     // Update QR code with the real asset ID now that it exists.
     const updatedAsset = await this.prisma.asset.update({
       where: { id: asset.id },
-      data: { qr_code: `CHURCHOS:ASSET:${asset.id}` },
+      data: { qr_code: `BELIVRHQ:ASSET:${asset.id}` },
       include: {
         category: true,
         branch: { select: { name: true } },
@@ -805,7 +806,7 @@ export class AssetsService {
   async generateQrCode(churchId: string, assetId: string): Promise<QrResponseDto> {
     await this.getAsset(churchId, assetId);
 
-    const qrData = `CHURCHOS:ASSET:${assetId}`;
+    const qrData = `BELIVRHQ:ASSET:${assetId}`;
     await this.prisma.asset.update({
       where: { id: assetId },
       data: { qr_code: qrData },
@@ -831,7 +832,7 @@ export class AssetsService {
       throw new NotFoundException('Asset not found');
     }
 
-    return { assetId, qrData: asset.qr_code ?? `CHURCHOS:ASSET:${assetId}` };
+    return { assetId, qrData: asset.qr_code ?? `BELIVRHQ:ASSET:${assetId}` };
   }
 
   /**
@@ -855,7 +856,7 @@ export class AssetsService {
     let assetId: string | undefined;
 
     if (dto.qrData) {
-      const match = dto.qrData.match(/^CHURCHOS:ASSET:([a-f0-9-]{36})$/i);
+      const match = dto.qrData.match(ASSET_QR);
       if (!match) {
         throw new BadRequestException('Invalid QR code format');
       }

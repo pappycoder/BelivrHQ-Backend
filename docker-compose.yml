@@ -1,24 +1,24 @@
+name: belivrhq-backend
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: churchos-postgres
+    container_name: belivrhq-postgres
     environment:
-      POSTGRES_USER: churchos
-      POSTGRES_PASSWORD: churchos_dev
-      POSTGRES_DB: churchos
+      POSTGRES_USER: belivrhq
+      POSTGRES_PASSWORD: belivrhq_dev
+      POSTGRES_DB: belivrhq
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U churchos"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
-
   redis:
     image: redis:7-alpine
-    container_name: churchos-redis
+    container_name: belivrhq-redis
     ports:
       - "6379:6379"
     volumes:
@@ -28,7 +28,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
 volumes:
   postgres_data:
+    external: true
+    name: ${POSTGRES_DATA_VOLUME:?Use npm run docker:up to select verified existing or fresh volumes}
   redis_data:
+    external: true
+    name: ${REDIS_DATA_VOLUME:?Use npm run docker:up to select verified existing or fresh volumes}

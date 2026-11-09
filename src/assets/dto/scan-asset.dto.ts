@@ -12,7 +12,7 @@ import { IsOptional, IsString } from 'class-validator';
 export class ScanAssetDto {
   @ApiPropertyOptional({
     description: 'QR code data',
-    example: 'CHURCHOS:ASSET:11111111-1111-1111-1111-111111111111',
+    example: 'BELIVRHQ:ASSET:11111111-1111-1111-1111-111111111111',
   })
   @IsString()
   @IsOptional()

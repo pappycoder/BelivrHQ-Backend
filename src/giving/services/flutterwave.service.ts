@@ -207,7 +207,7 @@ export class FlutterwaveService implements PaymentGatewayProvider {
     if (httpStatus === 401 || httpStatus === 403) {
       this.logger.error(`Flutterwave verification rejected: authentication (HTTP ${httpStatus})`);
       throw new ServiceUnavailableException(
-        'Payment verification is unavailable. Contact ChurchOS support to check the Flutterwave account configuration.',
+        'Payment verification is unavailable. Contact BelivrHQ support to check the Flutterwave account configuration.',
       );
     }
     if (

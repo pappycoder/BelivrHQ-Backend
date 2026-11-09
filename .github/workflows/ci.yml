@@ -1,4 +1,4 @@
-name: ChurchOS Backend CI
+name: BelivrHQ Backend CI
 
 on:
   push:
@@ -33,9 +33,9 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: churchos
-          POSTGRES_PASSWORD: churchos_test
-          POSTGRES_DB: churchos_test
+          POSTGRES_USER: belivrhq
+          POSTGRES_PASSWORD: belivrhq_test
+          POSTGRES_DB: belivrhq_test
         ports:
           - 5433:5432
         options: >-
@@ -47,7 +47,7 @@ jobs:
       NODE_ENV: test
       PORT: 3001
       WEB_URL: http://localhost:3000
-      DATABASE_URL: postgresql://churchos:churchos_test@localhost:5433/churchos_test
+      DATABASE_URL: postgresql://belivrhq:belivrhq_test@localhost:5433/belivrhq_test
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
       SUPABASE_ANON_KEY: test-anon-key
@@ -71,9 +71,9 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: churchos
-          POSTGRES_PASSWORD: churchos_test
-          POSTGRES_DB: churchos_e2e_test
+          POSTGRES_USER: belivrhq
+          POSTGRES_PASSWORD: belivrhq_test
+          POSTGRES_DB: belivrhq_e2e_test
         ports:
           - 5433:5432
         options: >-
@@ -82,8 +82,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://churchos:churchos_test@localhost:5433/churchos_e2e_test
-      TEST_DATABASE_URL: postgresql://churchos:churchos_test@localhost:5433/churchos_e2e_test
+      DATABASE_URL: postgresql://belivrhq:belivrhq_test@localhost:5433/belivrhq_e2e_test
+      TEST_DATABASE_URL: postgresql://belivrhq:belivrhq_test@localhost:5433/belivrhq_e2e_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

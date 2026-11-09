@@ -1,6 +1,6 @@
 /**
  * @file prisma.service.ts
- * @description Prisma database client service for the ChurchOS Backend.
+ * @description Prisma database client service for the BelivrHQ Backend.
  *
  * This service extends PrismaClient and integrates with the NestJS dependency
  * injection system. It manages the database connection lifecycle by connecting

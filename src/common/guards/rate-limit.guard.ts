@@ -1,3 +1,4 @@
+import { LEGACY_BRAND } from '../../brand/brand';
 import { measureStage, queryMetrics } from '../../prisma/query-metrics';
 /**
  * @file rate-limit.guard.ts
@@ -192,9 +193,11 @@ export class RateLimitGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     let ip = request.ip || request.socket.remoteAddress || 'unknown';
-    const supplied = request.headers['x-churchos-proxy-secret'];
+    const modern = request.headers['x-belivrhq-proxy-secret'] !== undefined;
+    const supplied =
+      request.headers[modern ? 'x-belivrhq-proxy-secret' : LEGACY_BRAND.proxySecretHeader];
     const secret = process.env.INTERNAL_PROXY_SECRET;
-    const forwarded = request.headers['x-churchos-client-ip'];
+    const forwarded = request.headers[modern ? 'x-belivrhq-client-ip' : LEGACY_BRAND.proxyIpHeader];
     if (
       secret &&
       typeof supplied === 'string' &&

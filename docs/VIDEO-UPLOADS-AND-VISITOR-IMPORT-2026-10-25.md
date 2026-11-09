@@ -7,8 +7,8 @@ The previous flow sent multipart bytes through the Next.js API proxy and then th
 All non-image uploads now use the same direct-storage workflow, including small audio/video files:
 
 1. The browser POSTs filename, MIME type, byte count, folder and branch to `/media/upload/prepare`.
-2. ChurchOS checks active plan eligibility, upload permission, folder, size/type and branch ownership. It creates a random, non-overwriting storage path in the existing private bucket and obtains a signed upload URL. No service-role credential reaches the browser.
-3. The browser PUTs the bytes directly to that URL, without ChurchOS cookies or credentials. A storage error is identified separately from a ChurchOS API error. The transfer allows up to ten minutes.
+2. BelivrHQ checks active plan eligibility, upload permission, folder, size/type and branch ownership. It creates a random, non-overwriting storage path in the existing private bucket and obtains a signed upload URL. No service-role credential reaches the browser.
+3. The browser PUTs the bytes directly to that URL, without BelivrHQ cookies or credentials. A storage error is identified separately from a BelivrHQ API error. The transfer allows up to ten minutes.
 4. `/media/upload/complete` verifies a server-signed completion ticket bound to user, church, branch, file metadata, asset ID and path. Completion authorization lasts one hour. Current plan, permissions and branch validity are checked again; storage-reported size and MIME type must match before the library asset is created.
 5. Completion is idempotent. A completed transfer is retained in browser memory if the metadata save fails, allowing a retry without transferring bytes again. Revoked/expired authorization is discarded so a fresh grant can be requested. Failed sermon-section PATCHes retain the returned recording URL independently.
 

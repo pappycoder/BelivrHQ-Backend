@@ -1,6 +1,6 @@
 /**
  * @file seed.ts
- * @description Single seed entry for ChurchOS — Development (full demo) or
+ * @description Single seed entry for BelivrHQ — Development (full demo) or
  * Production (reference data).
  *
  * When run without flags it interactively asks which mode to run:

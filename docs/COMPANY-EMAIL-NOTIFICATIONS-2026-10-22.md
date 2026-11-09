@@ -1,4 +1,4 @@
-# ChurchOS company email notifications — 22 October 2026
+# BelivrHQ company email notifications — 22 October 2026
 
 Registration now creates a branded welcome notification for the registering administrator. It confirms account/workspace creation, names the selected plan/cycle and directs the user to verification and Plan & Billing. It does not imply that payment succeeded or that an unpaid workspace is active. Supabase's existing email-verification flow remains separate.
 
@@ -6,7 +6,7 @@ A verified, applied subscription payment creates one company confirmation. The f
 
 ## Branding and recipients
 
-The templates use the official ChurchOS emblem, deep teal/lime palette, responsive table layout, plain-text alternative, and workspace/billing/help links derived exclusively from server-configured WEB_URL. All account-supplied text is HTML-escaped. No passwords, tokens, provider credentials or payment authorization details are included. Dates use Africa/Lagos and the amount uses the immutable payment's currency and value.
+The templates use the official BelivrHQ emblem, deep teal/lime palette, responsive table layout, plain-text alternative, and workspace/billing/help links derived exclusively from server-configured WEB_URL. All account-supplied text is HTML-escaped. No passwords, tokens, provider credentials or payment authorization details are included. Dates use Africa/Lagos and the amount uses the immutable payment's currency and value.
 
 Registration mail goes to the signup email. New checkouts freeze the authenticated payer's email in subscription_payments.billing_email. Pending legacy attempts without that field fall back to the church's billing/contact email. A legacy payment without a valid recipient still applies successfully and logs a generic review warning instead of manufacturing a recipient.
 
@@ -25,7 +25,7 @@ The table is server-only, has RLS enabled and denies anon/authenticated database
 ## Deployment
 
 1. Apply migration 20261022180000_company_email_notifications and regenerate Prisma Client before deploying code. It adds the nullable billing-email snapshot and the private outbox table.
-2. Configure the organization's RESEND_API_KEY and a verified-domain RESEND_FROM (for example, ChurchOS <noreply@your-verified-domain>). Set WEB_URL to the public HTTPS web origin so email buttons and branding work outside local development.
+2. Configure the organization's RESEND_API_KEY and a verified-domain RESEND_FROM (for example, BelivrHQ <noreply@your-verified-domain>). Set WEB_URL to the public HTTPS web origin so email buttons and branding work outside local development.
 3. Deploy API and persistent worker together. The existing worker command sets ENABLE_QUEUE_WORKERS=true and runs the retry scheduler. A serverless HTTP deployment alone sends immediate attempts but cannot guarantee background recovery.
 4. Monitor pending/failed outbox entries and provider delivery results. Email failure does not change account/subscription state.
 

@@ -1,3 +1,4 @@
+import { LEGACY_BRAND } from '../brand/brand';
 import { RequestContextService } from '../common/services/request-context.service';
 /**
  * @file pastoral.service.ts
@@ -83,7 +84,7 @@ export class PastoralService {
     }
     const rawKey = configuredKey || 'dev-only-change-in-production-32b';
     // Derive a 32-byte AES-256 key using scrypt with a fixed salt
-    this.encryptionKey = crypto.scryptSync(rawKey, 'churchos-pastoral-salt', 32);
+    this.encryptionKey = crypto.scryptSync(rawKey, LEGACY_BRAND.pastoralSalt, 32);
   }
 
   /**

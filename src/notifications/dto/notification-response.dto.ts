@@ -36,7 +36,7 @@ export class NotificationResponseDto {
 
   @ApiProperty({
     description: 'Notification title',
-    example: 'Welcome to ChurchOS',
+    example: 'Welcome to BelivrHQ',
   })
   title!: string;
 

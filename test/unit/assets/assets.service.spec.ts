@@ -65,7 +65,7 @@ describe('AssetsService', () => {
     depreciation_method: DepreciationMethod.straight_line,
     current_value: 250000,
     location: 'Main Sanctuary',
-    qr_code: `CHURCHOS:ASSET:${mockAssetId}`,
+    qr_code: `BELIVRHQ:ASSET:${mockAssetId}`,
     notes: null,
     created_at: new Date('2026-07-20T10:00:00.000Z'),
     updated_at: new Date('2026-07-20T10:00:00.000Z'),
@@ -350,7 +350,7 @@ describe('AssetsService', () => {
 
       expect(result.assetTag).toBe('AUD-001');
       expect(result.imageUrl).toBe('https://img.example/mixer.jpg');
-      expect(result.qrCode).toBe(`CHURCHOS:ASSET:${mockAssetId}`);
+      expect(result.qrCode).toBe(`BELIVRHQ:ASSET:${mockAssetId}`);
       expect(prisma.asset.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -476,13 +476,13 @@ describe('AssetsService', () => {
   });
 
   describe('generateQrCode', () => {
-    it('should return CHURCHOS:ASSET prefixed data', async () => {
+    it('should return BELIVRHQ:ASSET prefixed data', async () => {
       prisma.asset.findFirst.mockResolvedValue(mockAsset);
       prisma.asset.update.mockResolvedValue(mockAsset);
 
       const result = await service.generateQrCode(mockChurchId, mockAssetId);
 
-      expect(result.qrData).toBe(`CHURCHOS:ASSET:${mockAssetId}`);
+      expect(result.qrData).toBe(`BELIVRHQ:ASSET:${mockAssetId}`);
     });
   });
 
@@ -583,7 +583,7 @@ describe('AssetsService', () => {
 
       const result = await service.scanAsset(
         mockChurchId,
-        { qrData: `CHURCHOS:ASSET:${mockAssetId}` },
+        { qrData: `BELIVRHQ:ASSET:${mockAssetId}` },
         mockUserId,
       );
 

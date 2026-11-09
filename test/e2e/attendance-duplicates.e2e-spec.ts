@@ -99,6 +99,14 @@ describe('Attendance identities and sermon URL persistence with PostgreSQL', () 
   });
 
   it('accepts only one simultaneous event member check-in, including retries on another date', async () => {
+    await prisma.event.update({
+      where: { id: event },
+      data: {
+        start_date: new Date('2026-10-25T09:00:00Z'),
+        end_date: new Date('2026-10-26T18:00:00Z'),
+        recurrence: 'multi_day',
+      },
+    });
     const results = await Promise.all(
       Array.from({ length: 6 }, () =>
         events.bulkCheckInAttendees(event, [member], church, user, '2026-10-25'),

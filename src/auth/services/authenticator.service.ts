@@ -1,3 +1,4 @@
+import { LEGACY_BRAND } from '../../brand/brand';
 import {
   Injectable,
   BadRequestException,
@@ -50,7 +51,7 @@ export class AuthenticatorService {
   private encrypt(userId: string, secret: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    cipher.setAAD(Buffer.from(`churchos:totp:v1:${userId}`));
+    cipher.setAAD(Buffer.from(`${LEGACY_BRAND.totpDomain}${userId}`));
     const content = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
     return [
       'v1',
@@ -66,7 +67,7 @@ export class AuthenticatorService {
       throw new ServiceUnavailableException('Authenticator data is unavailable.');
     try {
       const decipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(iv, 'hex'));
-      decipher.setAAD(Buffer.from(`churchos:totp:v1:${userId}`));
+      decipher.setAAD(Buffer.from(`${LEGACY_BRAND.totpDomain}${userId}`));
       decipher.setAuthTag(Buffer.from(tag, 'hex'));
       return Buffer.concat([
         decipher.update(Buffer.from(content, 'hex')),
@@ -81,7 +82,7 @@ export class AuthenticatorService {
 
   private otp(secret: string, label = 'Account') {
     return new TOTP({
-      issuer: 'ChurchOS',
+      issuer: 'BelivrHQ',
       label,
       algorithm: 'SHA1',
       digits: 6,
@@ -104,7 +105,9 @@ export class AuthenticatorService {
 
   private recoveryHash(userId: string, revision: string, code: string) {
     return createHash('sha256')
-      .update(`churchos:recovery:${userId}:${revision}:${code.replace(/-/g, '').toUpperCase()}`)
+      .update(
+        `${LEGACY_BRAND.recoveryDomain}${userId}:${revision}:${code.replace(/-/g, '').toUpperCase()}`,
+      )
       .digest('hex');
   }
 

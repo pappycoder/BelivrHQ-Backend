@@ -11,9 +11,9 @@ describe('Company email transaction and delivery integrity', () => {
   const churchIds: string[] = [];
   const mail = { sendEmail: jest.fn().mockResolvedValue('provider-accepted') };
   const config = new ConfigService({
-    WEB_URL: 'https://churchos.example',
+    WEB_URL: 'https://belivrhq.example',
     RESEND_API_KEY: 'test-fixture',
-    RESEND_FROM: 'team@churchos.example',
+    RESEND_FROM: 'team@belivrhq.example',
   });
   const company = new CompanyEmailService(prisma, mail as never, config);
   const gateway = { isConfigured: () => true, verifyTransaction: jest.fn() };
@@ -103,7 +103,7 @@ describe('Company email transaction and delivery integrity', () => {
     'queues exactly one verified subscription email under callback races (renewal=%s)',
     async (previousPeriod) => {
       const record = await church(previousPeriod);
-      const reference = 'COSUB_' + randomUUID().replace(/-/g, '');
+      const reference = 'BHQSUB_' + randomUUID().replace(/-/g, '');
       await prisma.subscriptionPayment.create({
         data: {
           reference,

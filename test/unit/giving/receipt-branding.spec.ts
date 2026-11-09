@@ -20,7 +20,7 @@ describe('church-branded giving receipts', () => {
   };
   const service = new ReceiptService(new ConfigService({ SUPABASE_URL: origin }));
 
-  it('uses uploaded WebP church logos in a real PDF and retains ChurchOS identity', async () => {
+  it('uses uploaded WebP church logos in a real PDF and retains BelivrHQ identity', async () => {
     const logo = await sharp({
       create: { width: 80, height: 30, channels: 3, background: '#526f4a' },
     })
@@ -31,7 +31,7 @@ describe('church-branded giving receipts', () => {
     expect(pdf).toContain('%PDF');
     expect(pdf).toContain('/Subtype /Image');
     expect(pdf).toContain('Grace Community Church');
-    expect(pdf).toContain('ChurchOS');
+    expect(pdf).toContain('BelivrHQ');
     expect(global.fetch).toHaveBeenCalledWith(url, expect.objectContaining({ redirect: 'error' }));
   });
 
@@ -39,7 +39,7 @@ describe('church-branded giving receipts', () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Storage unavailable'));
     const pdf = (await service.generateReceipt(transaction)).toString('latin1');
     expect(pdf).toContain('Grace Community Church');
-    expect(pdf).toContain('ChurchOS');
+    expect(pdf).toContain('BelivrHQ');
     expect(pdf).not.toContain('/Subtype /Image');
   });
 

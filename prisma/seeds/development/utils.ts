@@ -1,6 +1,6 @@
 /**
  * @file utils.ts
- * @description Shared helpers for the full ChurchOS seed.
+ * @description Shared helpers for the full BelivrHQ seed.
  */
 
 import { PrismaClient } from '@prisma/client';

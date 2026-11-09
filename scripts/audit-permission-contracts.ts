@@ -32,7 +32,7 @@ function pureExports(file: string): Record<string, unknown> {
 
 export function auditPermissionContracts(
   backendRoot = resolve(__dirname, '..'),
-  webRoot = resolve(backendRoot, '../ChurchOS-Web'),
+  webRoot = resolve(backendRoot, '../BelivrHQ-Web'),
 ) {
   const catalog = generateAllPermissions();
   const names = new Set(catalog.map((p) => p.name));

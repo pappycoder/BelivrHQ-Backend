@@ -253,7 +253,7 @@ describe('AuthService', () => {
               }
             : {}),
         });
-        const storedAcceptance = signUpMock.mock.calls[0][0].options.data.churchos_legal_acceptance;
+        const storedAcceptance = signUpMock.mock.calls[0][0].options.data.belivrhq_legal_acceptance;
         if (acceptsTerms) {
           expect(storedAcceptance).toMatchObject({
             termsOfServiceVersion: REGISTRATION_LEGAL_VERSION,

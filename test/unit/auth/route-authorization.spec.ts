@@ -6,6 +6,9 @@ import { join, relative } from 'node:path';
 // cannot be described as one static ALL-permissions requirement. New exceptions
 // must be reviewed here rather than silently bypassing the global guard.
 const exceptions: Record<string, string[]> = {
+  // Public links are token scoped. Private methods use kind-dependent register
+  // grants plus tenant/branch scope in IntakeService (covered by intake tests).
+  'intake/intake.controller.ts': ['meta', 'submit', 'link', 'list', 'detail', 'accept', 'reject'],
   // Action-scoped challenge issuance reads no business data; private issuance requires JWT.
   'bot-protection/bot-protection.controller.ts': ['challenge', 'authenticatedChallenge'],
   // Self-service product guidance only: JWT plus AssistantService active staff/church checks.
@@ -91,6 +94,8 @@ const exceptions: Record<string, string[]> = {
   'integrations/payment-callbacks.controller.ts': ['receive'],
 };
 const publicRoutes = new Set([
+  'intake/intake.controller.ts:meta',
+  'intake/intake.controller.ts:submit',
   'bot-protection/bot-protection.controller.ts:challenge',
   // Public server-owned subscription prices; no church or payment history.
   'billing/billing.controller.ts:catalog',

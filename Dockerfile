@@ -20,17 +20,17 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-RUN addgroup --system --gid 1001 churchos
-RUN adduser --system --uid 1001 churchos
+RUN addgroup --system --gid 1001 belivrhq
+RUN adduser --system --uid 1001 belivrhq
 
 # Copy only what's needed for production
-COPY --from=builder --chown=churchos:churchos /app/dist ./dist
-COPY --from=builder --chown=churchos:churchos /app/node_modules ./node_modules
-COPY --from=builder --chown=churchos:churchos /app/package.json ./
-COPY --from=prisma --chown=churchos:churchos /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=prisma --chown=churchos:churchos /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=belivrhq:belivrhq /app/dist ./dist
+COPY --from=builder --chown=belivrhq:belivrhq /app/node_modules ./node_modules
+COPY --from=builder --chown=belivrhq:belivrhq /app/package.json ./
+COPY --from=prisma --chown=belivrhq:belivrhq /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=prisma --chown=belivrhq:belivrhq /app/node_modules/@prisma ./node_modules/@prisma
 
-USER churchos
+USER belivrhq
 
 EXPOSE 3001
 

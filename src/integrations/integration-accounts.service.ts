@@ -357,9 +357,9 @@ export class IntegrationAccountsService {
       ...account.settings,
       from: account.settings.from ?? '',
       to,
-      subject: 'ChurchOS connection test',
-      text: 'Your ChurchOS connection test was accepted.',
-      html: '<p>Your ChurchOS email connection is working.</p>',
+      subject: 'BelivrHQ connection test',
+      text: 'Your BelivrHQ connection test was accepted.',
+      html: '<p>Your BelivrHQ email connection is working.</p>',
     });
     await this.prisma.message.create({
       data: {
@@ -367,7 +367,7 @@ export class IntegrationAccountsService {
         phone: to,
         direction: 'outbound',
         channel: kind,
-        content: 'ChurchOS connection test',
+        content: 'BelivrHQ connection test',
         status: 'sent',
         metadata: {
           provider: account.provider,

@@ -61,7 +61,7 @@ export class StaffInvitationService {
     const userId = data.user.id;
     // Never delete or reassign an existing church account, even if the provider returns it.
     if (await this.prisma.profile.findUnique({ where: { user_id: userId }, select: { id: true } }))
-      throw new ConflictException('This email already has a ChurchOS account');
+      throw new ConflictException('This email already has a BelivrHQ account');
     const accept = new URL('/accept-invitation', origin);
     accept.hash = new URLSearchParams({ token_hash: data.properties.hashed_token }).toString();
     let result;

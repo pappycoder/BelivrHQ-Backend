@@ -1,6 +1,6 @@
 /**
  * @file main.ts
- * @description Application entry point for the ChurchOS Backend API.
+ * @description Application entry point for the BelivrHQ Backend API.
  *
  * This file bootstraps the NestJS application with the following configuration:
  * 1. Validates environment variables with Zod.
@@ -8,7 +8,7 @@
  * 3. Sets a global URL prefix (`/api/v1`) for all routes.
  * 4. Configures a global ValidationPipe for incoming request validation.
  * 5. Registers global exception filter for standardized error responses.
- * 6. Enables CORS for the ChurchOS web frontend.
+ * 6. Enables CORS for the BelivrHQ web frontend.
  * 7. Sets up Swagger/OpenAPI documentation at `/api/v1/docs`.
  * 8. Starts the HTTP server on the configured port.
  *
@@ -137,7 +137,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new SentryInterceptor());
 
   // Enable CORS (Cross-Origin Resource Sharing).
-  // Allows the ChurchOS web frontend (Next.js) running on a different port/origin
+  // Allows the BelivrHQ web frontend (Next.js) running on a different port/origin
   // to make API requests to this backend. Credentials are enabled to support
   // cookie-based authentication if needed.
   app.enableCors({
@@ -151,11 +151,11 @@ async function bootstrap(): Promise<void> {
   // and endpoint tags for grouping related controllers.
   if (env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
     const config = new DocumentBuilder()
-      .setTitle('ChurchOS API')
+      .setTitle('BelivrHQ API')
       .setDescription(
         'Church Management & Digital Ministry Platform API\n\n' +
           '## Overview\n' +
-          'This API powers the ChurchOS platform: a comprehensive church management system ' +
+          'This API powers the BelivrHQ platform: a comprehensive church management system ' +
           'built for Nigerian churches. It handles member management, attendance tracking, ' +
           'giving/donations, WhatsApp integration, event management, pastoral care, and more.\n\n' +
           '## Authentication\n' +
@@ -165,7 +165,7 @@ async function bootstrap(): Promise<void> {
           'All data is scoped by `church_id`. Users can only access data for their church.',
       )
       .setVersion('1.0')
-      .setContact('ChurchOS Team', 'https://churchos.ng', 'support@churchos.ng')
+      .setContact('BelivrHQ Team', 'https://churchos.ng', 'support@churchos.ng')
       .setLicense('GPL-3.0', 'https://www.gnu.org/licenses/gpl-3.0.html')
       .addBearerAuth(
         {
@@ -194,7 +194,7 @@ async function bootstrap(): Promise<void> {
         filter: true,
         showRequestDuration: true,
       },
-      customSiteTitle: 'ChurchOS API Documentation',
+      customSiteTitle: 'BelivrHQ API Documentation',
     });
   }
 

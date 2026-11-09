@@ -4,7 +4,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { PlanFeatureGuard } from './billing/plan-feature.guard';
 /**
  * @file app.module.ts
- * @description Root application module for the ChurchOS Backend API.
+ * @description Root application module for the BelivrHQ Backend API.
  *
  * The AppModule is the top-level module that NestJS loads when the application
  * starts. It imports and wires together all feature modules, global providers,

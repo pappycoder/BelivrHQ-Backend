@@ -9,7 +9,7 @@ import tempfile
 import time
 
 root = pathlib.Path(__file__).resolve().parents[2]
-with tempfile.TemporaryDirectory(prefix='churchos-terminal-') as directory:
+with tempfile.TemporaryDirectory(prefix='belivrhq-terminal-') as directory:
     fixture = pathlib.Path(directory) / 'fixture.cjs'
     # Paths are passed as argv, never embedded into evaluated JavaScript.
     fixture.write_text("""const core=require(process.argv[2]);core.readFields();

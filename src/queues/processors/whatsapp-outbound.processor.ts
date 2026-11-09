@@ -156,7 +156,8 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
 
     const maxAttempts = job.opts.attempts ?? 1;
     const isFinalAttempt = job.attemptsMade >= maxAttempts;
-    const fallbackEnabled = this.config.get<boolean>('ENABLE_SMS_FALLBACK', false);
+    const fallback = this.config.get<boolean | string>('ENABLE_SMS_FALLBACK', false);
+    const fallbackEnabled = fallback === true || fallback === 'true';
 
     if (isFinalAttempt && fallbackEnabled) {
       const { to, message, churchId, messageId } = job.data;

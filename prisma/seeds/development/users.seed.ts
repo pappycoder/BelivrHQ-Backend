@@ -1,6 +1,6 @@
 /**
  * @file users.seed.ts
- * @description Seeds REAL Supabase Auth users + linked ChurchOS Profiles for
+ * @description Seeds REAL Supabase Auth users + linked BelivrHQ Profiles for
  * every role, in both the HQ (is_admin_hq = true) and a non-HQ branch
  * (is_admin_hq = false, seated at Lekki Campus).
  *
@@ -29,7 +29,7 @@ export async function alignDevelopmentMemberBranch(
 
 export const DEV_PASSWORD = 'ChurchOS@1234';
 
-export const EMAIL_DOMAIN = 'churchos.dev';
+export const EMAIL_DOMAIN = 'belivrhq.dev';
 
 export interface AuthUserSeed {
   email: string;

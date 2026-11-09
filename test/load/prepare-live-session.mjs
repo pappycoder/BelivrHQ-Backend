@@ -8,7 +8,7 @@ const credentials = dotenv.parse(await readFile(resolve(root, '.env.load-test'))
 const origin = 'https://church-os-web.vercel.app';
 const headers = {
   'Content-Type': 'application/json',
-  'x-churchos-client': 'web',
+  'x-belivrhq-client': 'web',
   Origin: origin,
   'Sec-Fetch-Site': 'same-origin',
 };
@@ -36,11 +36,11 @@ if (loginData?.requiresTwoFactor)
   );
 const tokenCookie = response.headers
   .getSetCookie()
-  .find((value) => value.startsWith('churchos_token='));
-const token = tokenCookie?.split(';')[0].slice('churchos_token='.length);
+  .find((value) => value.startsWith('belivrhq_token='));
+const token = tokenCookie?.split(';')[0].slice('belivrhq_token='.length);
 if (!token) throw new Error('Login did not issue a completed access session; no load was sent');
 const profileResponse = await fetch(`${origin}/api/backend/profiles/me`, {
-  headers: { ...headers, Cookie: `churchos_token=${token}` },
+  headers: { ...headers, Cookie: `belivrhq_token=${token}` },
   signal: AbortSignal.timeout(45000),
 });
 const profileBody = await profileResponse.json().catch(() => null);

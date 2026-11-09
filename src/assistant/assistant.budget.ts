@@ -1,3 +1,4 @@
+import { brandConfig, LEGACY_BRAND } from '../brand/brand';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
@@ -34,7 +35,7 @@ export class AssistantBudget {
       month: '2-digit',
       day: '2-digit',
     }).format(new Date());
-    const prefix = `ask-churchos:v1:${day}`;
+    const prefix = `${LEGACY_BRAND.assistantBudgetPrefix}${day}`;
     const keys = [
       `${prefix}:user:${churchId}:${profileId}`,
       `${prefix}:church:${churchId}`,
@@ -48,11 +49,15 @@ export class AssistantBudget {
       1,
       requestLimit(plan),
       1,
-      positiveNumber(this.config.get('ASK_CHURCHOS_GLOBAL_DAILY_REQUESTS'), 2000),
+      positiveNumber(brandConfig(this.config, 'ASK_BELIVRHQ_GLOBAL_DAILY_REQUESTS'), 2000),
       costMicroUsd,
-      Math.floor(positiveNumber(this.config.get('ASK_CHURCHOS_CHURCH_DAILY_USD'), 0.25) * 1e6),
+      Math.floor(
+        positiveNumber(brandConfig(this.config, 'ASK_BELIVRHQ_CHURCH_DAILY_USD'), 0.25) * 1e6,
+      ),
       costMicroUsd,
-      Math.floor(positiveNumber(this.config.get('ASK_CHURCHOS_GLOBAL_DAILY_USD'), 2) * 1e6),
+      Math.floor(
+        positiveNumber(brandConfig(this.config, 'ASK_BELIVRHQ_GLOBAL_DAILY_USD'), 2) * 1e6,
+      ),
     ].map(String);
     try {
       const result = this.redis.isUpstash

@@ -34,7 +34,7 @@ Church payment webhook URL: `/api/v1/integrations/payments/webhook/{provider}`. 
 
 Use the Flutterwave V3 refund webhook preference to configure refund delivery separately. Chargeback webhooks require Flutterwave enablement. Verify charge, refund and dispute delivery against the intended test/live merchant account. Flutterwave static `verif-hash` and HMAC `flutterwave-signature` are supported. Paystack accepts legacy `x-paystack-signature` and timestamped `Paystack-Signature`; modern verification requires optional `PAYSTACK_WEBHOOK_SECRET` for platform payments or the church account's optional webhook signing secret. Prefer the modern header when both are present. No credential values were changed by this implementation.
 
-ChurchOS uses its own prepaid subscription ledger and manual renewals. Provider-native `subscription.*`/invoice lifecycle events do not create ChurchOS access; supporting a provider-native recurring contract would require a separate explicit integration.
+BelivrHQ uses its own prepaid subscription ledger and manual renewals. Provider-native `subscription.*`/invoice lifecycle events do not create BelivrHQ access; supporting a provider-native recurring contract would require a separate explicit integration.
 
 Before production rollout, send signed test charges, failed/pending charges, settled/failed partial and full refunds, and dispute open/won/lost events. Verify delivery retries and recovery with the worker running. Local tests use mocked providers and cannot prove dashboard delivery or real merchant API behavior.
 

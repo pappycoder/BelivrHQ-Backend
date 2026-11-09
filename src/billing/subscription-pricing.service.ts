@@ -202,7 +202,7 @@ export class SubscriptionPricingService {
     };
   }
   async saveQuote(churchId: string, payload: LockedQuote) {
-    const id = `COSQ_${randomBytes(16).toString('hex')}`;
+    const id = `BHQQUOTE_${randomBytes(16).toString('hex')}`;
     try {
       await this.redis.set(`subscription:quote:${churchId}:${id}`, payload, 900);
     } catch {

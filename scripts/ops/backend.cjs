@@ -168,7 +168,7 @@ async function backupDatabase(context) {
   }
   const file = path.join(
     directory,
-    `churchos-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(4).toString('hex')}.dump`,
+    `belivrhq-${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(4).toString('hex')}.dump`,
   );
   const partial = file + '.partial';
   fs.closeSync(fs.openSync(partial, 'wx', 0o600));
@@ -338,7 +338,7 @@ async function provisionAdmin(db, auth, input) {
             entity: 'profile',
             entity_id: profile.id,
             action: 'CREATE',
-            user_agent: 'ChurchOS operations console',
+            user_agent: 'BelivrHQ operations console',
             new_values: { role: [input.role], is_admin_hq: true, provisioning: input.authMode },
           },
         });
@@ -372,7 +372,7 @@ async function listDemoUsers(auth) {
     if (result.error || !Array.isArray(result.data?.users))
       throw new ConsoleError('Could not inventory authentication users.');
     users.push(
-      ...result.data.users.filter((user) => user.email?.toLowerCase().endsWith('@churchos.dev')),
+      ...result.data.users.filter((user) => user.email?.toLowerCase().endsWith('@belivrhq.dev')),
     );
     if (result.data.users.length < 1000) return users;
   }

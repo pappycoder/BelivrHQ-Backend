@@ -36,7 +36,7 @@ describe('Backend authenticator security', () => {
     prisma.profileAuthenticator.findUnique.mockResolvedValue(null);
     const setup = await service.setup(userId, 'test@example.com');
     const code = new TOTP({
-      issuer: 'ChurchOS',
+      issuer: 'BelivrHQ',
       label: 'test@example.com',
       secret: setup.secret,
     }).generate();
@@ -70,7 +70,7 @@ describe('Backend authenticator security', () => {
   it('requires atomic consumption of the TOTP time step', async () => {
     const { setup } = await enroll();
     const code = new TOTP({
-      issuer: 'ChurchOS',
+      issuer: 'BelivrHQ',
       label: 'test@example.com',
       secret: setup.secret,
     }).generate();

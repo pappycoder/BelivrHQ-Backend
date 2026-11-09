@@ -64,7 +64,7 @@ export class LoginResponseDto {
   email?: string;
 
   @ApiPropertyOptional({
-    description: 'ChurchOS profile',
+    description: 'BelivrHQ profile',
     example: {
       profileId: '22222222-2222-2222-2222-222222222222',
       churchId: '00000000-0000-0000-0000-000000000001',

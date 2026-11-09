@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 /** Email destinations use the configured WEB_URL directly, independent of Supabase Site URL settings. */
 export function publicWebUrl(config: Pick<ConfigService, 'get'>): string {
   const configured = config.get<string>('WEB_URL');
-  if (!configured) throw new Error('WEB_URL is required for ChurchOS email links');
+  if (!configured) throw new Error('WEB_URL is required for BelivrHQ email links');
   const url = new URL(configured);
   if (
     !['https:', 'http:'].includes(url.protocol) ||

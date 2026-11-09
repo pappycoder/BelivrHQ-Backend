@@ -55,7 +55,7 @@ const mockNotification = {
   profile_id: mockProfileId,
   type: 'system',
   title: 'Welcome',
-  body: 'Welcome to ChurchOS',
+  body: 'Welcome to BelivrHQ',
   data: null,
   read_at: null,
   created_at: new Date('2026-07-22'),
@@ -308,7 +308,7 @@ describe('NotificationsService', () => {
         mockProfileId,
         'system',
         'Welcome',
-        'Welcome to ChurchOS',
+        'Welcome to BelivrHQ',
       );
 
       expect(result.title).toBe('Welcome');

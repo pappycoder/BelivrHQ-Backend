@@ -12,7 +12,7 @@ describe('staff invitation profile and outbox integrity', () => {
   const config = new ConfigService({
     WEB_URL: 'https://church-os-web.vercel.app',
     RESEND_API_KEY: 'fixture',
-    RESEND_FROM: 'team@churchos.example',
+    RESEND_FROM: 'team@belivrhq.example',
   });
   const company = new CompanyEmailService(prisma, mail as never, config);
   const generateLink = jest.fn();

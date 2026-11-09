@@ -1,4 +1,4 @@
-// ChurchOS Prisma Schema
+// BelivrHQ Prisma Schema
 // PostgreSQL database with Supabase Auth for authentication.
 // Order: client configuration, enums by feature, then models by feature.
 // Model fields: identifiers, data, audit timestamps, relations, constraints.

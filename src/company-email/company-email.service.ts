@@ -1,3 +1,4 @@
+import { BRAND_NAME, LEGACY_BRAND } from '../brand/brand';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
@@ -35,7 +36,7 @@ export class CompanyEmailService {
   private sender(): string {
     const configured = this.config.get<string>('RESEND_FROM', 'noreply@churchos.app');
     if (/[\r\n]/.test(configured)) throw new Error('Invalid company email sender');
-    return configured.includes('<') ? configured : `ChurchOS <${configured}>`;
+    return configured.includes('<') ? configured : `${BRAND_NAME} <${configured}>`;
   }
   private async enqueue(
     tx: Prisma.TransactionClient,
@@ -56,7 +57,7 @@ export class CompanyEmailService {
   assertInvitationDeliveryConfigured(): void {
     publicWebUrl(this.config);
     if (!this.config.get<string>('RESEND_API_KEY'))
-      throw new ServiceUnavailableException('ChurchOS invitation email delivery is not configured');
+      throw new ServiceUnavailableException('BelivrHQ invitation email delivery is not configured');
   }
   enqueueInvitation(
     tx: Prisma.TransactionClient,
@@ -183,7 +184,11 @@ export class CompanyEmailService {
           row.html,
           '',
           undefined,
-          { text: row.text, from: row.from_email, idempotencyKey: `churchos-account-${row.id}` },
+          {
+            text: row.text,
+            from: row.from_email,
+            idempotencyKey: `${LEGACY_BRAND.emailIdempotencyPrefix}${row.id}`,
+          },
         );
         await this.prisma.companyEmailNotification.updateMany({
           where: { id: row.id, lease_token: token, sent_at: null },

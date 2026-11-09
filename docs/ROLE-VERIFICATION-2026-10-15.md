@@ -37,7 +37,7 @@ HQ does not select an account's church or confer platform-wide tenant access. Sh
 
 ## Repeatable checks
 
-Run from `ChurchOS-Backend`:
+Run from `BelivrHQ-Backend`:
 
 ```bash
 npm test -- --runInBand --silent
@@ -45,9 +45,9 @@ npx ts-node -P tsconfig.scripts.json scripts/audit-permission-contracts.ts
 npx ts-node -P tsconfig.scripts.json scripts/audit-role-database.ts
 ```
 
-The contract audit reads the sibling `ChurchOS-Web` checkout when present and explicitly reports `webAvailable`; it must be true for a complete cross-project result. The database audit uses a PostgreSQL read-only transaction and prints only catalog/template differences and aggregate counts, never connection strings or personal account data. Exit status 2 means the database was not verified; exit status 1 means differences were found. Do not substitute a permissions reseed for reviewing intentional church overrides.
+The contract audit reads the sibling `BelivrHQ-Web` checkout when present and explicitly reports `webAvailable`; it must be true for a complete cross-project result. The database audit uses a PostgreSQL read-only transaction and prints only catalog/template differences and aggregate counts, never connection strings or personal account data. Exit status 2 means the database was not verified; exit status 1 means differences were found. Do not substitute a permissions reseed for reviewing intentional church overrides.
 
-Run the web suite with `npm test` from `ChurchOS-Web`. The role round also checks TypeScript, scoped lint and the backend build; see the task response for completed totals.
+Run the web suite with `npm test` from `BelivrHQ-Web`. The role round also checks TypeScript, scoped lint and the backend build; see the task response for completed totals.
 
 ## Still required for full deployment sign-off
 

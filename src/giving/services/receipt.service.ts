@@ -79,7 +79,7 @@ export class ReceiptService {
           info: {
             Title: `Giving Receipt - ${data.receiptNumber}`,
             Author: data.churchName,
-            Creator: 'ChurchOS',
+            Creator: 'BelivrHQ',
             Subject: 'Giving Receipt',
           },
         });
@@ -102,7 +102,7 @@ export class ReceiptService {
           }
         };
         const paragraph = (text: string, size = 10, bold = false, color = colors.ink) => {
-          doc.font(bold ? 'ChurchOSSans-Bold' : 'ChurchOSSans').fontSize(size);
+          doc.font(bold ? 'BelivrHQSans-Bold' : 'BelivrHQSans').fontSize(size);
           const height = doc.heightOfString(text, { width: contentWidth, lineGap: 3 });
           ensureSpace(height + 8);
           doc.fillColor(color).text(text, 50, y, { width: contentWidth, lineGap: 3 });
@@ -111,26 +111,26 @@ export class ReceiptService {
         const heading = (label: string) => {
           ensureSpace(55);
           doc
-            .font('ChurchOSSans-Bold')
+            .font('BelivrHQSans-Bold')
             .fontSize(9)
             .fillColor(colors.blue)
             .text(label.toUpperCase(), 50, y, { width: contentWidth });
           y += 18;
         };
         const field = (label: string, value: string) => {
-          doc.font('ChurchOSSans').fontSize(10);
+          doc.font('BelivrHQSans').fontSize(10);
           const height = Math.max(
             22,
             doc.heightOfString(value, { width: contentWidth - 135, lineGap: 3 }) + 8,
           );
           ensureSpace(height);
           doc
-            .font('ChurchOSSans')
+            .font('BelivrHQSans')
             .fontSize(9)
             .fillColor(colors.muted)
             .text(label, 50, y + 4, { width: 125 });
           doc
-            .font('ChurchOSSans')
+            .font('BelivrHQSans')
             .fontSize(10)
             .fillColor(colors.ink)
             .text(value, 185, y + 3, { width: contentWidth - 135, lineGap: 3 });
@@ -150,13 +150,13 @@ export class ReceiptService {
         ensureSpace(84);
         doc.roundedRect(50, y, contentWidth, 70, 10).fill(colors.soft);
         doc
-          .font('ChurchOSSans-Bold')
+          .font('BelivrHQSans-Bold')
           .fontSize(8)
           .fillColor(colors.muted)
           .text('AMOUNT RECEIVED', 68, y + 16);
         const amount = `${data.currency} ${data.amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         let amountSize = 28;
-        doc.font('ChurchOSSans-Bold').fontSize(amountSize);
+        doc.font('BelivrHQSans-Bold').fontSize(amountSize);
         while (amountSize > 12 && doc.widthOfString(amount) > contentWidth - 36)
           doc.fontSize(--amountSize);
         doc.fillColor(colors.ink).text(amount, 68, y + 34, { width: contentWidth - 36 });

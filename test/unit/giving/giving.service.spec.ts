@@ -170,7 +170,7 @@ describe('GivingService', () => {
         }),
         historical: jest.fn(async (_churchId: string, name: string) => gatewayRegistry.get(name)),
       } as never,
-      new ConfigService({ WEB_URL: 'https://churchos.example' }),
+      new ConfigService({ WEB_URL: 'https://belivrhq.example' }),
     );
   });
 
@@ -1810,7 +1810,7 @@ describe('GivingService', () => {
     expect(receiptEmail).toHaveBeenCalledWith(
       'ada@example.org',
       'Your receipt from Grace Church',
-      expect.stringContaining('https://churchos.example/brand/churchos-logo.png'),
+      expect.stringContaining('https://belivrhq.example/brand/belivrhq-logo.png'),
       buffer,
       'receipt.pdf',
       mockChurchId,

@@ -1,4 +1,4 @@
-# Live ChurchOS retest — 24 October 2026
+# Live BelivrHQ retest — 24 October 2026
 
 The updated backend is confirmed live by its new `Server-Timing` fields (`db_queries`, `pool_waiting`, `profile`, `permissions`, `entitlements`, `revocation`, `session` and others). This is a fresh measurement of the current deployment, not the previous local microbenchmark. The timing fields confirm the new code path; they do not independently verify a build SHA or the deployed pool setting.
 

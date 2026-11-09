@@ -34,32 +34,32 @@ const planNames: Record<SubscriptionPlan, string> = {
 export function companyEmail(input: CompanyEmailInput, webUrl: string): CompanyEmailContent {
   const origin = new URL(webUrl);
   if (!['https:', 'http:'].includes(origin.protocol) || origin.username || origin.password)
-    throw new Error('Invalid ChurchOS website URL');
+    throw new Error('Invalid BelivrHQ website URL');
   const actionUrl = new URL(input.kind === 'welcome' ? '/subscription' : '/home', origin.origin)
     .href;
   const billingUrl = new URL('/subscription', origin.origin).href;
   const helpUrl = new URL('/help', origin.origin).href;
-  const logoUrl = new URL('/brand/churchos-logo.png', origin.origin).href;
+  const logoUrl = new URL('/brand/belivrhq-logo.png', origin.origin).href;
   const welcome = input.kind === 'welcome';
   const titles = {
-    welcome: 'Welcome to ChurchOS.',
+    welcome: 'Welcome to BelivrHQ.',
     activation: 'Your church is ready to grow.',
     renewal: 'Here’s to another chapter.',
     upgrade: 'More room for your ministry.',
   };
   const subjects = {
-    welcome: 'Welcome to ChurchOS: your next chapter starts here',
-    activation: 'Your ChurchOS subscription is active',
-    renewal: 'Your ChurchOS renewal is confirmed',
-    upgrade: 'Your ChurchOS plan upgrade is confirmed',
+    welcome: 'Welcome to BelivrHQ: your next chapter starts here',
+    activation: 'Your BelivrHQ subscription is active',
+    renewal: 'Your BelivrHQ renewal is confirmed',
+    upgrade: 'Your BelivrHQ plan upgrade is confirmed',
   };
   const title = titles[input.kind];
   const subject = subjects[input.kind];
   const greeting = input.firstName ? `Hello ${input.firstName},` : 'Hello,';
   const lead = welcome
-    ? `Thank you for choosing ChurchOS for ${input.churchName}. Your account and church workspace have been created. We’re glad you’re here.`
+    ? `Thank you for choosing BelivrHQ for ${input.churchName}. Your account and church workspace have been created. We’re glad you’re here.`
     : input.kind === 'renewal'
-      ? `Thank you for renewing ChurchOS for ${input.churchName}. Your payment has been confirmed and your new subscription period is in place.`
+      ? `Thank you for renewing BelivrHQ for ${input.churchName}. Your payment has been confirmed and your new subscription period is in place.`
       : input.kind === 'upgrade'
         ? `Your payment has been confirmed and ${input.churchName} has moved to the ${planNames[input.plan]} plan. Your team can now use the features included in your new plan.`
         : `Your payment has been confirmed and the ${planNames[input.plan]} plan is now active for ${input.churchName}. Your team can start using your church workspace.`;
@@ -163,8 +163,8 @@ function companyEmailFrame({
   showBillingLink,
   verificationCode,
   signoff = 'With you in the work,',
-  senderName = 'The ChurchOS team',
-  footerNote = 'An account notification from ChurchOS. Need a hand?',
+  senderName = 'The BelivrHQ team',
+  footerNote = 'An account notification from BelivrHQ. Need a hand?',
 }: CompanyEmailFrameInput): CompanyEmailContent {
   const details = rows
     .filter(([label]) => !verificationCode || label !== 'Sign-in code')
@@ -232,7 +232,7 @@ function companyEmailFrame({
                 </td>
               </tr></table>
             </td>
-            <td valign="middle"><p class="email-heading" style="margin:0;font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-1px;color:#123c35">ChurchOS<span style="color:#6f8d39">.</span></p><p class="email-muted" style="margin:5px 0 0;font-size:12px;line-height:1.5;color:#66796d">Your church, connected.</p></td>
+            <td valign="middle"><p class="email-heading" style="margin:0;font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-1px;color:#123c35">BelivrHQ<span style="color:#6f8d39">.</span></p><p class="email-muted" style="margin:5px 0 0;font-size:12px;line-height:1.5;color:#66796d">Your church, connected.</p></td>
           </tr></table>
         </td></tr>
         <tr><td class="content-pad" style="padding:30px 36px 34px">
@@ -259,7 +259,7 @@ function companyEmailFrame({
         </td></tr>
       </table>
       <!--[if mso]></td></tr></table><![endif]-->
-      <p class="email-muted" style="margin:18px 0 0;font-size:10px;line-height:1.6;color:#66796d">ChurchOS &middot; Built for the people behind your ministry.</p>
+      <p class="email-muted" style="margin:18px 0 0;font-size:10px;line-height:1.6;color:#66796d">BelivrHQ &middot; Built for the people behind your ministry.</p>
     </td></tr>
   </table>
 </body></html>`.replace(/[ \t]+$/gm, '');
@@ -283,23 +283,23 @@ export function invitationEmail(input: InvitationEmailInput, webUrl: string): Co
     accept.pathname !== '/accept-invitation' ||
     !new URLSearchParams(accept.hash.slice(1)).get('token_hash')
   )
-    throw new Error('Invalid ChurchOS invitation destination');
+    throw new Error('Invalid BelivrHQ invitation destination');
   return companyEmailFrame({
-    subject: `You’re invited to ${input.churchName} on ChurchOS`,
+    subject: `You’re invited to ${input.churchName} on BelivrHQ`,
     title: 'Your team is waiting.',
     greeting: `Hello ${input.firstName},`,
-    lead: `${input.inviterName} has invited you to join ${input.churchName} on ChurchOS. We’re glad to help you serve your church together.`,
+    lead: `${input.inviterName} has invited you to join ${input.churchName} on BelivrHQ. We’re glad to help you serve your church together.`,
     rows: [
       ['Church', input.churchName],
       ['Your role', input.roleLabel],
     ],
     next: 'Accept your invitation and create your own password. Then sign in using this email address and your new password. This link can be used once. If it has expired, request a password link from the sign-in page. If you weren’t expecting this invitation, you can ignore this email.',
     cta: 'Accept invitation',
-    preheader: `Join ${input.churchName} and set up your ChurchOS account.`,
+    preheader: `Join ${input.churchName} and set up your BelivrHQ account.`,
     actionUrl: accept.href,
     billingUrl: new URL('/subscription', origin).href,
     helpUrl: new URL('/help', origin).href,
-    logoUrl: new URL('/brand/churchos-logo.png', origin).href,
+    logoUrl: new URL('/brand/belivrhq-logo.png', origin).href,
     headerTag: 'YOU’RE INVITED',
     sectionHeading: 'Make yourself at home',
     showBillingLink: false,
@@ -309,11 +309,11 @@ export function invitationEmail(input: InvitationEmailInput, webUrl: string): Co
 function accountEmailLinks(webUrl: string) {
   const url = new URL(webUrl);
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
-    throw new Error('Invalid ChurchOS website URL');
+    throw new Error('Invalid BelivrHQ website URL');
   return {
     billingUrl: new URL('/subscription', url.origin).href,
     helpUrl: new URL('/help', url.origin).href,
-    logoUrl: new URL('/brand/churchos-logo.png', url.origin).href,
+    logoUrl: new URL('/brand/belivrhq-logo.png', url.origin).href,
     showBillingLink: false,
   };
 }
@@ -328,20 +328,20 @@ export function passwordResetEmail(resetUrl: string, webUrl: string): CompanyEma
     reset.username ||
     reset.password
   )
-    throw new Error('Invalid ChurchOS recovery destination');
+    throw new Error('Invalid BelivrHQ recovery destination');
   return companyEmailFrame({
     ...links,
-    subject: 'Reset your ChurchOS password',
+    subject: 'Reset your BelivrHQ password',
     title: 'A fresh start, securely.',
     greeting: 'Hello,',
-    lead: 'We received a request to reset your ChurchOS password. Choose a new password to get back to your church workspace.',
+    lead: 'We received a request to reset your BelivrHQ password. Choose a new password to get back to your church workspace.',
     rows: [
       ['Request', 'Password reset'],
       ['Link', 'One-time use'],
     ],
     next: 'Select Reset password to choose your new password, then sign in with your email address. This link expires and can be used once. If it has expired, request a new link from the sign-in page. If you did not request this, ignore this email; your password will stay the same.',
     cta: 'Reset password',
-    preheader: 'A secure link to reset your ChurchOS password.',
+    preheader: 'A secure link to reset your BelivrHQ password.',
     actionUrl: reset.href,
     headerTag: 'ACCOUNT SECURITY',
     sectionHeading: 'Get back to your workspace',
@@ -355,7 +355,7 @@ export function signInCodeEmail(
   if (!/^\d{6}$/.test(input.code)) throw new Error('Invalid sign-in code');
   return companyEmailFrame({
     ...accountEmailLinks(webUrl),
-    subject: 'Your ChurchOS sign-in code',
+    subject: 'Your BelivrHQ sign-in code',
     title: 'Your secure sign-in code.',
     verificationCode: input.code,
     greeting: 'Hello,',
@@ -366,7 +366,7 @@ export function signInCodeEmail(
     ],
     next: 'Enter this code in the sign-in screen you already have open. Never share it with anyone. If you did not try to sign in, ignore this email.',
     cta: 'Go to sign in',
-    preheader: 'Complete your ChurchOS sign-in securely.',
+    preheader: 'Complete your BelivrHQ sign-in securely.',
     actionUrl: new URL('/login', webUrl).href,
     headerTag: 'ACCOUNT SECURITY',
     sectionHeading: 'Keep your account safe',
@@ -377,16 +377,16 @@ export function signInCodeEmail(
 export function signupConfirmationEmail(webUrl: string): CompanyEmailContent {
   return companyEmailFrame({
     ...accountEmailLinks(webUrl),
-    subject: 'Confirm your ChurchOS email address',
+    subject: 'Confirm your BelivrHQ email address',
     title: 'You’re one step closer.',
     greeting: 'Hello,',
-    lead: 'Confirm your email address to continue setting up your ChurchOS account and church workspace.',
+    lead: 'Confirm your email address to continue setting up your BelivrHQ account and church workspace.',
     rows: [['Request', 'Email confirmation']],
-    next: 'Select Confirm email to verify your address. If this link has expired, return to the sign-in page for help. If you did not create a ChurchOS account, ignore this email.',
+    next: 'Select Confirm email to verify your address. If this link has expired, return to the sign-in page for help. If you did not create a BelivrHQ account, ignore this email.',
     cta: 'Confirm email',
-    preheader: 'Confirm your email address to get started with ChurchOS.',
+    preheader: 'Confirm your email address to get started with BelivrHQ.',
     actionUrl: '{{ .ConfirmationURL }}',
-    headerTag: 'WELCOME TO CHURCHOS',
+    headerTag: 'WELCOME TO BELIVRHQ',
     sectionHeading: 'Verify your email address',
   });
 }
@@ -429,6 +429,6 @@ export function givingReceiptEmail(
     sectionHeading: 'Your receipt is attached',
     signoff: 'Thank you for supporting the ministry,',
     senderName: input.churchName,
-    footerNote: `Sent by ${input.churchName} through ChurchOS.`,
+    footerNote: `Sent by ${input.churchName} through BelivrHQ.`,
   });
 }

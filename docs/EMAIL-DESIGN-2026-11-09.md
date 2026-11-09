@@ -1,10 +1,10 @@
-# ChurchOS system email design
+# BelivrHQ system email design
 
 All nine system templates share one email frame: welcome, subscription activation, renewal, upgrade, staff invitation, password reset, sign-in code, signup confirmation and giving receipt.
 
 ## Logo and layout
 
-The header uses the existing `/brand/churchos-logo.png` master. This PNG has an opaque white background, so its navy mark stays legible without depending on client CSS to supply a background. The visible ChurchOS wordmark is live text beside the image, preserving the sender identity when remote images are blocked. No brand image was edited or generated.
+The header uses the existing `/brand/belivrhq-logo.png` master. This PNG has an opaque white background, so its navy mark stays legible without depending on client CSS to supply a background. The visible BelivrHQ wordmark is live text beside the image, preserving the sender identity when remote images are blocked. No brand image was edited or generated.
 
 The frame uses the Paper palette, serif headings, readable body text, compact detail rows, a clear green action and a quieter footer. Mobile rows stack and long references wrap. Sign-in codes have a dedicated selectable monospace panel that preserves leading zeroes. Light/dark styles are explicit; inline colors, presentation tables, background attributes and an Outlook width wrapper provide the fallback when head styles are stripped. Rounded corners are decorative, and can remain square in clients that do not support them.
 

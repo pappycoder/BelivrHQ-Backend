@@ -68,7 +68,7 @@ function addChoices(workbook: Workbook, values: string[]): string {
   values.forEach((value, i) => {
     choices.getCell(i + 1, col).value = value;
   });
-  const name = `ChurchOSChoices${col}`;
+  const name = `BelivrHQChoices${col}`;
   workbook.definedNames.add(
     `'_Choices'!$${choices.getColumn(col).letter}$1:$${choices.getColumn(col).letter}$${values.length}`,
     name,
@@ -92,7 +92,7 @@ export function addDesignedSheet(workbook: Workbook, spec: ExcelSheet, index: nu
       fitToWidth: 1,
       fitToHeight: 0,
     },
-    headerFooter: { oddFooter: '&LChurchOS&C&P / &N&R&D' },
+    headerFooter: { oddFooter: '&LBelivrHQ&C&P / &N&R&D' },
   });
   const headerRow = spec.template ? 1 : 6;
   const startRow = headerRow + 1;
@@ -109,7 +109,7 @@ export function addDesignedSheet(workbook: Workbook, spec: ExcelSheet, index: nu
 
   if (!spec.template) {
     sheet.mergeCells(1, 1, 1, titleWidth);
-    sheet.getCell('A1').value = `ChurchOS  /  ${spec.name}`;
+    sheet.getCell('A1').value = `BelivrHQ  /  ${spec.name}`;
     sheet.getRow(1).height = 42;
     sheet.getCell('A1').fill = {
       type: 'pattern',
@@ -156,7 +156,7 @@ export function addDesignedSheet(workbook: Workbook, spec: ExcelSheet, index: nu
       to: { row: Math.max(2, rows.length + 1), column: columns.length },
     };
   } else if (rows.length) {
-    const tableName = `ChurchOSData${index + 1}`;
+    const tableName = `BelivrHQData${index + 1}`;
     sheet.addTable({
       name: tableName,
       ref: `A${headerRow}`,
@@ -243,7 +243,7 @@ export function addDesignedSheet(workbook: Workbook, spec: ExcelSheet, index: nu
           promptTitle: column.label,
           prompt: spec.template
             ? 'Choose an option from the dropdown.'
-            : 'Choices come from the exported rows. Workbook edits do not update ChurchOS.',
+            : 'Choices come from the exported rows. Workbook edits do not update BelivrHQ.',
           showErrorMessage: !!explicitChoices,
           errorStyle: 'stop',
           errorTitle: 'Choose a listed value',
@@ -287,7 +287,7 @@ export function addDesignedSheet(workbook: Workbook, spec: ExcelSheet, index: nu
 }
 
 export function initializeWorkbook(workbook: Workbook): void {
-  workbook.creator = 'ChurchOS';
+  workbook.creator = 'BelivrHQ';
   workbook.created = new Date();
   workbook.modified = new Date();
   workbook.calcProperties.fullCalcOnLoad = true;

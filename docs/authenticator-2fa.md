@@ -2,7 +2,7 @@
 
 ## Ownership and scope
 
-Supabase handles email/password authentication and signs access tokens. ChurchOS owns TOTP enrollment, verification, recovery, replay prevention, and second-factor session approvals. New authenticator accounts do not use Supabase MFA APIs or require Supabase TOTP settings.
+Supabase handles email/password authentication and signs access tokens. BelivrHQ owns TOTP enrollment, verification, recovery, replay prevention, and second-factor session approvals. New authenticator accounts do not use Supabase MFA APIs or require Supabase TOTP settings.
 
 All users manage their own authenticator under Profile → Security. Role and branch permissions remain independent. TOTP uses OTPAuth with SHA-1, six digits, a 30-second interval, and a one-step clock tolerance. QR codes are generated locally; no secret is sent to a QR service.
 

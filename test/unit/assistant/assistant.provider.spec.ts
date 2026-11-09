@@ -1,11 +1,11 @@
 import { ConfigService } from '@nestjs/config';
 import { AssistantProvider } from '../../../src/assistant/assistant.provider';
 const settings = {
-  ASK_CHURCHOS_AI_ENABLED: 'true',
+  ASK_BELIVRHQ_AI_ENABLED: 'true',
   OPENAI_API_KEY: 'test-only-key',
-  ASK_CHURCHOS_MODEL: 'test-model',
-  ASK_CHURCHOS_INPUT_USD_PER_MILLION: '1',
-  ASK_CHURCHOS_OUTPUT_USD_PER_MILLION: '2',
+  ASK_BELIVRHQ_MODEL: 'test-model',
+  ASK_BELIVRHQ_INPUT_USD_PER_MILLION: '1',
+  ASK_BELIVRHQ_OUTPUT_USD_PER_MILLION: '2',
 };
 const create = (overrides = {}) =>
   new AssistantProvider({
@@ -31,11 +31,11 @@ describe('OpenAI provider boundary', () => {
   it('requires an explicit opt-in, key, model and positive cost configuration', () => {
     expect(create().configured).toBe(true);
     for (const overrides of [
-      { ASK_CHURCHOS_AI_ENABLED: 'false' },
+      { ASK_BELIVRHQ_AI_ENABLED: 'false' },
       { OPENAI_API_KEY: '' },
-      { ASK_CHURCHOS_MODEL: '' },
-      { ASK_CHURCHOS_INPUT_USD_PER_MILLION: 'NaN' },
-      { ASK_CHURCHOS_OUTPUT_USD_PER_MILLION: '0' },
+      { ASK_BELIVRHQ_MODEL: '' },
+      { ASK_BELIVRHQ_INPUT_USD_PER_MILLION: 'NaN' },
+      { ASK_BELIVRHQ_OUTPUT_USD_PER_MILLION: '0' },
     ])
       expect(create(overrides).configured).toBe(false);
   });

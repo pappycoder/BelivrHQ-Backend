@@ -23,7 +23,7 @@ import type { AssistantQuestionDto } from './assistant.dto';
 /** Extract a short, relevant reference answer instead of dumping full guide sections. */
 export function conciseReference(source: AssistantSource | undefined, question: string): string {
   if (!source)
-    return 'I could not find a reliable ChurchOS answer. Try a specific feature or open the Help Centre.';
+    return 'I could not find a reliable BelivrHQ answer. Try a specific feature or open the Help Centre.';
   const words = [...new Set(question.toLowerCase().match(/[a-z]{4,}/g) ?? [])].filter(
     (word) =>
       ![
@@ -38,7 +38,7 @@ export function conciseReference(source: AssistantSource | undefined, question: 
         'work',
         'works',
         'explain',
-        'churchos',
+        'belivrhq',
       ].includes(word),
   );
   const sentences = source.text
@@ -59,7 +59,7 @@ export function conciseReference(source: AssistantSource | undefined, question: 
   return /[.!?]$/.test(answer) ? answer : `${answer.replace(/[,;:]$/, '')}…`;
 }
 function conciseAccess(item: AssistantAccess | undefined, reviewing: boolean): string {
-  if (!item) return 'Ask about a specific ChurchOS feature so I can check its access requirements.';
+  if (!item) return 'Ask about a specific BelivrHQ feature so I can check its access requirements.';
   switch (item.status) {
     case 'missing_permission':
       return reviewing

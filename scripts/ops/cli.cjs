@@ -4,7 +4,7 @@ const path = require('node:path');
 const core = require('./core.cjs');
 const actions = require('./actions.cjs');
 const root = path.resolve(__dirname, '../..');
-const web = require(path.join(root, 'package.json')).name === 'churchos-web';
+const web = require(path.join(root, 'package.json')).name === 'belivrhq-web';
 const [file, manager, mode, action] = process.argv.slice(2);
 function definition(id) {
   const item = actions.find((entry) => entry.id === id);

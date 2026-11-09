@@ -249,7 +249,7 @@ export function checkRule(
 /** Login returns only to a known, authorized application page. */
 export function permissionReturnTo(destination: string | null, can: (permission: string) => boolean): string {
   if (!destination?.startsWith("/") || destination.startsWith("//") || /[\\\u0000-\u001f]/.test(destination)) return "/home";
-  const url = new URL(destination, "https://churchos.invalid");
+  const url = new URL(destination, "https://belivrhq.invalid");
   if (url.pathname === "/dashboard") url.pathname = "/home";
   return checkRule(matchRoutePermission(url.pathname), can)
     ? `${url.pathname}${url.search}${url.hash}`

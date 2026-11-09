@@ -6,7 +6,7 @@ import { AuthenticatedRequest } from '../common/decorators/current-user.decorato
 import { AssistantQuestionDto } from './assistant.dto';
 import { AssistantService } from './assistant.service';
 
-@ApiTags('Ask ChurchOS')
+@ApiTags('Ask BelivrHQ')
 @ApiBearerAuth('supabase-auth')
 @Controller('assistant')
 @UseGuards(JwtAuthGuard, RateLimitGuard)

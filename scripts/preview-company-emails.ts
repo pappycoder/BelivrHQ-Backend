@@ -22,7 +22,7 @@ for (const kind of ['welcome', 'activation', 'renewal', 'upgrade'] as CompanyEma
       cycle: 'monthly',
       amount: 10,
       currency: 'USD',
-      reference: 'COSUB_' + 'a'.repeat(32),
+      reference: 'BHQSUB_' + 'a'.repeat(32),
       paidUntil: new Date('2026-11-22T12:00:00.000Z'),
       requiresEmailConfirmation: true,
     },

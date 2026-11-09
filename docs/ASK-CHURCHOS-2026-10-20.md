@@ -1,12 +1,12 @@
-# Ask ChurchOS — first release
+# Ask BelivrHQ — first release
 
-Ask ChurchOS is a guidance-only dashboard side panel for active, verified staff. Its header entry is separate from Help Centre and human Tawk support. It explains product workflows and the current page, summarizes the user’s own verified roles/grant counts, cites product references, offers authorized static navigation links, and explains verified permission/plan restrictions. It cannot read church business records, inspect rendered screen content, check a selected record's state/ownership, perform actions or contact anyone. No new staff grants, database tables or migrations are required.
+Ask BelivrHQ is a guidance-only dashboard side panel for active, verified staff. Its header entry is separate from Help Centre and human Tawk support. It explains product workflows and the current page, summarizes the user’s own verified roles/grant counts, cites product references, offers authorized static navigation links, and explains verified permission/plan restrictions. It cannot read church business records, inspect rendered screen content, check a selected record's state/ownership, perform actions or contact anyone. No new staff grants, database tables or migrations are required.
 
 ## What the user sees
 
-Open **Ask ChurchOS** in the workspace header. The panel shows the current normalized page and branch-scope description, suggested questions, a question composer, answers, reference links and expandable access checks. Examples include “Explain this page”, “How do I approve form submissions?” and “How do table display controls work?”. Enter submits; Shift+Enter inserts a new line. New conversation clears the current conversation and cancels a pending answer. Errors preserve the question for retry. Escape closes the panel. It supports narrow screens and keyboard focus through the shared Sheet primitive.
+Open **Ask BelivrHQ** in the workspace header. The panel shows the current normalized page and branch-scope description, suggested questions, a question composer, answers, reference links and expandable access checks. Examples include “Explain this page”, “How do I approve form submissions?” and “How do table display controls work?”. Enter submits; Shift+Enter inserts a new line. New conversation clears the current conversation and cancels a pending answer. Errors preserve the question for retry. Escape closes the panel. It supports narrow screens and keyboard focus through the shared Sheet primitive.
 
-Reference mode works without an AI key. It is labelled **ChurchOS references** and displays retrieved, reviewed product material and deterministic access checks. When configured and an active subscription is present, AI mode synthesizes selected references into concise answers. Access/role/permission questions remain deterministic regardless of provider configuration. AI mode explains that typed questions and selected product guidance go to OpenAI; users should keep questions general and omit passwords, secrets and personal records. Answers lead with a direct response, normally one to three sentences or up to three short steps, targeting fewer than 75 words. Reference answers are capped at 75 words; oversized model answers fall back to concise references. Detailed access checks remain expandable. Tawk remains the administrator-only human-support channel. Opening Ask ChurchOS temporarily hides the Tawk widget and its error panel; closing the drawer restores the widget only while its authorized support session remains active. This preserves the conversation, covers delayed widget initialization and does not restore chat after logout.
+Reference mode works without an AI key. It is labelled **BelivrHQ references** and displays retrieved, reviewed product material and deterministic access checks. When configured and an active subscription is present, AI mode synthesizes selected references into concise answers. Access/role/permission questions remain deterministic regardless of provider configuration. AI mode explains that typed questions and selected product guidance go to OpenAI; users should keep questions general and omit passwords, secrets and personal records. Answers lead with a direct response, normally one to three sentences or up to three short steps, targeting fewer than 75 words. Reference answers are capped at 75 words; oversized model answers fall back to concise references. Detailed access checks remain expandable. Tawk remains the administrator-only human-support channel. Opening Ask BelivrHQ temporarily hides the Tawk widget and its error panel; closing the drawer restores the widget only while its authorized support session remains active. This preserves the conversation, covers delayed widget initialization and does not restore chat after logout.
 
 Conversations remain in component memory, bounded to 20 turns. They are not stored in browser storage, the application database or shared query cache. Identity, branch, HQ, role, permissions and plan-feature changes remount the panel, clear the conversation and abort requests. Logout, inactive accounts and failed permission verification remove the entry. The panel never mounts on public landing/help/token-form pages. Only normalized route templates are sent, never actual record IDs, query strings, selected filters, form values or DOM contents. User text is nevertheless user-supplied: it can contain sensitive data if the user types it, which the UI explicitly discourages.
 
@@ -18,17 +18,17 @@ Guidance remains available to active staff of unpaid/expired churches, so they c
 
 Navigation uses generated copies of the existing route and feature maps, current verified grants, additional all-of rules, administrator-only surfaces and subscription eligibility. Unknown/template/external links are never offered as actionable navigation. The frontend independently rechecks navigation against its current grants. Historical reads and feature eligibility are explained separately from write authority. HQ never becomes an implicit administrator grant. Specific record status, ownership, leadership assignment and current usage are explicitly unverified; those APIs are not called.
 
-Knowledge comes from 20 public guides, 73 navigation entries, 11 reviewed detailed product policies and the generated permission catalog. Retrieval is local lexical ranking with page context and guide keywords; there is no vector database or whole-codebase upload. This is a bounded first release, not a claim of exhaustive or perfect knowledge of every ChurchOS screen. The handwritten policies cover role/scope semantics, review/bulk flows, table controls, billing, historical access, attendance totals, giving, providers, support and offline limitations. Policy citations identify a ChurchOS product reference rather than linking to an unrelated public article.
+Knowledge comes from 20 public guides, 73 navigation entries, 11 reviewed detailed product policies and the generated permission catalog. Retrieval is local lexical ranking with page context and guide keywords; there is no vector database or whole-codebase upload. This is a bounded first release, not a claim of exhaustive or perfect knowledge of every BelivrHQ screen. The handwritten policies cover role/scope semantics, review/bulk flows, table controls, billing, historical access, attendance totals, giving, providers, support and offline limitations. Policy citations identify a BelivrHQ product reference rather than linking to an unrelated public article.
 
 ## Optional model configuration
 
 Set these on the **backend only** (see `.env.example`):
 
 - `OPENAI_API_KEY`: an organization-controlled API key with appropriately restricted project access.
-- `ASK_CHURCHOS_AI_ENABLED=true`: explicit opt-in to paid calls.
-- `ASK_CHURCHOS_MODEL`: a Responses API text model supporting strict structured output. No model is silently selected.
-- `ASK_CHURCHOS_INPUT_USD_PER_MILLION` and `ASK_CHURCHOS_OUTPUT_USD_PER_MILLION`: the selected model's current regular input/output USD rates per million tokens. Missing/nonpositive/invalid rates keep reference mode active.
-- `ASK_CHURCHOS_CHURCH_DAILY_USD` (default 0.25), `ASK_CHURCHOS_GLOBAL_DAILY_USD` (default 2), and `ASK_CHURCHOS_GLOBAL_DAILY_REQUESTS` (default 2000).
+- `ASK_BELIVRHQ_AI_ENABLED=true`: explicit opt-in to paid calls.
+- `ASK_BELIVRHQ_MODEL`: a Responses API text model supporting strict structured output. No model is silently selected.
+- `ASK_BELIVRHQ_INPUT_USD_PER_MILLION` and `ASK_BELIVRHQ_OUTPUT_USD_PER_MILLION`: the selected model's current regular input/output USD rates per million tokens. Missing/nonpositive/invalid rates keep reference mode active.
+- `ASK_BELIVRHQ_CHURCH_DAILY_USD` (default 0.25), `ASK_BELIVRHQ_GLOBAL_DAILY_USD` (default 2), and `ASK_BELIVRHQ_GLOBAL_DAILY_REQUESTS` (default 2000).
 
 The Responses integration uses a fixed official endpoint, `store: false`, strict structured output, no tools, a 20-second timeout and at most 450 output tokens. The model receives selected public/product references, bounded user text and minimal access conclusions; server-added names, email, identity IDs, raw permission arrays, church records and credentials are excluded. Output must cite supplied source IDs and pass size/shape/link/content checks. Provider errors, refusals, incomplete/malformed answers and unverified citations fall back to reference guidance. No automatic provider retry occurs.
 
@@ -42,14 +42,14 @@ Cost reservations conservatively bound input using UTF-8 bytes plus framing allo
 
 ## Keeping knowledge current
 
-Run from ChurchOS-Web:
+Run from BelivrHQ-Web:
 
 ```
 npm run assistant:sync
 npm run assistant:check
 ```
 
-The sync script reads the web help content/catalog, navigation AST, route map, feature map, reviewed policies and sibling backend permission seed. It writes versioned standalone TypeScript artifacts into `ChurchOS-Backend/src/assistant`. The hash changes with the consumed material. Check mode fails if generated files are stale. Commit both repositories' changes together and run the check during coordinated release verification. Backend deployment/build uses checked-in artifacts and does not require a sibling frontend checkout. Generated artifacts skip only formatting lint; normal compilation and other lint checks still apply.
+The sync script reads the web help content/catalog, navigation AST, route map, feature map, reviewed policies and sibling backend permission seed. It writes versioned standalone TypeScript artifacts into `BelivrHQ-Backend/src/assistant`. The hash changes with the consumed material. Check mode fails if generated files are stale. Commit both repositories' changes together and run the check during coordinated release verification. Backend deployment/build uses checked-in artifacts and does not require a sibling frontend checkout. Generated artifacts skip only formatting lint; normal compilation and other lint checks still apply.
 
 Update policies when behavior, permissions, plan semantics or UI labels change. Run boundary tests across branch/HQ/custom roles, plans, denied actions and historical reads. The backend remains the authority; prompt instructions do not enforce authorization.
 

@@ -35,7 +35,7 @@ describe('TemplatesService', () => {
     status: 'published',
     category: 'MARKETING',
     variables: ['name', 'church'],
-    external_id: 'churchos:welcome_message',
+    external_id: 'belivrhq:welcome_message',
     external_status: 'APPROVED',
     created_at: new Date('2026-07-20T10:00:00.000Z'),
     updated_at: new Date('2026-07-20T10:00:00.000Z'),
@@ -62,7 +62,7 @@ describe('TemplatesService', () => {
           channel: 'whatsapp',
           category: 'MARKETING',
           variables: ['name', 'church'],
-          externalId: 'churchos:welcome_message',
+          externalId: 'belivrhq:welcome_message',
         },
         mockChurchId,
         mockUserId,
@@ -71,7 +71,7 @@ describe('TemplatesService', () => {
       expect(result.channel).toBe('whatsapp');
       expect(result.category).toBe('MARKETING');
       expect(result.variables).toEqual(['name', 'church']);
-      expect(result.externalId).toBe('churchos:welcome_message');
+      expect(result.externalId).toBe('belivrhq:welcome_message');
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({ entity: 'template', action: 'CREATE' }),
       );

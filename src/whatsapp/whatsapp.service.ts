@@ -552,7 +552,7 @@ export class WhatsAppService {
 
   private async handleHelp(_msg: NormalizedMessage, _args: string): Promise<string> {
     return [
-      '🙏 *Welcome to ChurchOS*',
+      '🙏 *Welcome to BelivrHQ*',
       '',
       'Available commands:',
       '• CHECKIN: Mark your attendance',

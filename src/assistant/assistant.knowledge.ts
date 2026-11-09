@@ -98,7 +98,7 @@ const STOP = new Set([
   'where',
   'does',
   'please',
-  'churchos',
+  'belivrhq',
   'have',
   'want',
   'need',

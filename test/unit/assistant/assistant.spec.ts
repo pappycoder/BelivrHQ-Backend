@@ -33,7 +33,7 @@ const context = (overrides: Partial<AccessContext> = {}): AccessContext => ({
   ...overrides,
 });
 
-describe('Ask ChurchOS access and retrieval', () => {
+describe('Ask BelivrHQ access and retrieval', () => {
   it('normalizes a concrete record URL, query string or external path without preserving identifiers', () => {
     for (const page of [
       '/forms/secret-record?token=secret',
@@ -120,7 +120,7 @@ describe('Ask ChurchOS access and retrieval', () => {
   });
 });
 
-describe('Ask ChurchOS server identity, fallback and model boundary', () => {
+describe('Ask BelivrHQ server identity, fallback and model boundary', () => {
   let prisma: { platformSubscription: { findUnique: jest.Mock } };
   let provider: {
     configured: boolean;

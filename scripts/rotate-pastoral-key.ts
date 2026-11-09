@@ -1,3 +1,4 @@
+import { LEGACY_BRAND } from '../src/brand/brand';
 /** Dry-run by default. Stop writers and back up the database before --apply. */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
@@ -11,8 +12,8 @@ if (!oldSecret || !newSecret || oldSecret === newSecret || newSecret.length < 32
   throw new Error(
     'Provide distinct PASTORAL_OLD_ENCRYPTION_KEY and PASTORAL_ENCRYPTION_KEY (at least 32 characters).',
   );
-const oldKey = scryptSync(oldSecret, 'churchos-pastoral-salt', 32);
-const newKey = scryptSync(newSecret, 'churchos-pastoral-salt', 32);
+const oldKey = scryptSync(oldSecret, LEGACY_BRAND.pastoralSalt, 32);
+const newKey = scryptSync(newSecret, LEGACY_BRAND.pastoralSalt, 32);
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
     connectionString: process.env.DATABASE_URL,

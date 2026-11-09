@@ -6,7 +6,7 @@ import { CompanyEmailService } from '../company-email/company-email.service';
  * @file auth.service.ts
  * @description Auth business logic for registration, profile retrieval, and session management.
  *
- * Handles Supabase Auth user creation, ChurchOS Profile creation, and
+ * Handles Supabase Auth user creation, BelivrHQ Profile creation, and
  * profile lookup. All mutations are audit-logged.
  *
  * @module auth/auth.service
@@ -95,7 +95,7 @@ export class AuthService {
             first_name: dto.firstName,
             last_name: dto.lastName,
             church_name: dto.churchName,
-            ...(legalAcceptance ? { churchos_legal_acceptance: legalAcceptance } : {}),
+            ...(legalAcceptance ? { belivrhq_legal_acceptance: legalAcceptance } : {}),
           },
         },
       });
@@ -380,7 +380,7 @@ export class AuthService {
       // sent we must not log the user in without 2FA. Surface a clean error so
       // the caller can prompt the user to retry / request the code again.
       try {
-        await this.sendLoginCode(userId, recipient, profile.church.name ?? 'ChurchOS');
+        await this.sendLoginCode(userId, recipient, profile.church.name ?? 'BelivrHQ');
       } catch {
         this.logger.error('Unable to deliver legacy 2FA migration code');
         // Best-effort cleanup of the pending (unverifiable) session.

@@ -79,8 +79,8 @@ describe('WhatsAppService', () => {
     config.get.mockImplementation((key: string, defaultVal?: string) => {
       if (key === 'TERMII_API_KEY') return 'test-api-key';
       if (key === 'TERMII_WHATSAPP_DEVICE_ID') return 'device-123456';
-      if (key === 'TERMII_FROM') return 'ChurchOS';
-      if (key === 'WEB_URL') return 'https://churchos.example.com';
+      if (key === 'TERMII_FROM') return 'BelivrHQ';
+      if (key === 'WEB_URL') return 'https://belivrhq.example.com';
       return defaultVal;
     });
 

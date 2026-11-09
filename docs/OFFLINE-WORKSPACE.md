@@ -14,14 +14,14 @@ The first browser release prepares one branch and supports member/visitor contac
 - Form submissions recheck the current definition, publication/archive status, schema version, field validation, authenticated-user deduplication, unique field and capacity. Attachments require the online domain API.
 - Snapshot refreshes are complete and bounded, so browser clients do not depend on the legacy feed cursor/retention. Existing mobile `/sync` APIs are unchanged.
 
-The browser encrypts IndexedDB with a local passphrase and preserves pending changes across logout. Server login and authenticator verification still need internet. Revocation takes effect at the next online check; a disconnected encrypted copy cannot be remotely erased immediately. Full UX and limitations are documented in `ChurchOS-Web/docs/OFFLINE-WORKSPACE.md`.
+The browser encrypts IndexedDB with a local passphrase and preserves pending changes across logout. Server login and authenticator verification still need internet. Revocation takes effect at the next online check; a disconnected encrypted copy cannot be remotely erased immediately. Full UX and limitations are documented in `BelivrHQ-Web/docs/OFFLINE-WORKSPACE.md`.
 
 ## Running the suites
 
 ```sh
 npm test -- --runInBand
 npm run build
-TEST_DATABASE_URL=postgresql://user@127.0.0.1:55439/churchos_offline_tests npm run test:e2e -- --runInBand
+TEST_DATABASE_URL=postgresql://user@127.0.0.1:55439/belivrhq_offline_tests npm run test:e2e -- --runInBand
 ```
 
 Create and migrate an **isolated local test database** first. E2E setup rejects non-local hosts and databases without `test` in their name. Apply migrations to that database using an explicit `DATABASE_URL` override. Tests never require seeding the application database or real Supabase identities.

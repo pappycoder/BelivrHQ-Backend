@@ -11,7 +11,7 @@ OPS_DRY_RUN=0
 OPS_SINGLE_ACTION=''
 ops_help() {
   cat <<'HELP'
-ChurchOS Backend interactive operations console
+BelivrHQ Backend interactive operations console
 Usage: bash scripts/console.sh [--env FILE] [--manager npm|pnpm] [--dry-run]
        bash scripts/console.sh [options] --action ACTION
        bash scripts/console.sh --list
@@ -155,7 +155,7 @@ if [[ -n "$OPS_SINGLE_ACTION" ]]; then
   ops_dispatch "$OPS_SINGLE_ACTION"; OPS_STATUS=$?; ops_result "$OPS_STATUS"; exit "$OPS_STATUS"
 fi
 while true; do
-  ops_title 'ChurchOS Backend'
+  ops_title 'BelivrHQ Backend'
   printf '%bEnv: %s | %s%b\n\n' "$DIM" "$OPS_ENV_FILE" "$OPS_MANAGER" "$RESET"
   cat <<'MENU'
   [1] Dev build (watch)

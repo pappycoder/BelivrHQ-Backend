@@ -1,0 +1,14 @@
+# Compatibility mapping: retain the original data and database credentials.
+services:
+  postgres:
+    environment:
+      POSTGRES_USER: churchos
+      POSTGRES_PASSWORD: churchos_dev
+      POSTGRES_DB: churchos
+volumes:
+  postgres_data:
+    external: true
+    name: churchos-backend_postgres_data
+  redis_data:
+    external: true
+    name: churchos-backend_redis_data

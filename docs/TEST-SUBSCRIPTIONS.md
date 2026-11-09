@@ -1,6 +1,6 @@
 # Manual subscription testing
 
-Run commands from `ChurchOS-Backend`. The script uses `DATABASE_URL` from the process environment or backend `.env`; it prints the database host/name without credentials. Use a test database/church for these manual overrides.
+Run commands from `BelivrHQ-Backend`. The script uses `DATABASE_URL` from the process environment or backend `.env`; it prints the database host/name without credentials. Use a test database/church for these manual overrides.
 
 ```bash
 # Find the church ID and inspect its current plan/expiry

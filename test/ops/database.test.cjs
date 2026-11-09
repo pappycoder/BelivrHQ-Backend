@@ -24,7 +24,7 @@ test(
   'operations against disposable PostgreSQL and local authentication HTTP fixture',
   { timeout: 120000 },
   async (t) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'churchos-db-console-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'belivrhq-db-console-'));
     const startedAt = new Date();
     const migrationCount = fs
       .readdirSync(path.join(root, 'prisma/migrations'))

@@ -84,8 +84,8 @@ function request(session, path, name) {
     headers:
       session.transport === 'web-cookie'
         ? {
-            Cookie: `churchos_token=${session.token}`,
-            'x-churchos-client': 'web',
+            Cookie: `belivrhq_token=${session.token}`,
+            'x-belivrhq-client': 'web',
             Origin: target.match(/^https?:\/\/[^/]+/)[0],
             'Sec-Fetch-Site': 'same-origin',
           }

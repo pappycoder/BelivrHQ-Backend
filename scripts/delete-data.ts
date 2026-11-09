@@ -1,5 +1,5 @@
 /**
- * @file Delete data utility for ChurchOS
+ * @file Delete data utility for BelivrHQ
  * @description Interactive console application for deleting records from the database.
  *
  * Provides three deletion methods:
@@ -232,7 +232,7 @@ function clearScreen() {
 }
 
 function printHeader() {
-  console.log(`\n${BOLD}CHURCHOS Data Delete Utility${RESET}`);
+  console.log(`\n${BOLD}BELIVRHQ Data Delete Utility${RESET}`);
   console.log(`${'-'.repeat(45)}`);
   if (IS_DRY_RUN) {
     console.log(red(`${bold('DRY-RUN MODE')} — No data will actually be deleted.`));

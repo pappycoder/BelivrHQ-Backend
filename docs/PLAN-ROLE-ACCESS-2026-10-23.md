@@ -25,6 +25,6 @@ Existing profiles, custom roles, stored assignments and historical records are r
 
 ## Display and deployment
 
-Landing pricing, plan details and subscription billing cards share `ChurchOS-Web/src/components/marketing/plans.ts`. All show the role differences. The assistant policy and generated server catalog match the new features.
+Landing pricing, plan details and subscription billing cards share `BelivrHQ-Web/src/components/marketing/plans.ts`. All show the role differences. The assistant policy and generated server catalog match the new features.
 
 Apply the migration to the target database, regenerate Prisma and deploy API/web together. No production database migration, live invitation or deployment was performed in this task. Local checks cover allowed/blocked plan assignments, custom-role creation and downgrade caching, real database role triggers and concurrent final staff-seat allocation, plus the plan-specific browser pickers and public pricing copy.

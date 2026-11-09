@@ -14,9 +14,9 @@ export const PDF_COLORS = {
 const asset = (name: string) => join(__dirname, '../../assets/pdf', name);
 
 export function preparePdf(doc: PDFKit.PDFDocument): void {
-  doc.registerFont('ChurchOSSans', asset('DejaVuSans.ttf'));
-  doc.registerFont('ChurchOSSans-Bold', asset('DejaVuSans-Bold.ttf'));
-  doc.font('ChurchOSSans');
+  doc.registerFont('BelivrHQSans', asset('DejaVuSans.ttf'));
+  doc.registerFont('BelivrHQSans-Bold', asset('DejaVuSans-Bold.ttf'));
+  doc.font('BelivrHQSans');
 }
 
 export function drawPdfHeader(
@@ -36,7 +36,7 @@ export function drawPdfHeader(
       textX = 118;
     }
     doc
-      .font('ChurchOSSans-Bold')
+      .font('BelivrHQSans-Bold')
       .fontSize(16)
       .fillColor('#FFFFFF')
       .text(branding.name, textX, 31, {
@@ -45,15 +45,15 @@ export function drawPdfHeader(
         ellipsis: true,
       });
     doc
-      .font('ChurchOSSans')
+      .font('BelivrHQSans')
       .fontSize(8)
       .fillColor('#D6ED97')
-      .text('Powered by ChurchOS', textX, 88, { lineBreak: false });
+      .text('Powered by BelivrHQ', textX, 88, { lineBreak: false });
   } else {
-    doc.image(asset('churchos-lockup-light.png'), 40, 16, { fit: [145, 80] });
+    doc.image(asset('belivrhq-lockup-light.png'), 40, 16, { fit: [145, 80] });
   }
   doc
-    .font('ChurchOSSans-Bold')
+    .font('BelivrHQSans-Bold')
     .fontSize(13)
     .fillColor('#FFFFFF')
     .text(label.toUpperCase(), doc.page.width - 180, 51, {
@@ -80,11 +80,11 @@ export function drawPdfFooters(doc: PDFKit.PDFDocument, generatedAt: Date): void
       .lineWidth(0.5)
       .stroke(PDF_COLORS.line);
     doc
-      .font('ChurchOSSans')
+      .font('BelivrHQSans')
       .fontSize(8)
       .fillColor(PDF_COLORS.muted)
       .text(
-        `Powered by ChurchOS  ·  ${generatedAt.toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+        `Powered by BelivrHQ  ·  ${generatedAt.toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}`,
         50,
         height - 43,
         { lineBreak: false },

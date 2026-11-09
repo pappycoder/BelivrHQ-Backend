@@ -19,7 +19,7 @@ export interface AuthenticatedRequest extends Request {
   verifiedJwt?: JWTPayload;
   /** The authenticated Supabase user */
   user: SupabaseJwtPayload;
-  /** The user's ChurchOS profile (role, church_id, branch_id) */
+  /** The user's BelivrHQ profile (role, church_id, branch_id) */
   profile?: {
     id: string;
     church_id: string;

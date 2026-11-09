@@ -1,9 +1,10 @@
+import { SUBSCRIPTION_REFERENCE, QUOTE_REFERENCE } from '../brand/brand';
 import { BillingCycle, SubscriptionGateway, SubscriptionPlan } from '@prisma/client';
 import { IsEnum, IsIn, IsString, MaxLength, Matches, IsOptional, MinLength } from 'class-validator';
 import { PRICING_CURRENCIES } from './subscription-pricing.service';
 export class CheckoutDto {
   @IsOptional() @IsIn(PRICING_CURRENCIES) currency?: string;
-  @IsOptional() @Matches(/^COSQ_[a-f0-9]{32}$/) quoteId?: string;
+  @IsOptional() @Matches(QUOTE_REFERENCE) quoteId?: string;
   @IsIn([SubscriptionPlan.essentials, SubscriptionPlan.community, SubscriptionPlan.network])
   plan!: Exclude<SubscriptionPlan, 'enterprise'>;
   @IsEnum(BillingCycle)
@@ -14,7 +15,7 @@ export class CheckoutDto {
 export class VerifySubscriptionDto {
   @IsString()
   @MaxLength(100)
-  @Matches(/^COSUB_[a-f0-9]{32}$/)
+  @Matches(SUBSCRIPTION_REFERENCE)
   reference!: string;
 }
 

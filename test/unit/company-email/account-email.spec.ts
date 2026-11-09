@@ -32,7 +32,7 @@ describe('Company account emails', () => {
     expect(generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'person@example.org' });
     const [to, subject, html, churchId, , options] = sendEmail.mock.calls[0];
     expect(to).toBe('person@example.org');
-    expect(subject).toBe('Reset your ChurchOS password');
+    expect(subject).toBe('Reset your BelivrHQ password');
     expect(churchId).toBe('');
     expect(html).toContain(`${webUrl}/reset-password?token_hash=one-time-hash`);
     expect(html).toContain('bgcolor="#ffffff"');
@@ -93,7 +93,7 @@ describe('shared system email design', () => {
               cycle: 'monthly',
               amount: 10,
               currency: 'USD',
-              reference: 'COSUB_example',
+              reference: 'BHQSUB_example',
               paidUntil: new Date('2026-12-09'),
             },
             webUrl,
@@ -137,9 +137,9 @@ describe('shared system email design', () => {
   it.each(samples)(
     'gives %s an opaque brand asset, usable fallback link, responsive details and plain text',
     (_name, content) => {
-      expect(content.html).toContain(`${webUrl}/brand/churchos-logo.png`);
-      expect(content.html).not.toContain('churchos-emblem.png');
-      expect(content.html).toContain('ChurchOS<span');
+      expect(content.html).toContain(`${webUrl}/brand/belivrhq-logo.png`);
+      expect(content.html).not.toContain('belivrhq-emblem.png');
+      expect(content.html).toContain('BelivrHQ<span');
       expect(content.html).toContain('bgcolor="#ffffff"');
       expect(content.html).toContain('max-width:480px');
       expect(content.html).toContain('prefers-color-scheme:dark');
@@ -175,7 +175,7 @@ describe('shared system email design', () => {
     expect(content.html).not.toContain('<Church>');
     expect(content.html).toContain('&lt;Tithe&gt;');
     expect(content.html).toContain('Your PDF receipt is attached');
-    expect(content.html).toContain('Sent by &lt;Church&gt; through ChurchOS.');
+    expect(content.html).toContain('Sent by &lt;Church&gt; through BelivrHQ.');
     expect(content.text).toContain('Thank you for supporting the ministry,\n<Church>');
   });
 });

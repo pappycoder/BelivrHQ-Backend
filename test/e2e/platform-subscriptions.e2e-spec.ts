@@ -125,8 +125,8 @@ describe('Platform subscription checkout (PostgreSQL + HTTP)', () => {
       if (url === 'https://api.paystack.co/transaction/initialize') {
         expect((init!.headers as Record<string, string>).Authorization).toBe('Bearer ' + secret);
         const body = JSON.parse(String(init!.body));
-        expect(body.callback_url).toBe('https://churchos.example/subscription?payment_window=1');
-        expect(body.metadata.purpose).toBe('churchos_subscription');
+        expect(body.callback_url).toBe('https://belivrhq.example/subscription?payment_window=1');
+        expect(body.metadata.purpose).toBe('belivrhq_subscription');
         providerPayments.set(body.reference, {
           reference: body.reference,
           amount: body.amount,
@@ -164,7 +164,7 @@ describe('Platform subscription checkout (PostgreSQL + HTTP)', () => {
           'Bearer platform-flutterwave-test',
         );
         const body = JSON.parse(String(init!.body));
-        expect(body.redirect_url).toBe('https://churchos.example/subscription?payment_window=1');
+        expect(body.redirect_url).toBe('https://belivrhq.example/subscription?payment_window=1');
         providerPayments.set(body.tx_ref, {
           reference: body.tx_ref,
           amount: body.amount,
@@ -228,7 +228,7 @@ describe('Platform subscription checkout (PostgreSQL + HTTP)', () => {
             PAYSTACK_SECRET_KEY: secret,
             FLUTTERWAVE_SECRET_KEY: 'platform-flutterwave-test',
             FLUTTERWAVE_WEBHOOK_SECRET: 'platform-webhook-test',
-            WEB_URL: 'https://churchos.example',
+            WEB_URL: 'https://belivrhq.example',
           }),
         },
       ],
@@ -429,7 +429,7 @@ describe('Platform subscription checkout (PostgreSQL + HTTP)', () => {
       ).status,
     ).toBe(409);
   });
-  it('uses the independent ChurchOS Flutterwave account and signed confirmation for yearly subscriptions', async () => {
+  it('uses the independent BelivrHQ Flutterwave account and signed confirmation for yearly subscriptions', async () => {
     const checkout = await result(
       await request(
         '/billing/checkout',

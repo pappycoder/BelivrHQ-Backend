@@ -362,7 +362,7 @@ export async function seedComm(
   }> = [
     {
       type: 'system',
-      title: 'Welcome to ChurchOS',
+      title: 'Welcome to BelivrHQ',
       body: 'You have been provisioned with a staff account.',
       profileKey: 'church_admin',
     },

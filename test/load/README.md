@@ -1,13 +1,13 @@
-# ChurchOS capacity tests
+# BelivrHQ capacity tests
 
-These tests distinguish active users, in-flight requests, and offered requests/second. A result is a measurement for one deployment, workload, fixture size, and duration, not a universal maximum for ChurchOS.
+These tests distinguish active users, in-flight requests, and offered requests/second. A result is a measurement for one deployment, workload, fixture size, and duration, not a universal maximum for BelivrHQ.
 
 ## Local service/database baseline
 
 Requirements: Node 22, installed backend dependencies, k6, and a migrated **local disposable** PostgreSQL database whose name contains `test`. The server refuses remote databases and binds only to loopback. It does not load `.env`. It creates fictional tenant-owned records and deletes only those records on SIGINT/SIGTERM. Do not use a database with application data.
 
 ```sh
-TEST_DATABASE_URL=postgresql://USER@127.0.0.1:55439/churchos_capacity_test DB_POOL_MAX=10 node test/load/local-server.cjs
+TEST_DATABASE_URL=postgresql://USER@127.0.0.1:55439/belivrhq_capacity_test DB_POOL_MAX=10 node test/load/local-server.cjs
 ```
 
 Run in another terminal:
@@ -33,7 +33,7 @@ node test/load/run.mjs --target=https://STAGING_API/api/v1 --allow-remote=STAGIN
 node test/load/run.mjs --target=https://STAGING_API/api/v1 --allow-remote=STAGING_API --sessions=/PRIVATE/test.sessions.json --mode=rps --levels=5,10,25,50,100 --seconds=60
 ```
 
-Target the API directly for backend numbers; use the authenticated web proxy base `https://WEB/api/backend` for a separately labeled test of that HTTP path. For the ChurchOS web proxy, sessions require `transport: "web-cookie"`; the generator supplies the normal session cookie and trusted web headers. `--workload=live-read` rotates member, visitor, service, giving lists and financial reports. It permits genuinely empty collections/reports, while malformed bodies still fail. Browser rendering needs a separate browser test. Remote `users` mode requires a distinct authorized identity per VU; `requests` and `burst` can reuse one account and must be reported as request concurrency, never distinct users. Never send production tokens to a local baseline. Remote runs require HTTPS and an explicitly matching hostname. The flag is an execution guard, not evidence of permission to stress a service.
+Target the API directly for backend numbers; use the authenticated web proxy base `https://WEB/api/backend` for a separately labeled test of that HTTP path. For the BelivrHQ web proxy, sessions require `transport: "web-cookie"`; the generator supplies the normal session cookie and trusted web headers. `--workload=live-read` rotates member, visitor, service, giving lists and financial reports. It permits genuinely empty collections/reports, while malformed bodies still fail. Browser rendering needs a separate browser test. Remote `users` mode requires a distinct authorized identity per VU; `requests` and `burst` can reuse one account and must be reported as request concurrency, never distinct users. Never send production tokens to a local baseline. Remote runs require HTTPS and an explicitly matching hostname. The flag is an execution guard, not evidence of permission to stress a service.
 
 The current API default rate limit is 100/minute per identity and route, authentication 10/minute, sensitive operations 5/minute. Avoid benchmarking many VUs on one identity or one IP: 429 results describe throttling, not saturation. Keep the normal guards enabled for an end-to-end user test. Any separate staging test with modified guards needs that difference recorded. Do not weaken production guards for a benchmark.
 
@@ -55,7 +55,7 @@ Only run this against an environment whose owner authorized the load. Start low,
 
 ```sh
 node test/load/prepare-live-session.mjs
-node test/load/run.mjs --target=https://church-os-web.vercel.app/api/backend --allow-remote=church-os-web.vercel.app --sessions=test/load/results/live.sessions.json --workload=live-read --mode=burst --levels=1,5,10,20,50 --seconds=30 --p95-ms=10000 --p99-ms=10000 --trace-events=true
+node test/load/run.mjs --target=https://church-os-web.vercel.app/api/backend --allow-remote=belivrhq-web.vercel.app --sessions=test/load/results/live.sessions.json --workload=live-read --mode=burst --levels=1,5,10,20,50 --seconds=30 --p95-ms=10000 --p99-ms=10000 --trace-events=true
 ```
 
 Allow the rate-limit window and response latency to recover before sustained follow-up runs. Remove the generated private live session file after testing; do not globally log out the account or delete the user-managed credentials file. Local interrupted cleanup can be retried with the same test-only database and `local-server.cjs --cleanup-run=FIXTURE_UUID`; the helper only deletes churches carrying that exact capacity-test prefix.

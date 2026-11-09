@@ -301,7 +301,7 @@ describe('BroadcastService', () => {
     it('should use WhatsApp template when external_id is set', async () => {
       prisma.broadcast.findFirst.mockResolvedValue({
         ...mockBroadcast,
-        template: { ...mockTemplate, external_id: 'churchos:sunday_reminder' },
+        template: { ...mockTemplate, external_id: 'belivrhq:sunday_reminder' },
       });
       prisma.broadcast.update.mockResolvedValue({ ...mockBroadcast, status: 'sending' });
       prisma.broadcastRecipient.findMany.mockResolvedValue([
@@ -322,7 +322,7 @@ describe('BroadcastService', () => {
         'send-template',
         expect.objectContaining({
           to: '+2348012345678',
-          templateName: 'churchos:sunday_reminder',
+          templateName: 'belivrhq:sunday_reminder',
           churchId: mockChurchId,
         }),
       );

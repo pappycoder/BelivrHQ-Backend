@@ -51,7 +51,7 @@ describe('Subscription database enforcement', () => {
       const id = await church(plan);
       for (const [resource, limit] of Object.entries(limits))
         expect(
-          (await pool.query('SELECT churchos_plan_limit($1,$2) AS n', [id, resource])).rows[0].n,
+          (await pool.query('SELECT belivrhq_plan_limit($1,$2) AS n', [id, resource])).rows[0].n,
         ).toBe(limit);
     }
     const id = await church('enterprise');
@@ -170,8 +170,8 @@ describe('Subscription database enforcement', () => {
       "UPDATE platform_subscriptions SET paid_until=now()+interval '5 days' WHERE church_id=$1",
       [id],
     );
-    await pool.query('SELECT churchos_notify_renewal($1)', [id]);
-    await pool.query('SELECT churchos_notify_renewal($1)', [id]);
+    await pool.query('SELECT belivrhq_notify_renewal($1)', [id]);
+    await pool.query('SELECT belivrhq_notify_renewal($1)', [id]);
     expect(
       (
         await pool.query(

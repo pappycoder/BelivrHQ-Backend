@@ -1,6 +1,6 @@
 # Local environment setup
 
-The backend loads `ChurchOS-Backend/.env`; the web app loads `ChurchOS-Web/.env.local`. The backend `.env.local` belongs to Vercel tooling and is not the Nest configuration file. Local secrets stay ignored by Git. Restart both development servers after edits; hosted deployments need their own environment settings.
+The backend loads `BelivrHQ-Backend/.env`; the web app loads `BelivrHQ-Web/.env.local`. The backend `.env.local` belongs to Vercel tooling and is not the Nest configuration file. Local secrets stay ignored by Git. Restart both development servers after edits; hosted deployments need their own environment settings.
 
 ## Flutterwave subscription testing
 
@@ -9,7 +9,7 @@ The backend loads `ChurchOS-Backend/.env`; the web app loads `ChurchOS-Web/.env.
 3. Register `https://YOUR-PUBLIC-API/api/v1/billing/webhooks/flutterwave` as the subscription webhook. A local API needs a public HTTPS tunnel for Flutterwave callbacks. Set `PUBLIC_API_URL` to that origin without `/api/v1`; keep `WEB_URL` pointed at the frontend used for checkout.
 4. Restart the backend. Use Plan & Billing to start a test payment. `SUBSCRIPTION_FLUTTERWAVE_CURRENCIES=NGN` is the conservative default. Add other collection currencies only after enabling them on the merchant account.
 
-Environment gateway credentials cover **ChurchOS subscriptions**. Church giving and paid events require that church's own Flutterwave account and payment channel under Settings → Integrations; they do not inherit the platform key. Test payments can update subscription/giving records in the connected database, so choose a designated test church.
+Environment gateway credentials cover **BelivrHQ subscriptions**. Church giving and paid events require that church's own Flutterwave account and payment channel under Settings → Integrations; they do not inherit the platform key. Test payments can update subscription/giving records in the connected database, so choose a designated test church.
 
 No payment, webhook registration or provider credential validation is performed by environment-file setup. Flutterwave test keys must be supplied by the account owner.
 
@@ -18,15 +18,15 @@ No payment, webhook registration or provider credential validation is performed 
 | Setting | What supplies it |
 | --- | --- |
 | `OPENAI_API_KEY` | Your OpenAI API project; optional while AI is disabled. |
-| `ASK_CHURCHOS_MODEL` | Your selected Responses API model. |
-| `ASK_CHURCHOS_INPUT_USD_PER_MILLION`, `ASK_CHURCHOS_OUTPUT_USD_PER_MILLION` | That model's current published USD price per million tokens. No prices are guessed. |
+| `ASK_BELIVRHQ_MODEL` | Your selected Responses API model. |
+| `ASK_BELIVRHQ_INPUT_USD_PER_MILLION`, `ASK_BELIVRHQ_OUTPUT_USD_PER_MILLION` | That model's current published USD price per million tokens. No prices are guessed. |
 | `FLUTTERWAVE_WEBHOOK_SECRET` | A secret hash you choose and configure in both the backend and Flutterwave dashboard. |
 | `INTEGRATIONS_ENCRYPTION_KEY` | Existing deployment's 64-character hex key used to encrypt church provider accounts. |
 | `TWO_FACTOR_ENCRYPTION_KEY` | Existing deployment's 64-character hex key used for enrolled authenticators. |
 | `SENTRY_DSN` | Optional Sentry project configuration. |
 | `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION` (web) | Optional ownership verification tokens from the respective webmaster tools. |
 
-Ask ChurchOS remains in reference mode with `ASK_CHURCHOS_AI_ENABLED=false`; the model/key/rates can stay blank. Daily cost defaults are USD 0.25 per church and USD 2 across the platform, with a 2,000-request platform cap. These settings only apply when AI is enabled.
+Ask BelivrHQ remains in reference mode with `ASK_BELIVRHQ_AI_ENABLED=false`; the model/key/rates can stay blank. Daily cost defaults are USD 0.25 per church and USD 2 across the platform, with a 2,000-request platform cap. These settings only apply when AI is enabled.
 
 The local backend currently connects to a remote database. Recover existing encryption keys from the environment that wrote encrypted data. Do not generate replacements for existing encrypted accounts, authenticators or pastoral notes. For a genuinely fresh isolated environment, generate separate keys with `openssl rand -hex 32`. Pastoral notes currently retain the development fallback when their key is absent; moving them to a new key requires the documented note re-encryption process.
 

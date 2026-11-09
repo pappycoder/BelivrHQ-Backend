@@ -201,7 +201,7 @@ export class ProviderTransportService {
       const form = new FormData();
       form.set('from', input.senderName ? `${input.senderName} <${input.from}>` : input.from);
       form.set('to', input.to);
-      form.set('subject', input.subject ?? 'ChurchOS');
+      form.set('subject', input.subject ?? 'BelivrHQ');
       form.set('html', input.html ?? input.text);
       if (input.plainText) form.set('text', input.plainText);
       if (input.replyTo) form.set('h:Reply-To', input.replyTo);
