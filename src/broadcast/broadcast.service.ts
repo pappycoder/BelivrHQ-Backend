@@ -174,14 +174,39 @@ export class BroadcastService {
     const ownBranch = this.requestContext.branchWhere(churchId).branch_id;
     if (!ownBranch && query.branchId)
       where.audience_filter = { path: ['branchId'], equals: query.branchId };
-    if (query.search) where.name = { contains: query.search.trim(), mode: 'insensitive' };
+    if (query.search?.trim()) {
+      const existing = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+      where.AND = [
+        ...existing,
+        {
+          OR: [
+            { name: { contains: query.search.trim(), mode: 'insensitive' } },
+            { template: { name: { contains: query.search.trim(), mode: 'insensitive' } } },
+          ],
+        },
+      ];
+    }
     if (query.status) where.status = query.status;
     if (query.channel) where.channel = query.channel;
 
+    const sortFields = {
+      name: 'name',
+      createdAt: 'created_at',
+      scheduledAt: 'scheduled_at',
+      sentAt: 'sent_at',
+      totalRecipients: 'total_recipients',
+      channel: 'channel',
+      status: 'status',
+    } as const;
+    const sortField = sortFields[query.sortBy ?? 'createdAt'] ?? 'created_at';
+    const orderBy: Prisma.BroadcastOrderByWithRelationInput[] = [
+      { [sortField]: query.sortOrder ?? 'desc' },
+      { id: 'asc' },
+    ];
     const [broadcasts, total] = await Promise.all([
       this.prisma.broadcast.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),

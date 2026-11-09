@@ -41,7 +41,7 @@ describe('Ask ChurchOS access and retrieval', () => {
       '//evil.test',
       '/unknown',
     ])
-      expect(normalizedPage(page)).toBe('/dashboard');
+      expect(normalizedPage(page)).toBe('/home');
     expect(normalizedPage('/forms/[formId]/fill')).toBe('/forms/[formId]/fill');
   });
   it('requires all additional page grants', () => {
@@ -101,7 +101,7 @@ describe('Ask ChurchOS access and retrieval', () => {
     );
   });
   it('resolves an exact permission code from the catalog', () => {
-    expect(actionAccess('Explain members:all:read', '/dashboard', context())).toMatchObject([
+    expect(actionAccess('Explain members:all:read', '/home', context())).toMatchObject([
       { label: 'members:all:read', status: 'missing_permission' },
     ]);
   });
@@ -116,7 +116,7 @@ describe('Ask ChurchOS access and retrieval', () => {
         (item) => item.id === 'policy:reviews',
       ),
     ).toBe(true);
-    expect(retrieve('astrophysics quasars relativity', '/dashboard').sources).toHaveLength(0);
+    expect(retrieve('astrophysics quasars relativity', '/home').sources).toHaveLength(0);
   });
 });
 

@@ -58,4 +58,16 @@ export class ListTemplatesDto {
   @IsOptional()
   @IsBoolean()
   archived?: boolean;
+  @ApiPropertyOptional({
+    enum: ['name', 'createdAt', 'updatedAt', 'channel', 'status'],
+    default: 'name',
+  })
+  @IsOptional()
+  @IsIn(['name', 'createdAt', 'updatedAt', 'channel', 'status'])
+  sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'channel' | 'status';
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }

@@ -121,6 +121,52 @@ describe('TemplatesService', () => {
   });
 
   describe('findAll', () => {
+    it.each([
+      ['name', 'name'],
+      ['createdAt', 'created_at'],
+      ['updatedAt', 'updated_at'],
+      ['channel', 'channel'],
+      ['status', 'status'],
+    ] as const)(
+      'sorts %s before pagination while preserving filters and branch scope',
+      async (sortBy, field) => {
+        prisma.template.findMany.mockResolvedValue([]);
+        prisma.template.count.mockResolvedValue(0);
+        await service.findAll(
+          mockChurchId,
+          {
+            page: 2,
+            limit: 12,
+            sortBy,
+            sortOrder: 'desc',
+            search: 'welcome',
+            channel: 'email',
+            status: 'published',
+            branchId: 'other-branch',
+          },
+          { church_id: mockChurchId, branch_id: 'own-branch', role: 'secretary' },
+        );
+        const query = prisma.template.findMany.mock.calls[0][0];
+        expect(query).toMatchObject({
+          skip: 12,
+          take: 12,
+          orderBy: [{ [field]: 'desc' }, { id: 'asc' }],
+          where: {
+            church_id: mockChurchId,
+            archived_at: null,
+            channel: 'email',
+            status: 'published',
+            AND: [{ OR: [{ branch_id: 'own-branch' }, { branch_id: null }] }],
+            OR: [
+              { name: { contains: 'welcome', mode: 'insensitive' } },
+              { content: { contains: 'welcome', mode: 'insensitive' } },
+            ],
+          },
+        });
+        expect(prisma.template.count).toHaveBeenCalledWith({ where: query.where });
+      },
+    );
+
     it('should return paginated templates', async () => {
       prisma.template.findMany.mockResolvedValue([mockTemplate]);
       prisma.template.count.mockResolvedValue(1);

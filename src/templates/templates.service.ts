@@ -125,11 +125,23 @@ export class TemplatesService {
       ];
     }
 
+    const sortFields = {
+      name: 'name',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      channel: 'channel',
+      status: 'status',
+    } as const;
+    const sortField = sortFields[query.sortBy ?? 'name'] ?? 'name';
+    const orderBy: Prisma.TemplateOrderByWithRelationInput[] = [
+      { [sortField]: query.sortOrder ?? 'asc' },
+      { id: 'asc' },
+    ];
     const [templates, total] = await Promise.all([
       this.prisma.template.findMany({
         include: { branch: { select: { name: true } } },
         where,
-        orderBy: { name: 'asc' },
+        orderBy,
         skip,
         take: limit,
       }),

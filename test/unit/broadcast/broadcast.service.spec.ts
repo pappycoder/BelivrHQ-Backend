@@ -162,6 +162,57 @@ describe('BroadcastService', () => {
   });
 
   describe('findAll', () => {
+    it.each([
+      ['name', 'name'],
+      ['createdAt', 'created_at'],
+      ['scheduledAt', 'scheduled_at'],
+      ['sentAt', 'sent_at'],
+      ['totalRecipients', 'total_recipients'],
+      ['channel', 'channel'],
+      ['status', 'status'],
+    ] as const)(
+      'sorts %s before pagination and searches templates without losing branch scope',
+      async (sortBy, field) => {
+        jest
+          .spyOn(RequestContextService.prototype, 'branchWhere')
+          .mockReturnValue({ branch_id: 'own-branch' });
+        prisma.broadcast.findMany.mockResolvedValue([]);
+        prisma.broadcast.count.mockResolvedValue(0);
+        prisma.template.findMany.mockResolvedValue([]);
+        await service.findAll(mockChurchId, {
+          page: 3,
+          limit: 12,
+          sortBy,
+          sortOrder: 'asc',
+          search: ' Sunday ',
+          channel: 'email',
+          status: 'scheduled',
+          branchId: 'other-branch',
+        });
+        const query = prisma.broadcast.findMany.mock.calls[0][0];
+        expect(query).toMatchObject({
+          skip: 24,
+          take: 12,
+          orderBy: [{ [field]: 'asc' }, { id: 'asc' }],
+          where: {
+            church_id: mockChurchId,
+            channel: 'email',
+            status: 'scheduled',
+            audience_filter: { path: ['branchId'], equals: 'own-branch' },
+            AND: [
+              {
+                OR: [
+                  { name: { contains: 'Sunday', mode: 'insensitive' } },
+                  { template: { name: { contains: 'Sunday', mode: 'insensitive' } } },
+                ],
+              },
+            ],
+          },
+        });
+        expect(prisma.broadcast.count).toHaveBeenCalledWith({ where: query.where });
+      },
+    );
+
     it('should return paginated broadcasts', async () => {
       prisma.broadcast.findMany.mockResolvedValue([mockBroadcast]);
       prisma.broadcast.count.mockResolvedValue(1);

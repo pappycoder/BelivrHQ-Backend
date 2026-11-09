@@ -6,6 +6,7 @@
  * @since 1.0.0
  */
 
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsUUID, IsOptional, IsString, IsIn, IsInt, Min, Max } from 'class-validator';
 
@@ -22,12 +23,14 @@ export class ListBroadcastsDto {
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
   @ApiPropertyOptional({ default: 20 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
@@ -44,4 +47,17 @@ export class ListBroadcastsDto {
   @IsString()
   @IsIn(['whatsapp', 'sms', 'email'])
   channel?: string;
+  @ApiPropertyOptional({
+    enum: ['name', 'createdAt', 'scheduledAt', 'sentAt', 'totalRecipients', 'channel', 'status'],
+    default: 'createdAt',
+  })
+  @IsOptional()
+  @IsIn(['name', 'createdAt', 'scheduledAt', 'sentAt', 'totalRecipients', 'channel', 'status'])
+  sortBy?:
+    'name' | 'createdAt' | 'scheduledAt' | 'sentAt' | 'totalRecipients' | 'channel' | 'status';
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }

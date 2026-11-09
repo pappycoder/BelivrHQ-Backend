@@ -693,6 +693,19 @@ export class SermonsService {
       }));
   }
 
+  /** Reuse the tenant/branch-scoped active archive; expose only reusable names. */
+  async formOptions(churchId: string, viewer?: ViewerScope | null) {
+    const [speakers, series] = await Promise.all([
+      this.listSpeakers(churchId, viewer),
+      this.listSeries(churchId, viewer),
+    ]);
+    const names = (items: { name: string }[]) =>
+      [...new Set(items.map((item) => item.name.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b),
+      );
+    return { speakers: names(speakers), series: names(series) };
+  }
+
   // ─── MAPPERS ───────────────────────────────────────────────────
 
   /**

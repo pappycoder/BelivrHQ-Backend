@@ -807,6 +807,89 @@ describe('FormsService', () => {
   });
 
   describe('listSubmissions', () => {
+    it.each([
+      ['createdAt', 'created_at'],
+      ['status', 'status'],
+      ['id', 'id'],
+    ] as const)(
+      'sorts %s before pagination with source and tenant filters',
+      async (sortBy, field) => {
+        prisma.form.findFirst.mockResolvedValue(mockForm);
+        prisma.formSubmission.count.mockResolvedValue(0);
+        prisma.formSubmission.findMany.mockResolvedValue([]);
+        await service.listSubmissions(mockChurchId, mockFormId, {
+          page: 2,
+          limit: 15,
+          status: SubmissionStatus.pending,
+          source: 'public',
+          sortBy,
+          sortOrder: 'asc',
+        });
+        const query = prisma.formSubmission.findMany.mock.calls[0][0];
+        expect(query).toMatchObject({
+          skip: 15,
+          take: 15,
+          where: {
+            church_id: mockChurchId,
+            form_id: mockFormId,
+            status: SubmissionStatus.pending,
+            submitted_by: null,
+          },
+          orderBy: field === 'id' ? [{ id: 'asc' }] : [{ [field]: 'asc' }, { id: 'asc' }],
+        });
+        expect(prisma.formSubmission.count).toHaveBeenCalledWith({ where: query.where });
+      },
+    );
+
+    it('searches beyond the first batch and counts all matches before paging', async () => {
+      prisma.form.findFirst.mockResolvedValue(mockForm);
+      prisma.formSubmission.findMany
+        .mockResolvedValueOnce(
+          Array.from({ length: 1000 }, (_, i) => ({
+            ...mockSubmission,
+            id: `old-${i}`,
+            data: { name: 'Other' },
+          })),
+        )
+        .mockResolvedValueOnce([
+          { ...mockSubmission, id: 'later-a', data: { name: 'Grace' } },
+          { ...mockSubmission, id: 'later-b', data: { name: 'Grace B' } },
+        ]);
+      const result = await service.listSubmissions(mockChurchId, mockFormId, {
+        search: 'grace',
+        page: 2,
+        limit: 1,
+      });
+      expect(result.total).toBe(2);
+      expect(result.items.map((row) => row.id)).toEqual(['later-b']);
+      expect(prisma.formSubmission.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          skip: 1000,
+          take: 1000,
+          where: { church_id: mockChurchId, form_id: mockFormId },
+        }),
+      );
+    });
+
+    it('does not let a public source filter override an explicit member filter', async () => {
+      prisma.form.findFirst.mockResolvedValue(mockForm);
+      prisma.formSubmission.count.mockResolvedValue(0);
+      prisma.formSubmission.findMany.mockResolvedValue([]);
+      await service.listSubmissions(mockChurchId, mockFormId, {
+        submittedBy: mockUserId,
+        source: 'public',
+      });
+      expect(prisma.formSubmission.count).toHaveBeenCalledWith({
+        where: {
+          church_id: mockChurchId,
+          form_id: mockFormId,
+          submitted_by: mockUserId,
+          AND: [{ submitted_by: null }],
+        },
+      });
+    });
+
     it('should return paginated submissions', async () => {
       prisma.form.findFirst.mockResolvedValue(mockForm);
       prisma.formSubmission.count.mockResolvedValue(1);

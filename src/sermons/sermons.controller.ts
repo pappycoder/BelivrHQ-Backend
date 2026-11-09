@@ -131,6 +131,21 @@ export class SermonsController {
     return this.sermonsService.listSpeakers(churchId, req.profile);
   }
 
+  /** Form suggestions are available to authors without opening aggregate reports. */
+  @Get('new/options')
+  @RequirePermissions('sermons:new:create')
+  @ApiOperation({ summary: 'List speaker and series suggestions for a new sermon' })
+  async newSermonOptions(@Request() req: AuthenticatedRequest) {
+    return this.sermonsService.formOptions(req.profile?.church_id || '', req.profile);
+  }
+
+  @Get('edit/options')
+  @RequirePermissions('sermons:update')
+  @ApiOperation({ summary: 'List speaker and series suggestions for sermon editing' })
+  async editSermonOptions(@Request() req: AuthenticatedRequest) {
+    return this.sermonsService.formOptions(req.profile?.church_id || '', req.profile);
+  }
+
   /**
    * Get a single sermon by ID.
    */

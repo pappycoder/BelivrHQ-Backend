@@ -749,26 +749,44 @@ export class FormsService {
 
     if (query.status) where.status = query.status;
     if (query.submittedBy) where.submitted_by = query.submittedBy;
+    if (query.source === 'public') {
+      // A member-ID filter and a public-only filter cannot both match.
+      if (query.submittedBy) where.AND = [{ submitted_by: null }];
+      else where.submitted_by = null;
+    } else if (query.source === 'member' && !query.submittedBy) where.submitted_by = { not: null };
 
-    // Prisma cannot LIKE inside a Json column, so a searched read filters
-    // BEFORE paging (bounded walk) instead of post-filtering one page and
-    // reporting unfiltered totals. Unsearched reads keep native server paging.
-    const orderBy: Prisma.FormSubmissionOrderByWithRelationInput = {
-      created_at: query.sortOrder ?? 'desc',
-    };
-    if (query.search) {
-      const term = query.search.toLowerCase();
-      const matches = (
-        await this.prisma.formSubmission.findMany({ where, orderBy, take: 1_000 })
-      ).filter((submission) =>
-        Object.values(this.mapSubmission(submission).data).some((value) =>
-          String(value).toLowerCase().includes(term),
-        ),
-      );
-      const items = matches
-        .slice(skip, skip + limit)
-        .map((submission) => this.mapSubmission(submission));
-      return { items, total: matches.length, page, limit };
+    const sortFields = { createdAt: 'created_at', status: 'status', id: 'id' } as const;
+    const field = sortFields[query.sortBy ?? 'createdAt'] ?? 'created_at';
+    const orderBy: Prisma.FormSubmissionOrderByWithRelationInput[] = [
+      { [field]: query.sortOrder ?? 'desc' },
+      ...(field === 'id' ? [] : [{ id: 'asc' as const }]),
+    ];
+    // Scan in bounded batches so answer search includes every response, keeping
+    // only the requested page in memory while counting all matching records.
+    if (query.search?.trim()) {
+      const term = query.search.trim().toLowerCase();
+      const items: FormSubmissionResponseDto[] = [];
+      let total = 0;
+      for (let offset = 0; ; offset += 1000) {
+        const batch = await this.prisma.formSubmission.findMany({
+          where,
+          orderBy,
+          skip: offset,
+          take: 1000,
+        });
+        for (const submission of batch) {
+          const mapped = this.mapSubmission(submission);
+          if (
+            !submission.id.toLowerCase().includes(term) &&
+            !Object.values(mapped.data).some((value) => String(value).toLowerCase().includes(term))
+          )
+            continue;
+          if (total >= skip && items.length < limit) items.push(mapped);
+          total++;
+        }
+        if (batch.length < 1000) break;
+      }
+      return { items, total, page, limit };
     }
 
     const [total, submissions] = await Promise.all([

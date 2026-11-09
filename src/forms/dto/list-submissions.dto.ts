@@ -28,6 +28,11 @@ export class ListFormSubmissionsDto {
   @MaxLength(100)
   search?: string;
 
+  @ApiPropertyOptional({ description: 'Submission source', enum: ['public', 'member'] })
+  @IsIn(['public', 'member'])
+  @IsOptional()
+  source?: 'public' | 'member';
+
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @Type(() => Number)
   @IsOptional()
@@ -40,11 +45,11 @@ export class ListFormSubmissionsDto {
 
   @ApiPropertyOptional({
     description: 'Sort field (default: createdAt desc)',
-    enum: ['createdAt'],
+    enum: ['createdAt', 'status', 'id'],
   })
-  @IsIn(['createdAt'])
+  @IsIn(['createdAt', 'status', 'id'])
   @IsOptional()
-  sortBy?: 'createdAt';
+  sortBy?: 'createdAt' | 'status' | 'id';
 
   @ApiPropertyOptional({ description: 'Sort direction', enum: ['asc', 'desc'], default: 'desc' })
   @IsIn(['asc', 'desc'])

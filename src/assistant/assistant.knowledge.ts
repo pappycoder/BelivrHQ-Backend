@@ -66,7 +66,7 @@ export function routeAccess(path: string, context: AccessContext): AssistantAcce
 }
 export function normalizedPage(page?: string) {
   const exact = ROUTE_PERMISSIONS.find((rule) => rule.prefix === page);
-  return exact?.prefix ?? '/dashboard';
+  return exact?.prefix ?? '/home';
 }
 export function pageSummary(page?: string) {
   const path = normalizedPage(page);

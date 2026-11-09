@@ -52,6 +52,19 @@ describe('SermonsController permission decorators', () => {
     );
   });
 
+  it('authorizes create and edit suggestions with their respective form grants', () => {
+    expect(blockBetween("@Get('new/options')", 'async newSermonOptions(')).toContain(
+      "@RequirePermissions('sermons:new:create')",
+    );
+    expect(blockBetween("@Get('edit/options')", 'async editSermonOptions(')).toContain(
+      "@RequirePermissions('sermons:update')",
+    );
+    expect(source.indexOf("@Get('new/options')")).toBeLessThan(source.indexOf("@Get(':sermonId')"));
+    expect(source.indexOf("@Get('edit/options')")).toBeLessThan(
+      source.indexOf("@Get(':sermonId')"),
+    );
+  });
+
   it('requires sermons:list:read on GET /sermons/:sermonId', () => {
     expect(blockBetween("@Get(':sermonId')", 'async getSermon(')).toContain(
       "@RequirePermissions('sermons:list:read')",

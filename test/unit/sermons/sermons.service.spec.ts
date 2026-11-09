@@ -42,6 +42,25 @@ describe('SermonsService', () => {
     updated_at: new Date('2026-07-20T10:00:00.000Z'),
   };
 
+  it('returns only distinct names for form suggestions using the same viewer scope', async () => {
+    const viewer = { church_id: 'church', branch_id: 'branch', role: 'media_team' };
+    const speakers = jest.spyOn(service, 'listSpeakers').mockResolvedValue([
+      { name: 'Pastor John', count: 4, lastDate: '2026-01-01' },
+      { name: ' Pastor Ada ', count: 2, lastDate: '2026-01-02' },
+      { name: 'Pastor John', count: 1, lastDate: '2026-01-01' },
+      { name: '  ', count: 1, lastDate: '' },
+    ]);
+    const series = jest
+      .spyOn(service, 'listSeries')
+      .mockResolvedValue([{ name: 'Faith Foundations', count: 3, lastDate: '2026-01-01' }]);
+    expect(await service.formOptions('church', viewer)).toEqual({
+      speakers: ['Pastor Ada', 'Pastor John'],
+      series: ['Faith Foundations'],
+    });
+    expect(speakers).toHaveBeenCalledWith('church', viewer);
+    expect(series).toHaveBeenCalledWith('church', viewer);
+  });
+
   beforeEach(() => {
     prisma = createPrismaMock();
     audit = { log: jest.fn().mockResolvedValue(undefined) };
