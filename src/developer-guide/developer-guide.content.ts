@@ -25,7 +25,7 @@ const ALL_FLOWS: Flow[] = [
     title: 'Authentication',
     description:
       'The ChurchOS API uses Supabase Auth with JWT Bearer tokens. All protected endpoints require a valid token in the Authorization header. This flow covers the complete auth lifecycle: creating an account, logging in, refreshing expired tokens, and logging out.',
-    prerequisites: 'None — registration is publicly accessible.',
+    prerequisites: 'None: registration is publicly accessible.',
     steps: [
       {
         method: 'POST',
@@ -221,7 +221,7 @@ const ALL_FLOWS: Flow[] = [
   "success": true,
   "data": { "id": "member-uuid", "phone": "+2348012345679", "status": "inactive" }
 }`,
-        note: 'Partial updates only — send only the fields to change. A status change to "inactive" is a soft-delete.',
+        note: 'Partial updates only: send only the fields to change. A status change to "inactive" is a soft-delete.',
       },
       {
         method: 'DELETE',
@@ -651,7 +651,7 @@ const ALL_FLOWS: Flow[] = [
   "success": true,
   "message": "Recurring giving cancelled"
 }`,
-        note: 'Cancellation sets is_active to false. No further charges are attempted. The plan is not deleted — it remains as a record.',
+        note: 'Cancellation sets is_active to false. No further charges are attempted. The plan is not deleted: it remains as a record.',
       },
     ],
   },
@@ -1962,7 +1962,7 @@ abc123challengetoken`,
     title: 'User Registration & Login',
     description:
       'Register a new user account and authenticate via JWT token exchange. Covers the complete auth lifecycle with Supabase Auth.',
-    prerequisites: 'None — registration is publicly accessible.',
+    prerequisites: 'None: registration is publicly accessible.',
     businessRule:
       'Registration creates both a Supabase auth user and a Profile record in a transaction. Login returns ES256-signed JWT verified via JWKS. Rate limit: 10 req/min.',
     steps: [
@@ -3055,7 +3055,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
     prerequisites:
       'Paystack must be configured as the payment gateway. The event registration must have a pending payment.',
     businessRule:
-      'Webhook verifies HMAC-SHA512 signature (x-paystack-signature). Idempotent for terminal states — already-confirmed registrations are skipped.',
+      'Webhook verifies HMAC-SHA512 signature (x-paystack-signature). Idempotent for terminal states: already-confirmed registrations are skipped.',
     steps: [
       {
         method: 'POST',
@@ -3322,7 +3322,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
       'Update template content, manage approval status for WhatsApp templates, and archive unused templates.',
     prerequisites: 'Template must exist and belong to the church.',
     businessRule:
-      'WhatsApp template content cannot be edited after submission — a new version must be created. SMS and Email templates can be freely updated.',
+      'WhatsApp template content cannot be edited after submission: a new version must be created. SMS and Email templates can be freely updated.',
     steps: [
       {
         method: 'PATCH',
@@ -4581,7 +4581,7 @@ Includes: Church name, member name, receipt number, date, category, amount (in w
   "message": "All notifications marked as read.",
   "data": { "updated": 5 }
 }`,
-        note: 'Bulk operation — marks all unread notifications for the authenticated user as read in a single query.',
+        note: 'Bulk operation: marks all unread notifications for the authenticated user as read in a single query.',
       },
     ],
   },
@@ -4816,7 +4816,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
   "success": true,
   "message": "Webhook subscription deactivated."
 }`,
-        note: 'Deactivated webhooks are not deleted — they are soft-deactivated for audit trail.',
+        note: 'Deactivated webhooks are not deleted: they are soft-deactivated for audit trail.',
       },
     ],
   },
@@ -5098,7 +5098,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
     title: 'System Health Check',
     description:
       'Monitor system health including database connectivity, Redis availability, and all BullMQ queue statuses.',
-    prerequisites: 'Public endpoint — no authentication required.',
+    prerequisites: 'Public endpoint: no authentication required.',
     businessRule:
       'Health check returns live status of all infrastructure dependencies. Queue metrics include waiting, active, completed, and failed job counts. 5-second timeout per dependency.',
     steps: [
@@ -5126,7 +5126,7 @@ Content-Disposition: attachment; filename="members-report-2026-07-31.csv"`,
     }
   }
 }`,
-        note: 'If any service is unhealthy, overall status returns "degraded". Individual queue failures do not affect overall status — only the queue entry shows the issue.',
+        note: 'If any service is unhealthy, overall status returns "degraded". Individual queue failures do not affect overall status: only the queue entry shows the issue.',
       },
     ],
   },
@@ -5233,7 +5233,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChurchOS API — Developer Guide</title>
+  <title>ChurchOS API: Developer Guide</title>
   <style>
     :root {
       --bg-primary: #0b1120;
@@ -5552,7 +5552,7 @@ export function renderGuidePage(baseUrl: string, swaggerUrl: string): string {
   ${contentHtml}
 
   <div class="footer">
-    ChurchOS — Church Management &amp; Digital Ministry Platform &bull;
+    ChurchOS: Church Management &amp; Digital Ministry Platform &bull;
     <a href="${escapeHtml(swaggerUrl)}" target="_blank">Interactive Swagger Docs</a> &bull;
     Built with NestJS + Prisma
   </div>

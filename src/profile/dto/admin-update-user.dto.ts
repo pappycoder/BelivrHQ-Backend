@@ -57,7 +57,7 @@ export class AdminUpdateUserDto {
 
   @ApiPropertyOptional({
     description:
-      "Admin HQ flag — grants cross-branch access within the user's permission scope. Managed manually; defaults on for church_admin.",
+      "Admin HQ flag: grants cross-branch access within the user's permission scope. Managed manually; defaults on for church_admin.",
     example: true,
   })
   @IsOptional()

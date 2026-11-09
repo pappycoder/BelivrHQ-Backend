@@ -161,7 +161,7 @@ export class VisitorsController {
   @RequirePermissions('visitors:list:update')
   @ApiOperation({
     summary: 'Archive a visitor',
-    description: 'Sets archived_at — hides the visitor from active lists until restored.',
+    description: 'Sets archived_at: hides the visitor from active lists until restored.',
   })
   async archive(
     @Param('visitorId') visitorId: string,
@@ -177,7 +177,7 @@ export class VisitorsController {
   @RequirePermissions('visitors:list:update')
   @ApiOperation({
     summary: 'Restore an archived visitor',
-    description: 'Clears archived_at — brings the visitor back into active lists.',
+    description: 'Clears archived_at: brings the visitor back into active lists.',
   })
   async restore(
     @Param('visitorId') visitorId: string,

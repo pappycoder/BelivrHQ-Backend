@@ -111,7 +111,7 @@ export class CreateMemberDto {
 
   @ApiPropertyOptional({
     description: 'Admin notes about the member',
-    example: 'New member — referred by Pastor Daniel',
+    example: 'New member: referred by Pastor Daniel',
   })
   @IsString()
   @IsOptional()

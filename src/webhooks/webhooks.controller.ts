@@ -108,7 +108,7 @@ export class WebhooksController {
   @RequirePermissions('webhooks:update')
   @ApiOperation({
     summary: 'Archive webhook',
-    description: 'Set archived_at — hides the subscription from active lists until restored.',
+    description: 'Set archived_at: hides the subscription from active lists until restored.',
   })
   async archive(
     @Param('webhookId') webhookId: string,
@@ -125,7 +125,7 @@ export class WebhooksController {
   @RequirePermissions('webhooks:update')
   @ApiOperation({
     summary: 'Restore webhook',
-    description: 'Clears archived_at — brings the subscription back into active lists.',
+    description: 'Clears archived_at: brings the subscription back into active lists.',
   })
   async restore(
     @Param('webhookId') webhookId: string,

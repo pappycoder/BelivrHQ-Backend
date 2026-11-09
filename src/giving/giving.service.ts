@@ -2228,7 +2228,7 @@ export class GivingService {
       typeof metadata.cellGroupMeetingDate === 'string' ? metadata.cellGroupMeetingDate : undefined;
     return {
       givingType: typeof metadata.cellGroupId === 'string' ? 'cell_group' : 'normal',
-      title: groupName ? `${groupName} — Meeting Giving` : undefined,
+      title: groupName ? `${groupName}: Meeting Giving` : undefined,
       description: groupName
         ? `Combined giving from ${groupName}${meetingDate ? ` for the meeting on ${meetingDate}` : ''}.`
         : undefined,

@@ -207,7 +207,7 @@ export class MediaController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'File to upload (images, PDF, CSV, Excel, audio, video — max 50MB)',
+          description: 'File to upload (images, PDF, CSV, Excel, audio, video: max 50MB)',
         },
         folder: { type: 'string', description: 'Storage folder', example: 'documents' },
       },

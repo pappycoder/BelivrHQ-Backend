@@ -155,7 +155,7 @@ async function bootstrap(): Promise<void> {
       .setDescription(
         'Church Management & Digital Ministry Platform API\n\n' +
           '## Overview\n' +
-          'This API powers the ChurchOS platform — a comprehensive church management system ' +
+          'This API powers the ChurchOS platform: a comprehensive church management system ' +
           'built for Nigerian churches. It handles member management, attendance tracking, ' +
           'giving/donations, WhatsApp integration, event management, pastoral care, and more.\n\n' +
           '## Authentication\n' +

@@ -452,7 +452,7 @@ export class ProfileController {
   @HttpCode(HttpStatus.OK)
   @ApiCreateEndpoint(
     'Archive user',
-    'Sets archived_at — hides the profile from active lists until restored.',
+    'Sets archived_at: hides the profile from active lists until restored.',
   )
   @ApiForbiddenResponse({ description: 'Insufficient permissions' })
   @ApiNotFoundResponse({ description: 'Profile not found' })
@@ -473,7 +473,7 @@ export class ProfileController {
   @HttpCode(HttpStatus.OK)
   @ApiCreateEndpoint(
     'Restore user from archive',
-    'Clears archived_at — brings the profile back into active lists.',
+    'Clears archived_at: brings the profile back into active lists.',
   )
   @ApiForbiddenResponse({ description: 'Insufficient permissions' })
   @ApiNotFoundResponse({ description: 'Profile not found' })

@@ -58,7 +58,7 @@ export class TemplateResponseDto {
   externalStatus?: string;
 
   @ApiPropertyOptional({
-    description: 'Archive timestamp — set when the template is archived',
+    description: 'Archive timestamp: set when the template is archived',
     example: '2026-08-28T10:30:00.000Z',
   })
   archivedAt?: string;

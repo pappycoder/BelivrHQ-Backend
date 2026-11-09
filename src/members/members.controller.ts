@@ -286,7 +286,7 @@ export class MembersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Archive a member',
-    description: 'Sets archived_at — hides the member from active lists until restored.',
+    description: 'Sets archived_at: hides the member from active lists until restored.',
   })
   async archive(
     @Param('memberId') memberId: string,
@@ -305,7 +305,7 @@ export class MembersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restore an archived member',
-    description: 'Clears archived_at — brings the member back into active lists.',
+    description: 'Clears archived_at: brings the member back into active lists.',
   })
   async restoreArchive(
     @Param('memberId') memberId: string,

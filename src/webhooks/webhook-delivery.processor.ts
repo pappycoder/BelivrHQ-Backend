@@ -87,7 +87,7 @@ export class WebhookDeliveryProcessor extends WorkerHost {
 
   @OnWorkerEvent('failed')
   async onFailed(job: Job<WebhookDeliveryJob>, error: Error): Promise<void> {
-    this.logger.error(`Webhook delivery failed: ${job.data.deliveryId} — ${error.message}`);
+    this.logger.error(`Webhook delivery failed: ${job.data.deliveryId}: ${error.message}`);
 
     await this.prisma.webhookDelivery
       .update({

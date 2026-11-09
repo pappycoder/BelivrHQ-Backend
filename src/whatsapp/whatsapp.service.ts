@@ -555,15 +555,15 @@ export class WhatsAppService {
       '🙏 *Welcome to ChurchOS*',
       '',
       'Available commands:',
-      '• CHECKIN — Mark your attendance',
-      '• GIVE — Get giving instructions',
-      '• PRAYER — Submit a prayer request',
-      '• EVENTS — See upcoming events',
-      '• STATUS — View your giving/attendance',
-      '• SERMON — Search recent sermons',
-      '• TESTIMONY — Share your testimony',
-      '• BIRTHDAY — Check your birthday info',
-      '• HELP — Show this message',
+      '• CHECKIN: Mark your attendance',
+      '• GIVE: Get giving instructions',
+      '• PRAYER: Submit a prayer request',
+      '• EVENTS: See upcoming events',
+      '• STATUS: View your giving/attendance',
+      '• SERMON: Search recent sermons',
+      '• TESTIMONY: Share your testimony',
+      '• BIRTHDAY: Check your birthday info',
+      '• HELP: Show this message',
     ].join('\n');
   }
 
@@ -637,9 +637,9 @@ export class WhatsAppService {
       '💰 *Giving Options*',
       '',
       'You can give via:',
-      `🏦 Bank Transfer — Use your phone number as reference`,
-      `🔗 Online — ${givingUrl}/give`,
-      '📱 USSD — *737*000*Amount#',
+      `🏦 Bank Transfer: Use your phone number as reference`,
+      `🔗 Online: ${givingUrl}/give`,
+      '📱 USSD: *737*000*Amount#',
       '',
       'For Cash giving, visit the church office.',
       'God loves a cheerful giver! 🙏',
@@ -715,7 +715,7 @@ export class WhatsAppService {
         month: 'short',
         day: 'numeric',
       });
-      lines.push(`• *${event.title}* — ${date}`);
+      lines.push(`• *${event.title}*: ${date}`);
       if (event.description) {
         lines.push(`  ${event.description.substring(0, 80)}`);
       }
@@ -758,7 +758,7 @@ export class WhatsAppService {
       '📊 *Your Status (Last 30 Days)*',
       '',
       `✅ Attendance: ${attendanceCount} service(s)`,
-      `💰 Giving: ${givingCount} gift(s) — ₦${givingTotal.toLocaleString()}`,
+      `💰 Giving: ${givingCount} gift(s), totalling ₦${givingTotal.toLocaleString()}`,
     ].join('\n');
   }
 
@@ -804,7 +804,7 @@ export class WhatsAppService {
             day: 'numeric',
           })
         : '';
-      lines.push(`• *${sermon.title}* — ${sermon.speaker || 'Unknown speaker'}`);
+      lines.push(`• *${sermon.title}*: ${sermon.speaker || 'Unknown speaker'}`);
       if (date) lines.push(`  ${date}`);
       if (sermon.description) {
         lines.push(`  ${sermon.description.substring(0, 80)}`);

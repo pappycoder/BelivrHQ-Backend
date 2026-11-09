@@ -53,7 +53,7 @@ export class ChurchResponseDto {
   memberCount!: number;
 
   @ApiPropertyOptional({
-    description: 'Archive timestamp — set when the church is archived (hides it from normal use)',
+    description: 'Archive timestamp: set when the church is archived (hides it from normal use)',
     example: '2026-08-28T10:30:00.000Z',
   })
   archivedAt?: string;

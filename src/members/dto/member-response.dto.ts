@@ -116,7 +116,7 @@ export class MemberResponseDto {
 
   @ApiPropertyOptional({
     description: 'Admin notes',
-    example: 'New member — referred by Pastor Daniel',
+    example: 'New member: referred by Pastor Daniel',
   })
   notes?: string;
 

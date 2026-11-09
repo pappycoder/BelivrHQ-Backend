@@ -16,7 +16,7 @@ import {
 const ERROR_RESPONSES = {
   unauthorized: {
     status: 401,
-    description: 'Unauthorized — Invalid or missing JWT token',
+    description: 'Unauthorized: Invalid or missing JWT token',
     schema: {
       type: 'object',
       properties: {
@@ -33,7 +33,7 @@ const ERROR_RESPONSES = {
   },
   forbidden: {
     status: 403,
-    description: 'Forbidden — Insufficient permissions',
+    description: 'Forbidden: Insufficient permissions',
     schema: {
       type: 'object',
       properties: {
@@ -53,7 +53,7 @@ const ERROR_RESPONSES = {
   },
   notFound: {
     status: 404,
-    description: 'Not Found — Resource does not exist',
+    description: 'Not Found: Resource does not exist',
     schema: {
       type: 'object',
       properties: {
@@ -70,7 +70,7 @@ const ERROR_RESPONSES = {
   },
   conflict: {
     status: 409,
-    description: 'Conflict — Resource already exists',
+    description: 'Conflict: Resource already exists',
     schema: {
       type: 'object',
       properties: {
@@ -87,7 +87,7 @@ const ERROR_RESPONSES = {
   },
   badRequest: {
     status: 400,
-    description: 'Bad Request — Invalid input data',
+    description: 'Bad Request: Invalid input data',
     schema: {
       type: 'object',
       properties: {

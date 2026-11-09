@@ -150,7 +150,7 @@ export class ProfileResponseDto {
 
   @ApiPropertyOptional({
     description:
-      'Linked member id — present when the profile is linked to a member record (used by self-service ownership checks)',
+      'Linked member id: present when the profile is linked to a member record (used by self-service ownership checks)',
     example: '44444444-4444-4444-4444-444444444444',
   })
   memberId?: string;
@@ -181,7 +181,7 @@ export class ProfileResponseDto {
 
   @ApiProperty({
     description:
-      "Admin HQ flag — grants cross-branch read access within the user's permission scope. Defaults on for church_admin; managed manually otherwise.",
+      "Admin HQ flag: grants cross-branch read access within the user's permission scope. Defaults on for church_admin; managed manually otherwise.",
     example: false,
   })
   isAdminHq!: boolean;
@@ -196,7 +196,7 @@ export class ProfileResponseDto {
   updatedAt!: string;
 
   @ApiPropertyOptional({
-    description: 'Archive timestamp — set when the profile is archived',
+    description: 'Archive timestamp: set when the profile is archived',
     example: '2026-08-28T10:30:00.000Z',
   })
   archivedAt?: string;

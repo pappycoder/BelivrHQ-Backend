@@ -50,7 +50,7 @@ export function companyEmail(input: CompanyEmailInput, webUrl: string): CompanyE
     upgrade: 'More room for your ministry.',
   };
   const subjects = {
-    welcome: 'Welcome to ChurchOS — your next chapter starts here',
+    welcome: 'Welcome to ChurchOS: your next chapter starts here',
     activation: 'Your ChurchOS subscription is active',
     renewal: 'Your ChurchOS renewal is confirmed',
     upgrade: 'Your ChurchOS plan upgrade is confirmed',

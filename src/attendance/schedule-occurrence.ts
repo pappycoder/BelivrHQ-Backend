@@ -122,7 +122,7 @@ export function assertEventSchedule(input: {
 
   if (recurrence === 'one_time' && end && end !== start)
     throw new BadRequestException(
-      'A one-time event happens on a single day — choose Date range for multiple days',
+      'A one-time event happens on a single day. Choose Date range for multiple days',
     );
   if (recurrence === 'multi_day' && !end)
     throw new BadRequestException('A date-range event needs a start and end date');

@@ -31,7 +31,7 @@ export class NightlyScheduler {
    */
   @Cron('0 2 * * *', { timeZone: 'Africa/Lagos' })
   async handleNightlyTrigger(): Promise<void> {
-    this.logger.log('Nightly cron triggered — dispatching jobs for all churches');
+    this.logger.log('Nightly cron triggered: dispatching jobs for all churches');
 
     const churches = await this.prisma.church.findMany({
       select: { id: true },

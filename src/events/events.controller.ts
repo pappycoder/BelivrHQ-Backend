@@ -500,7 +500,7 @@ export class EventsController {
   @ApiOperation({
     summary: 'Create a ticket',
     description:
-      'Staff (admin, branch pastor) can create a ticket for any member or visitor. Members can claim a ticket for themselves — one per event, limited to their branch.',
+      'Staff (admin, branch pastor) can create a ticket for any member or visitor. Members can claim a ticket for themselves: one per event, limited to their branch.',
   })
   @ApiParam({ name: 'eventId', description: 'Event UUID' })
   async createTicket(

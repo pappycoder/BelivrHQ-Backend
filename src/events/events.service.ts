@@ -954,7 +954,7 @@ export class EventsService {
 
     if (registrationCount > 0) {
       throw new BadRequestException(
-        `Cannot delete tier "${tier.name}" — ${registrationCount} registration(s) reference it.`,
+        `Cannot delete tier "${tier.name}": ${registrationCount} registration(s) reference it.`,
       );
     }
 

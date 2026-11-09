@@ -96,7 +96,7 @@ export class RequestContextService {
   getChurchId(): string {
     const ctx = this.getStore();
     if (!ctx) {
-      throw new Error('RequestContext not available — ensure middleware is registered');
+      throw new Error('RequestContext not available: ensure middleware is registered');
     }
     return ctx.churchId;
   }
@@ -108,7 +108,7 @@ export class RequestContextService {
   getUserId(): string {
     const ctx = this.getStore();
     if (!ctx) {
-      throw new Error('RequestContext not available — ensure middleware is registered');
+      throw new Error('RequestContext not available: ensure middleware is registered');
     }
     return ctx.userId;
   }

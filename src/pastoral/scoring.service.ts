@@ -506,11 +506,11 @@ export class ScoringService {
     if (factors.attendanceDecline && factors.attendanceDecline > 0.5) {
       if (factors.attendanceDecline > 0.8) {
         suggestions.push(
-          '🔴 Severe attendance decline — member has missed most services in recent weeks. Schedule a personal check-in call or visit.',
+          '🔴 Severe attendance decline: member has missed most services in recent weeks. Schedule a personal check-in call or visit.',
         );
       } else {
         suggestions.push(
-          '🟡 Irregular attendance — member has missed several services. Send a friendly WhatsApp check-in message.',
+          '🟡 Irregular attendance: member has missed several services. Send a friendly WhatsApp check-in message.',
         );
       }
     }
@@ -518,21 +518,21 @@ export class ScoringService {
     // Analyze giving
     if (factors.noGiving && factors.noGiving > 0) {
       suggestions.push(
-        '💰 No recent giving activity — gently remind about giving options and check if there are any financial concerns.',
+        '💰 No recent giving activity: gently remind about giving options and check if there are any financial concerns.',
       );
     }
 
     // Analyze communication
     if (factors.noCommunication && factors.noCommunication > 0) {
       suggestions.push(
-        '📱 No recent communication engagement — consider reaching out via phone call or personalized message.',
+        '📱 No recent communication engagement: consider reaching out via phone call or personalized message.',
       );
     }
 
     // Analyze membership status
     if (factors.inactiveStatus && factors.inactiveStatus > 0) {
       suggestions.push(
-        '📋 Member status is inactive — discuss re-engagement and update membership status if needed.',
+        '📋 Member status is inactive: discuss re-engagement and update membership status if needed.',
       );
     }
 
@@ -540,11 +540,11 @@ export class ScoringService {
     if (factors.recentInactivity && factors.recentInactivity > 0.4) {
       if (factors.recentInactivity > 0.7) {
         suggestions.push(
-          '⏰ Member has been absent for an extended period — assign a follow-up team member for personal outreach.',
+          '⏰ Member has been absent for an extended period: assign a follow-up team member for personal outreach.',
         );
       } else {
         suggestions.push(
-          "👋 Member hasn't attended recently — send an invitation to the next upcoming service or event.",
+          "👋 Member hasn't attended recently: send an invitation to the next upcoming service or event.",
         );
       }
     }

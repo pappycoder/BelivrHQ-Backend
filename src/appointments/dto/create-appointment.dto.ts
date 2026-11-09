@@ -48,14 +48,14 @@ export class CreateAppointmentDto {
 
   @ApiProperty({
     description:
-      'The With party — the pastor Profile ID (branch_pastor | senior_pastor | church_admin).',
+      'The With party: the pastor Profile ID (branch_pastor | senior_pastor | church_admin).',
     example: '11111111-1111-1111-1111-111111111111',
   })
   @IsUUID('4')
   withId!: string;
 
   @ApiProperty({
-    description: 'The Who party — a staff Profile ID. Mutually exclusive with the visitor form.',
+    description: 'The Who party: a staff Profile ID. Mutually exclusive with the visitor form.',
     example: '22222222-2222-2222-2222-222222222222',
   })
   @IsUUID('4')
@@ -76,14 +76,14 @@ export class CreateAppointmentDto {
 
   @ApiPropertyOptional({
     description:
-      'The Who party — an existing visitor Profile-equivalent ID, required when `whoKind` is "visitor".',
+      'The Who party: an existing visitor Profile-equivalent ID, required when `whoKind` is "visitor".',
     example: '8c8c8c8c-8c8c-8c8c-8c8c-8c8c8c8c8c8c',
   })
   @IsUUID('4')
   @ValidateIf((o) => o.whoKind === 'visitor')
   visitorId?: string;
 
-  @ApiPropertyOptional({ description: 'Location', example: 'Main Campus — Office 2' })
+  @ApiPropertyOptional({ description: 'Location', example: 'Main Campus: Office 2' })
   @IsString()
   @MaxLength(200)
   @IsOptional()

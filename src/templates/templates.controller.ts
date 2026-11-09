@@ -178,7 +178,7 @@ export class TemplatesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Archive a template',
-    description: 'Sets archived_at — hides the template from active lists until restored.',
+    description: 'Sets archived_at: hides the template from active lists until restored.',
   })
   @ApiParam({ name: 'templateId', description: 'Template UUID' })
   @ApiResponse({ status: 200, description: 'Template archived successfully' })
@@ -198,7 +198,7 @@ export class TemplatesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restore an archived template',
-    description: 'Clears archived_at — brings the template back into active lists.',
+    description: 'Clears archived_at: brings the template back into active lists.',
   })
   @ApiParam({ name: 'templateId', description: 'Template UUID' })
   @ApiResponse({ status: 200, description: 'Template restored successfully' })

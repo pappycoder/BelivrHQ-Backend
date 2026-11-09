@@ -65,7 +65,7 @@ export class CreateFormDto {
 
   @ApiPropertyOptional({
     description:
-      'Field key (e.g. "email") whose value must be unique across public submissions — blocks duplicate submissions',
+      'Field key (e.g. "email") whose value must be unique across public submissions: blocks duplicate submissions',
   })
   @IsString()
   @IsOptional()

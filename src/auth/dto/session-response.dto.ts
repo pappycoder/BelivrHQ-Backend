@@ -8,7 +8,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class LoginResponseDto {
   @ApiPropertyOptional({
     description:
-      'JWT access token. Absent when two-factor authentication is required — call /auth/login/2fa with the authenticator code and challengeToken to complete sign-in.',
+      'JWT access token. Absent when two-factor authentication is required: call /auth/login/2fa with the authenticator code and challengeToken to complete sign-in.',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
   accessToken?: string;

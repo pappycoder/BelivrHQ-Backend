@@ -359,13 +359,13 @@ export class AttendanceController {
     name: 'startDate',
     required: false,
     type: String,
-    description: 'Start date (ISO 8601) — overrides the rolling days window when provided',
+    description: 'Start date (ISO 8601): overrides the rolling days window when provided',
   })
   @ApiQuery({
     name: 'endDate',
     required: false,
     type: String,
-    description: 'End date (ISO 8601) — overrides the rolling days window when provided',
+    description: 'End date (ISO 8601): overrides the rolling days window when provided',
   })
   async getAttendanceTrends(
     @Query('days') days: number,

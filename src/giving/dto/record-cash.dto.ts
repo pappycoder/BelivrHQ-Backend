@@ -74,14 +74,14 @@ export class RecordCashDto {
   branchId?: string;
 
   @ApiPropertyOptional({
-    description: 'Service ID — tags the gift against a church service',
+    description: 'Service ID: tags the gift against a church service',
   })
   @IsUUID()
   @IsOptional()
   serviceId?: string;
 
   @ApiPropertyOptional({
-    description: 'Event ID — tags the gift against a church event',
+    description: 'Event ID: tags the gift against a church event',
   })
   @IsUUID()
   @IsOptional()

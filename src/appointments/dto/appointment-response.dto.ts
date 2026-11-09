@@ -33,43 +33,43 @@ export class AppointmentDto {
   scheduledAt!: string;
 
   @ApiProperty({
-    description: 'With party — pastor Profile ID',
+    description: 'With party: pastor Profile ID',
     example: '11111111-1111-1111-1111-111111111111',
   })
   pastorId!: string;
 
   @ApiPropertyOptional({
-    description: 'With party — pastor full name',
+    description: 'With party: pastor full name',
     example: 'Pastor John Adebayo',
   })
   pastorName?: string;
 
   @ApiPropertyOptional({
-    description: 'With party — pastor primary role',
+    description: 'With party: pastor primary role',
     example: 'branch_pastor',
   })
   pastorRole?: string;
 
   @ApiPropertyOptional({
-    description: 'With party — pastor avatar URL',
+    description: 'With party: pastor avatar URL',
     example: 'https://storage.example.com/avatars/pastor.jpg',
   })
   pastorAvatarUrl?: string;
 
   @ApiProperty({
-    description: 'Who party — person Profile ID',
+    description: 'Who party: person Profile ID',
     example: '22222222-2222-2222-2222-222222222222',
   })
   personId!: string;
 
   @ApiPropertyOptional({
-    description: 'Who party — person full name',
+    description: 'Who party: person full name',
     example: 'Sister Bola Okonkwo',
   })
   personName?: string;
 
   @ApiPropertyOptional({
-    description: 'Who party — person avatar URL',
+    description: 'Who party: person avatar URL',
     example: 'https://storage.example.com/avatars/person.jpg',
   })
   personAvatarUrl?: string;
@@ -82,18 +82,18 @@ export class AppointmentDto {
   whoKind?: 'profile' | 'visitor';
 
   @ApiPropertyOptional({
-    description: 'Who party — visitor ID (when whoKind is visitor)',
+    description: 'Who party: visitor ID (when whoKind is visitor)',
     example: '8c8c8c8c-8c8c-8c8c-8c8c-8c8c8c8c8c8c',
   })
   visitorId?: string;
 
   @ApiPropertyOptional({
-    description: 'Who party — visitor full name (when whoKind is visitor)',
+    description: 'Who party: visitor full name (when whoKind is visitor)',
     example: 'Visitor Tunde Bello',
   })
   visitorName?: string;
 
-  @ApiPropertyOptional({ description: 'Location', example: 'Main Campus — Office 2' })
+  @ApiPropertyOptional({ description: 'Location', example: 'Main Campus: Office 2' })
   location?: string;
 
   @ApiPropertyOptional({ description: 'Purpose / notes', example: 'Review Q3 outreach plans' })

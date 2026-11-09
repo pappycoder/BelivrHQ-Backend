@@ -615,7 +615,7 @@ export class PermissionsService {
     }
     if (role.church_id !== null) {
       throw new BadRequestException(
-        `Custom roles have no defaults to reset — edit their permissions directly.`,
+        `Custom roles have no defaults to reset: edit their permissions directly.`,
       );
     }
 

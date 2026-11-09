@@ -37,7 +37,7 @@ export class SetRolePermissionsDto {
 export class CreateRoleDto {
   @ApiProperty({
     description:
-      'Friendly role label — slugified into a snake_case role name (e.g. "Media Team" → "media_team")',
+      'Friendly role label: slugified into a snake_case role name (e.g. "Media Team" → "media_team")',
     example: 'Media Team',
     minLength: 3,
     maxLength: 50,
@@ -59,7 +59,7 @@ export class CreateRoleDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Initial permission IDs to grant (optional — can be configured afterwards)',
+    description: 'Initial permission IDs to grant (optional: can be configured afterwards)',
     example: ['perm-id-1'],
     required: false,
     type: [String],
