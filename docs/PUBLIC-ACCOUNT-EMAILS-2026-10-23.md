@@ -4,7 +4,7 @@ Public Forgot Password and the administrator Send Password Reset action both gen
 
 Links use the existing backend WEB_URL only, at `/reset-password?token_hash=…`. The reset page keeps the token in memory, removes it from the visible URL and submits it as a recovery-only token when the user saves a password. No password change occurs from opening the email. Local WEB_URL is now `https://church-os-web.vercel.app`.
 
-Welcome, subscription activation/renewal/upgrade and staff invitations already use the company frame. Password recovery and legacy sign-in codes now use it too, including the white logo background, green header, lime action, footer, escaped dynamic text and plain text. Church-authored broadcasts and integration test messages are separate from public account mail and retain their existing contracts.
+Welcome, subscription activation/renewal/upgrade and staff invitations already use the company frame. Password recovery and legacy sign-in codes now use it too, including the opaque white-background logo, Paper layout, green action, footer, escaped dynamic text and plain text. The refreshed design and all nine templates are documented in [Email design](EMAIL-DESIGN-2026-11-09.md). Church-authored broadcasts and integration test messages are separate from public account mail and retain their existing contracts.
 
 ## Deploy and provider confirmation template
 

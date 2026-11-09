@@ -69,6 +69,26 @@ describe('Unified church messaging delivery', () => {
     expect(JSON.stringify(prisma.message.create.mock.calls)).not.toContain('private-church-key');
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('uses a supplied plain-text alternative for a church email', async () => {
+    await email.sendEmail(
+      'member@example.org',
+      'Receipt',
+      '<p>Receipt details</p>',
+      'church-a',
+      undefined,
+      { text: 'Receipt details' },
+    );
+    expect(accounts.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'church-a-account' }),
+      'email',
+      expect.objectContaining({
+        from: 'office@church.example',
+        text: 'Receipt details',
+        plainText: 'Receipt details',
+        html: '<p>Receipt details</p>',
+      }),
+    );
+  });
   it('fails closed before delivery for missing, disabled or corrupt church credentials', async () => {
     accounts.resolve.mockRejectedValue(new Error('Account disabled'));
     await expect(

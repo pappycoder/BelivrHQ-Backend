@@ -363,8 +363,7 @@ export class NotificationsService {
   /**
    * Sends an email with attachment.
    *
-   * Currently creates an in-app notification. Full email delivery
-   * will be implemented via Resend API integration.
+   * Delivers through the church email account and records a notification after acceptance.
    */
   async sendEmailWithAttachment(
     email: string,
@@ -373,6 +372,7 @@ export class NotificationsService {
     buffer: Buffer,
     filename: string,
     churchId: string,
+    text?: string,
   ): Promise<void> {
     this.logger.log(`Email with attachment to ${email}: ${subject} (church: ${churchId})`);
 
@@ -386,10 +386,10 @@ export class NotificationsService {
     if (!this.resendService)
       throw new ServiceUnavailableException('Email receipt delivery is not configured');
     try {
-      await this.resendService.sendEmail(email, subject, body, churchId, {
-        filename,
-        content: buffer,
-      });
+      const attachment = { filename, content: buffer };
+      if (text)
+        await this.resendService.sendEmail(email, subject, body, churchId, attachment, { text });
+      else await this.resendService.sendEmail(email, subject, body, churchId, attachment);
     } catch {
       this.logger.warn('Receipt email delivery was not accepted');
       throw new ServiceUnavailableException('Receipt email could not be delivered. Please retry.');

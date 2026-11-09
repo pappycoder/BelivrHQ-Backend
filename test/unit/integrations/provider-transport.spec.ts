@@ -74,6 +74,7 @@ describe('Provider-specific authentication and delivery adapters', () => {
       subject: 'Hello',
       text: 'Welcome',
       html: '<p>Welcome</p>',
+      plainText: 'Welcome',
       attachment: { filename: 'receipt.pdf', content: Buffer.from('pdf') },
     };
     fetchMock.mockResolvedValueOnce(response({ id: 'resend-id' }));
@@ -86,6 +87,7 @@ describe('Provider-specific authentication and delivery adapters', () => {
     expect(resend).toMatchObject({
       from: 'Church office <church@example.org>',
       reply_to: 'office@example.org',
+      text: 'Welcome',
       attachments: [{ filename: 'receipt.pdf', content: 'cGRm' }],
     });
     fetchMock.mockResolvedValueOnce(
@@ -101,6 +103,10 @@ describe('Provider-specific authentication and delivery adapters', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toMatchObject({
       from: { email: input.from, name: input.senderName },
       reply_to: { email: input.replyTo },
+      content: [
+        { type: 'text/plain', value: 'Welcome' },
+        { type: 'text/html', value: '<p>Welcome</p>' },
+      ],
     });
     fetchMock.mockResolvedValueOnce(response({ id: 'mailgun-id' }));
     await service.deliver(
@@ -115,6 +121,7 @@ describe('Provider-specific authentication and delivery adapters', () => {
       'https://api.eu.mailgun.net/v3/mail.example.org/messages',
     );
     expect((fetchMock.mock.calls[2][1]?.body as FormData).get('h:Reply-To')).toBe(input.replyTo);
+    expect((fetchMock.mock.calls[2][1]?.body as FormData).get('text')).toBe('Welcome');
   });
   it('supports SMS and WhatsApp on one Twilio account with independent senders', async () => {
     const account = {

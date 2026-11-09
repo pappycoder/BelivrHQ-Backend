@@ -95,7 +95,8 @@ export class EmailDeliveryService {
         from: integration.settings.from,
         to,
         subject,
-        text: subject,
+        text: organizationOptions?.text ?? subject,
+        ...(organizationOptions?.text ? { plainText: organizationOptions.text } : {}),
         html,
         attachment,
       });

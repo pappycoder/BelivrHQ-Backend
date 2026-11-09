@@ -333,6 +333,28 @@ describe('NotificationsService', () => {
       expect(model('notification').create).not.toHaveBeenCalled();
     });
 
+    it('forwards the receipt plain text while retaining the church sender and attachment', async () => {
+      model('member').findMany.mockResolvedValue([]);
+      const buffer = Buffer.from('pdf');
+      await service.sendEmailWithAttachment(
+        'member@example.org',
+        'Receipt',
+        '<p>Receipt</p>',
+        buffer,
+        'receipt.pdf',
+        mockChurchId,
+        'Receipt details',
+      );
+      expect(resendService.sendEmail).toHaveBeenCalledWith(
+        'member@example.org',
+        'Receipt',
+        '<p>Receipt</p>',
+        mockChurchId,
+        { filename: 'receipt.pdf', content: buffer },
+        { text: 'Receipt details' },
+      );
+    });
+
     it('should forward attachments to the email service', async () => {
       model('member').findMany.mockResolvedValue([{ id: 'member-1' }]);
       model('profile').findMany.mockResolvedValue([{ id: mockProfileId }]);

@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { givingReceiptEmail } from '../company-email/company-email.templates';
 import { applyAdjustment, record } from './services/payment-lifecycle';
 import type { PaymentAdjustment } from './services/payment-lifecycle';
 import type { PaymentVerifyResult } from './services/payment-gateway.interface';
@@ -65,11 +67,6 @@ import { Prisma } from '@prisma/client';
  * and receipt generation. Supports multiple payment gateways.
  */
 
-const escapeReceiptText = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!,
-  );
 @Injectable()
 export class GivingService {
   private readonly logger = new Logger(GivingService.name);
@@ -84,6 +81,7 @@ export class GivingService {
     private readonly branchScope: BranchScopeService,
     private readonly integrationAlert: IntegrationAlertService,
     private readonly paymentAccounts: PaymentAccountsService,
+    private readonly config: ConfigService = new ConfigService(),
   ) {}
 
   /**
@@ -2141,7 +2139,7 @@ export class GivingService {
   ): Promise<{ success: boolean; message: string }> {
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
-      include: { category: true },
+      include: { category: true, church: { select: { name: true } } },
     });
 
     if (!transaction || transaction.church_id !== churchId) {
@@ -2183,13 +2181,25 @@ export class GivingService {
       throw new BadRequestException('Member has no email on file');
     }
 
+    const content = givingReceiptEmail(
+      {
+        churchName: transaction.church.name,
+        firstName: member.first_name,
+        categoryName: transaction.category?.name || 'Giving',
+        amount: transaction.amount,
+        currency: transaction.currency,
+        receiptNumber: transaction.receipt_number || 'Not assigned',
+      },
+      this.config.getOrThrow<string>('WEB_URL'),
+    );
     await this.notifications.sendEmailWithAttachment(
       email,
-      `Your Receipt - ${transaction.category?.name || 'Giving'}`,
-      `<p>Dear ${escapeReceiptText(member.first_name)},</p><p>Please find attached your receipt for ${escapeReceiptText(transaction.category?.name || 'giving')} of <strong>${escapeReceiptText(transaction.currency)} ${transaction.amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>.</p><p>Receipt number: ${escapeReceiptText(transaction.receipt_number || 'Not assigned')}</p><p>Thank you for your generosity.</p>`,
+      content.subject,
+      content.html,
       buffer,
       filename,
       churchId,
+      content.text,
     );
 
     await this.audit.log({

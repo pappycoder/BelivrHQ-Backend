@@ -15,6 +15,7 @@ export interface DeliveryInput {
   text: string;
   subject?: string;
   html?: string;
+  plainText?: string;
   templateId?: string;
   variables?: Record<string, string>;
   attachment?: { filename: string; content: Buffer };
@@ -156,6 +157,7 @@ export class ProviderTransportService {
         to: [input.to],
         subject: input.subject,
         html: input.html ?? input.text,
+        ...(input.plainText ? { text: input.plainText } : {}),
         ...(input.replyTo ? { reply_to: input.replyTo } : {}),
         ...(input.attachment
           ? {
@@ -176,7 +178,10 @@ export class ProviderTransportService {
         from: { email: input.from, ...(input.senderName ? { name: input.senderName } : {}) },
         ...(input.replyTo ? { reply_to: { email: input.replyTo } } : {}),
         subject: input.subject,
-        content: [{ type: 'text/html', value: input.html ?? input.text }],
+        content: [
+          ...(input.plainText ? [{ type: 'text/plain', value: input.plainText }] : []),
+          { type: 'text/html', value: input.html ?? input.text },
+        ],
         ...(input.attachment
           ? {
               attachments: [
@@ -198,6 +203,7 @@ export class ProviderTransportService {
       form.set('to', input.to);
       form.set('subject', input.subject ?? 'ChurchOS');
       form.set('html', input.html ?? input.text);
+      if (input.plainText) form.set('text', input.plainText);
       if (input.replyTo) form.set('h:Reply-To', input.replyTo);
       if (input.attachment)
         form.set(

@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
  * @file giving.service.spec.ts
@@ -32,6 +33,7 @@ describe('GivingService', () => {
   let flutterwave: Record<string, jest.Mock>;
   let gatewayRegistry: Map<string, PaymentGatewayProvider>;
   let receipt: Record<string, jest.Mock>;
+  let receiptEmail: jest.Mock;
   let integrationAlert: { notify: jest.Mock };
 
   const mockUserId = '11111111-1111-1111-1111-111111111111';
@@ -153,6 +155,7 @@ describe('GivingService', () => {
       receipt as unknown as ReceiptService,
       {
         createNotification: jest.fn().mockResolvedValue({}),
+        sendEmailWithAttachment: (receiptEmail = jest.fn().mockResolvedValue(undefined)),
         broadcastToChurch: jest.fn().mockResolvedValue({ sent: 0 }),
       } as never,
       new BranchScopeService(new RequestContextService()),
@@ -167,6 +170,7 @@ describe('GivingService', () => {
         }),
         historical: jest.fn(async (_churchId: string, name: string) => gatewayRegistry.get(name)),
       } as never,
+      new ConfigService({ WEB_URL: 'https://churchos.example' }),
     );
   });
 
@@ -1793,5 +1797,29 @@ describe('GivingService', () => {
         BadRequestException,
       );
     });
+  });
+  it('sends a church-branded receipt email and plain text with the original PDF attachment', async () => {
+    model('transaction').findUnique.mockResolvedValue({
+      ...mockTransaction,
+      church: { name: 'Grace Church' },
+    });
+    model('member').findUnique.mockResolvedValue({ first_name: 'Ada', email: 'ada@example.org' });
+    const buffer = Buffer.from('receipt-pdf');
+    jest.spyOn(service, 'generateReceipt').mockResolvedValue({ buffer, filename: 'receipt.pdf' });
+    await service.sendReceipt(mockTransactionId, mockChurchId, 'email');
+    expect(receiptEmail).toHaveBeenCalledWith(
+      'ada@example.org',
+      'Your receipt from Grace Church',
+      expect.stringContaining('https://churchos.example/brand/churchos-logo.png'),
+      buffer,
+      'receipt.pdf',
+      mockChurchId,
+      expect.stringContaining('Receipt number: 2026/TIT/0001'),
+    );
+    expect(model('transaction').findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: { category: true, church: { select: { name: true } } },
+      }),
+    );
   });
 });

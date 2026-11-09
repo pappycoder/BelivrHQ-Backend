@@ -2,12 +2,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   companyEmail,
+  givingReceiptEmail,
   CompanyEmailKind,
   invitationEmail,
   passwordResetEmail,
   signInCodeEmail,
   signupConfirmationEmail,
 } from '../src/company-email/company-email.templates';
+const webUrl = 'https://church-os-web.vercel.app';
 const directory = join(process.cwd(), 'docs', 'previews', 'company-emails');
 mkdirSync(directory, { recursive: true });
 for (const kind of ['welcome', 'activation', 'renewal', 'upgrade'] as CompanyEmailKind[]) {
@@ -24,7 +26,7 @@ for (const kind of ['welcome', 'activation', 'renewal', 'upgrade'] as CompanyEma
       paidUntil: new Date('2026-11-22T12:00:00.000Z'),
       requiresEmailConfirmation: true,
     },
-    'https://churchos.app',
+    webUrl,
   );
   writeFileSync(join(directory, kind + '.html'), content.html + '\n');
 }
@@ -41,7 +43,6 @@ const invitation = invitationEmail(
 writeFileSync(join(directory, 'invitation.html'), invitation.html + '\n');
 console.log(`Email previews written to ${directory}`);
 
-const webUrl = 'https://church-os-web.vercel.app';
 for (const [name, content] of [
   [
     'password-reset',
@@ -55,5 +56,19 @@ for (const [name, content] of [
     ),
   ],
   ['signup-confirmation', signupConfirmationEmail(webUrl)],
+  [
+    'giving-receipt',
+    givingReceiptEmail(
+      {
+        churchName: 'Grace Community Church',
+        firstName: 'Ada',
+        categoryName: 'Tithe',
+        amount: 25000,
+        currency: 'NGN',
+        receiptNumber: '2026/TIT/0001',
+      },
+      webUrl,
+    ),
+  ],
 ] as const)
   writeFileSync(join(directory, `${name}.html`), content.html + '\n');
