@@ -55,7 +55,7 @@ The active file includes slots for pastoral/MFA encryption, the matched private 
 
 ## GitHub Actions database migrations
 
-The backend CI runs the same validation jobs on pushes and pull requests. After lint/build, unit tests and E2E tests succeed, pushes to `main` or `staging` also run `prisma generate` and `prisma migrate deploy`. Pull requests and other branches never deploy to a hosted database. Existing tests continue using disposable PostgreSQL services.
+The backend CI runs the same validation jobs on pushes and pull requests. After lint/build, unit tests and E2E tests succeed, pushes to `main` or `staging` also run `prisma generate`, `prisma migrate deploy` and the insert-only production reference seed. Pull requests and other branches never deploy to a hosted database. Existing tests continue using disposable PostgreSQL services.
 
 In the **BelivrHQ-Backend** repository, open **Settings → Environments** and configure these two environments. Limit each environment's deployment branches to its matching branch:
 
@@ -68,6 +68,19 @@ Keep these secrets at environment scope. Do not create a repository-wide `DATABA
 
 Use the Supabase **Connect** PostgreSQL URI with credentials allowed to apply this repository's migrations. Use a direct connection when the runner can reach it, or the session pooler on port **5432** for IPv4-compatible GitHub-hosted runners; do not use the transaction pooler on port 6543. This is not `SUPABASE_URL` (the HTTPS API origin), an anon key or a service-role API key. URL-encode special characters in the database password and retain the connection's TLS settings. See [Supabase's Prisma connection guidance](https://supabase.com/docs/guides/database/prisma).
 
-`migrate deploy` applies committed migrations; it does not generate Prisma Client artifacts, hence the separate generate step. It does not reset or seed databases. Existing databases must already have their migration baseline, and existing applied migration files remain unchanged. See [Prisma migrate deploy](https://docs.prisma.io/docs/cli/v7/migrate/deploy).
+`migrate deploy` applies committed migrations; it does not generate Prisma Client artifacts, hence the separate generate step. The migration command does not reset or seed databases. The following CI step runs the insert-only reference seed described below. Existing databases must already have their migration baseline, and existing applied migration files remain unchanged. See [Prisma migrate deploy](https://docs.prisma.io/docs/cli/v7/migrate/deploy).
 
 Migration runs are serialized per branch and running migrations are not cancelled by newer pushes. GitHub environment protection rules still apply. Vercel continues deploying the API independently through its Git integration; this workflow does not make Vercel wait for migrations. Keep migrations compatible with the running API. Once both environment secrets are configured, push the branch or rerun its workflow to apply pending migrations. Adding a GitHub secret alone does not start a workflow. No hosted database is migrated by local workflow validation.
+
+
+## Production reference seed: missing roles only
+
+After a successful migration deployment on `main` or `staging`, CI runs `npm run prisma:seed-production` against that branch's selected database. The same policy applies to `npm run prisma:seed-perms` and the shared seed used during development.
+
+- A missing **global default role** is created with its initial default grants. Missing permission records needed by that new role are inserted; existing permission records are reused without updates.
+- An existing global role is skipped completely, including its label, description and grant set. Empty grants remain empty. Nothing is added back or removed, including mappings on an existing `super_admin` role.
+- Church-owned roles and church-specific permission overrides are untouched. The runtime rule that `super_admin` always has full access remains unchanged.
+- If all default roles already exist, the seed makes no data changes. Editing an existing role's matrix does not change its live grants; intentional permission changes require the appropriate reviewed administration or migration operation.
+- New roles require entries in `DEFAULT_ROLES` and `DEFAULT_PERMISSION_MATRIX` in `prisma/seeds/shared/permissions.seed.ts`. Permission names must exist in the generated catalog. Only the new role receives those defaults.
+
+The role/permission/mapping inserts share one transaction. A transaction-scoped database advisory lock serializes concurrent seed runs because PostgreSQL's nullable role uniqueness key does not itself prevent duplicate global roles. A failure rolls back new reference records instead of leaving a partially initialized role. Production seeding creates no churches, accounts, demo members, transactions or other church data.

@@ -3,9 +3,9 @@
  * @description Permissions-only seed entry — roles, permissions, and default
  * role-permission mappings, with no members/transactions/forms demo data.
  *
- * Re-seeding just the permission templates (e.g. after a new role grant
- * changed in permissions.seed.ts) takes seconds instead of minutes, because
- * the batched module runs in ~8 queries against the database.
+ * Creates only missing global roles and their initial grants. Existing roles
+ * and permission assignments are preserved, even when defaults have changed.
+ * Adding a role requires an entry in DEFAULT_ROLES and its permission matrix.
  *
  * Usage:
  *   npm run prisma:seed-perms

@@ -139,3 +139,5 @@ jobs:
         run: npx prisma generate
       - name: Apply pending migrations
         run: npx prisma migrate deploy
+      - name: Seed missing default roles
+        run: npm run prisma:seed-production

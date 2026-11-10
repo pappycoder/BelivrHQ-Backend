@@ -9,7 +9,7 @@
  * seeded here: those are created by the church's admin through the app's
  * registration page after logging in.
  *
- * Idempotent — safe to rerun (reconciliation keeps template grants exact).
+ * Insert-only: existing roles, descriptions, permissions and assignments are skipped.
  *
  * @module seeds/production/index.seed
  */
@@ -32,7 +32,7 @@ export async function runProductionSeed(prisma: PrismaClient): Promise<Productio
   console.log('\n🎉 Production seed completed successfully!\n');
   console.log('Summary:');
   console.log(
-    `  • Global roles/permissions/mappings seeded (see permissions.seed.ts output above)`,
+    `  • Missing global roles initialized; existing roles and grants preserved`,
   );
   console.log(
     '  • Note: church, branches, and church-scoped data are NOT seeded — ' +

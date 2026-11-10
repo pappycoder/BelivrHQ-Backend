@@ -2,7 +2,7 @@
  * @file permissions.seed.ts
  * @description Default roles, permissions, and role-permission mappings seed data.
  *
- * Seeds 10 roles and the hierarchical surface-permission catalog:
+ * Creates missing built-in roles and their hierarchical default grants:
  *   - `resource:view`                 — top-level menu visibility
  *   - `resource:action`               — coarse CRUD (create/read/update/delete)
  *   - `resource:surface:action`       — per-surface CRUD (e.g. `events:calendar:read`,
@@ -470,149 +470,68 @@ export const DEFAULT_PERMISSION_MATRIX: Record<string, string[]> = Object.fromEn
 );
 
 /**
- * Seeds all roles, permissions, and default role-permission mappings.
- *
- * Idempotent — running it multiple times will not create duplicate records.
- * Batched with `createMany({ skipDuplicates: true })` (and filtered
- * findMany/createMany for the per-church NULL-templated roles), so the whole
- * module runs in ~8 queries instead of ~500 sequential round trips — the old
- * per-row upsert loop took minutes and would abort against remote/pooled
- * databases.
- *
- * @param prisma - PrismaClient instance
+ * Creates missing global roles with their initial default grants.
+ * Existing roles, descriptions and grants are never changed, including empty
+ * grant sets. Only permissions needed by newly created roles are inserted;
+ * existing permission records and church overrides are preserved.
+ * A transaction-scoped lock serializes concurrent seed runs because the role
+ * compound unique key does not enforce uniqueness for NULL church IDs.
  */
 export async function seedPermissions(prisma: PrismaClient): Promise<void> {
-  console.log('\n🔐 Seeding roles, permissions, and default mappings...');
-
-  // ─── 1. Create Roles ──────────────────────────────────────
-  console.log('  📦 Creating roles...');
-  const roleNames = DEFAULT_ROLES.map((role) => role.name);
-  // Roles are unique per (church_id, name); templates have church_id = null.
-  // The compound-unique filter cannot express NULL in this Prisma version,
-  // so match on church_id = null and name in one batched findMany.
-  const existingRoles = await prisma.role.findMany({
-    where: { church_id: null, name: { in: roleNames } },
-    select: { id: true, name: true, description: true },
-  });
-  const existingByRoleName = new Map(existingRoles.map((r) => [r.name, r]));
-
-  const missingRoles = DEFAULT_ROLES.filter((role) => !existingByRoleName.has(role.name));
-  if (missingRoles.length > 0) {
-    await prisma.role.createMany({ data: missingRoles });
-  }
-
-  // Only touch descriptions that actually changed (no wasted writes on re-runs).
-  for (const role of DEFAULT_ROLES) {
-    const existing = existingByRoleName.get(role.name);
-    if (existing && existing.description !== role.description) {
-      await prisma.role.update({
-        where: { id: existing.id },
-        data: { description: role.description },
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('belivrhq:default-role-seed:v1'))`;
+      const existing = await tx.role.findMany({
+        where: { church_id: null, name: { in: DEFAULT_ROLES.map((role) => role.name) } },
+        select: { name: true },
       });
-    }
-  }
+      const existingNames = new Set(existing.map((role) => role.name));
+      const missing = DEFAULT_ROLES.filter((role) => !existingNames.has(role.name));
+      console.log(
+        `Default roles: ${existing.length} existing roles skipped; ${missing.length} to create.`,
+      );
+      if (!missing.length) return;
 
-  const allRoles = await prisma.role.findMany({
-    where: { church_id: null, name: { in: roleNames } },
-    select: { id: true, name: true },
-  });
-  for (const role of allRoles) {
-    console.log(`    ✅ Role: ${role.name}`);
-  }
-
-  // ─── 2. Create Permissions ────────────────────────────────
-  console.log('  📦 Creating permissions...');
-  const allPermissions = generateAllPermissions();
-  // One batched insert; `name` is unique so skipDuplicates ignores existing rows.
-  await prisma.permission.createMany({ data: allPermissions, skipDuplicates: true });
-  const createdPermissions = await prisma.permission.findMany({
-    where: { name: { in: allPermissions.map((p) => p.name) } },
-    select: { id: true, name: true },
-  });
-  const permissionIdByName = new Map(createdPermissions.map((p) => [p.name, p.id]));
-  const surfaceCount = Object.values(SURFACES).reduce((sum, s) => sum + s.length, 0);
-  console.log(
-    `    ✅ Permissions: ${createdPermissions.length} (${RESOURCES.length} resources × ${CRUD_ACTIONS.length} coarse actions + ${surfaceCount} surfaces)`,
-  );
-
-  // ─── 3. Assign Default Permissions to Roles ──────────────
-  console.log('  📦 Assigning default permissions to roles...');
-  const roleIdByName = new Map(allRoles.map((r) => [r.name, r.id]));
-
-  const desiredMappings: { role_id: string; permission_id: string }[] = [];
-
-  // super_admin gets ALL permissions (locked — always everything)
-  const superAdminRole = roleIdByName.get('super_admin');
-  if (superAdminRole) {
-    for (const perm of createdPermissions) {
-      desiredMappings.push({ role_id: superAdminRole, permission_id: perm.id });
-    }
-    console.log(
-      `    ✅ Assigned ${createdPermissions.length} permissions to super_admin (ALL — locked)`,
-    );
-  }
-
-  // Other roles get permissions from the matrix
-  for (const [roleName, permissions] of Object.entries(DEFAULT_PERMISSION_MATRIX)) {
-    if (roleName === 'super_admin') continue; // Already handled above
-
-    const roleId = roleIdByName.get(roleName);
-    if (!roleId) {
-      console.warn(`    ⚠️  Role "${roleName}" not found in created roles, skipping`);
-      continue;
-    }
-
-    let assignedCount = 0;
-    for (const permName of permissions) {
-      const permissionId = permissionIdByName.get(permName);
-      if (!permissionId) {
-        console.warn(`    ⚠️  Permission "${permName}" not found, skipping`);
-        continue;
+      const catalog = generateAllPermissions();
+      const catalogByName = new Map(catalog.map((permission) => [permission.name, permission]));
+      const grantsByRole = new Map<string, string[]>();
+      const needed = new Set<string>();
+      for (const role of missing) {
+        const grants =
+          role.name === 'super_admin'
+            ? catalog.map((permission) => permission.name)
+            : DEFAULT_PERMISSION_MATRIX[role.name];
+        if (!grants)
+          throw new Error(`Missing default permission matrix for new role: ${role.name}`);
+        grantsByRole.set(role.name, [...new Set(grants)]);
+        for (const name of grants) {
+          if (!catalogByName.has(name)) throw new Error(`Unknown default permission: ${name}`);
+          needed.add(name);
+        }
       }
-      desiredMappings.push({ role_id: roleId, permission_id: permissionId });
-      assignedCount++;
-    }
-    console.log(`    ✅ Assigned ${assignedCount} permissions to ${roleName}`);
-  }
-
-  // One batched insert; (role_id, permission_id) is unique, so duplicates are skipped.
-  await prisma.rolePermission.createMany({ data: desiredMappings, skipDuplicates: true });
-
-  // ─── 4. Reconcile (remove stale mappings) ────────────────
-  // The seed is template-driven: every template role's grants must EXACTLY
-  // match its DEFAULT_PERMISSION_MATRIX entry. Because the insert above is
-  // additive-only, permissions removed from a template would linger forever —
-  // so delete mappings for these null-church template roles that are not in
-  // the desired set. super_admin stays locked to ALL (never reconciled);
-  // per-church custom roles are untouched (they live on RolePermission with
-  // a non-null church_id and are not addressed by roleIdByName).
-  for (const [roleName, permissions] of Object.entries(DEFAULT_PERMISSION_MATRIX)) {
-    if (roleName === 'super_admin') continue; // Locked — always everything
-
-    const roleId = roleIdByName.get(roleName);
-    if (!roleId) {
-      console.warn(`    ⚠️  Role "${roleName}" not found, skipping reconciliation`);
-      continue;
-    }
-
-    const desiredIds = permissions
-      .map((permName) => permissionIdByName.get(permName))
-      .filter((id): id is string => Boolean(id));
-
-    const deleted = await prisma.rolePermission.deleteMany({
-      where: {
-        role_id: roleId,
-        permission_id: { notIn: desiredIds },
-      },
-    });
-    if (deleted.count > 0) {
-      console.log(`    🧹 Removed ${deleted.count} stale permissions from ${roleName}`);
-    }
-  }
-
-  // ─── Summary ─────────────────────────────────────────────
-  const totalRolePermissions = await prisma.rolePermission.count();
-  console.log(
-    `\n  🎉 Permissions seed complete: ${allRoles.length} roles, ${createdPermissions.length} permissions, ${totalRolePermissions} role-permission mappings`,
+      if (needed.size) {
+        await tx.permission.createMany({
+          data: [...needed].map((name) => catalogByName.get(name)!),
+          skipDuplicates: true,
+        });
+      }
+      const permissions = await tx.permission.findMany({
+        where: { name: { in: [...needed] } },
+        select: { id: true, name: true },
+      });
+      const ids = new Map(permissions.map((permission) => [permission.name, permission.id]));
+      const mappings: { role_id: string; permission_id: string }[] = [];
+      for (const definition of missing) {
+        const role = await tx.role.create({ data: { ...definition, church_id: null } });
+        for (const name of grantsByRole.get(role.name)!) {
+          const permissionId = ids.get(name);
+          if (!permissionId) throw new Error(`Missing permission record: ${name}`);
+          mappings.push({ role_id: role.id, permission_id: permissionId });
+        }
+        console.log(`Created default role: ${role.name}`);
+      }
+      if (mappings.length) await tx.rolePermission.createMany({ data: mappings });
+    },
+    { maxWait: 15_000, timeout: 60_000 },
   );
 }
