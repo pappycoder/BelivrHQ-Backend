@@ -4,7 +4,7 @@ on:
   push:
     branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 # Application deployment is handled by the Vercel Git integration.
 # This workflow validates changes only.
