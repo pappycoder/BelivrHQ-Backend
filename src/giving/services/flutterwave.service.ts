@@ -1,3 +1,4 @@
+import { BRAND_NAME } from '../../brand/brand';
 import { record, parsePaymentEvent, PaymentAdjustment } from './payment-lifecycle';
 /**
  * @file flutterwave.service.ts
@@ -149,6 +150,11 @@ export class FlutterwaveService implements PaymentGatewayProvider {
         metadata?.redirect_url ||
         `${this.config.get<string>('WEB_URL', 'http://localhost:3000').replace(/\/$/, '')}/payment/complete`,
       customer: { email },
+      // Subscription checkout belongs to BelivrHQ. Church giving/ticket
+      // gateways retain their own merchant account branding.
+      ...(metadata?.purpose === 'belivrhq_subscription'
+        ? { customizations: { title: BRAND_NAME, description: 'Church workspace subscription' } }
+        : {}),
       meta: metadata,
     };
 
