@@ -51,3 +51,23 @@ This cleanup changes local configuration and example/source files. It does not d
 The active file includes slots for pastoral/MFA encryption, the matched private proxy secret, historical Paystack keys, optional AI configuration and monitoring. Existing non-empty bot-protection, provider encryption, Resend and Flutterwave credentials were retained. Missing keys were left blank; no encryption keys were generated, copied from a different environment or rotated. Use the correct existing keys for encrypted data. A blank pastoral key is accepted for local development but remains a startup error with `NODE_ENV=production`. Other blank optional slots mean unconfigured, and their features remain unavailable until configured.
 
 `PUBLIC_API_URL`, the verified sender, gateway keys/webhook secrets and AI model/rates are deployment- or account-specific settings. They have no universal production values. Default budgets, pool settings, feature flags, ports and bucket names are shown in the example for reference and remain implemented in code. Automatic defaults such as serverless idle time and worker enablement are commented to avoid overriding host detection.
+
+
+## GitHub Actions database migrations
+
+The backend CI runs the same validation jobs on pushes and pull requests. After lint/build, unit tests and E2E tests succeed, pushes to `main` or `staging` also run `prisma generate` and `prisma migrate deploy`. Pull requests and other branches never deploy to a hosted database. Existing tests continue using disposable PostgreSQL services.
+
+In the **BelivrHQ-Backend** repository, open **Settings → Environments** and configure these two environments. Limit each environment's deployment branches to its matching branch:
+
+| Branch | GitHub environment | Environment secret | Value |
+| --- | --- | --- | --- |
+| `main` | `production` | `DATABASE_URL` | Production Supabase PostgreSQL migration connection string |
+| `staging` | `staging` | `DATABASE_URL` | Separate staging Supabase PostgreSQL migration connection string |
+
+Keep these secrets at environment scope. Do not create a repository-wide `DATABASE_URL` fallback, and do not reuse the production database for staging. The migration job maps `main` to `production` and `staging` to `staging`; a missing or non-PostgreSQL URL fails with a configuration error before dependencies or migrations run. Never paste connection strings into workflow YAML or commit an env file.
+
+Use the Supabase **Connect** PostgreSQL URI with credentials allowed to apply this repository's migrations. Use a direct connection when the runner can reach it, or the session pooler on port **5432** for IPv4-compatible GitHub-hosted runners; do not use the transaction pooler on port 6543. This is not `SUPABASE_URL` (the HTTPS API origin), an anon key or a service-role API key. URL-encode special characters in the database password and retain the connection's TLS settings. See [Supabase's Prisma connection guidance](https://supabase.com/docs/guides/database/prisma).
+
+`migrate deploy` applies committed migrations; it does not generate Prisma Client artifacts, hence the separate generate step. It does not reset or seed databases. Existing databases must already have their migration baseline, and existing applied migration files remain unchanged. See [Prisma migrate deploy](https://docs.prisma.io/docs/cli/v7/migrate/deploy).
+
+Migration runs are serialized per branch and running migrations are not cancelled by newer pushes. GitHub environment protection rules still apply. Vercel continues deploying the API independently through its Git integration; this workflow does not make Vercel wait for migrations. Keep migrations compatible with the running API. Once both environment secrets are configured, push the branch or rerun its workflow to apply pending migrations. Adding a GitHub secret alone does not start a workflow. No hosted database is migrated by local workflow validation.

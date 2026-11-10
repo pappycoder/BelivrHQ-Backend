@@ -7,7 +7,8 @@ on:
     branches: [main, staging]
 
 # Application deployment is handled by the Vercel Git integration.
-# This workflow validates changes only.
+# This workflow validates changes and applies checked-in Prisma migrations
+# to the matching branch database after all checks pass.
 jobs:
   lint:
     name: Lint & Format
@@ -95,3 +96,46 @@ jobs:
       - run: npm run test:e2e:prepare
       - run: npx prisma migrate deploy
       - run: npm run test:e2e
+
+  migrate:
+    name: Deploy database migrations
+    runs-on: ubuntu-latest
+    needs: [lint, test, e2e]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    concurrency:
+      group: prisma-migrate-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      # Add DATABASE_URL separately to production and staging GitHub environments.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Validate migration connection
+        run: |
+          node <<'NODE'
+          const value = process.env.DATABASE_URL;
+          if (!value) {
+            console.error('::error::Set DATABASE_URL in the matching production or staging GitHub environment.');
+            process.exit(1);
+          }
+          let connection;
+          try { connection = new URL(value); } catch { /* Report no credential details. */ }
+          if (!connection || !['postgres:', 'postgresql:'].includes(connection.protocol)) {
+            console.error('::error::DATABASE_URL must be a PostgreSQL connection string, not the Supabase HTTPS API URL.');
+            process.exit(1);
+          }
+          NODE
+      - run: npm ci
+      - name: Generate Prisma Client
+        run: npx prisma generate
+      - name: Apply pending migrations
+        run: npx prisma migrate deploy
