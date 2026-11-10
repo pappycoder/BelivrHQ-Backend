@@ -151,35 +151,54 @@ describe('Joined profile hydration', () => {
       permissions,
       { verifyToken: async () => ({ payload: { sub: users[1] } }) } as never,
     );
-    const run = async () => {
+    const run = async (method = 'GET', path = '/api/v1/members') => {
       const next = jest.fn();
-      await middleware.use(
-        {
-          headers: { authorization: 'Bearer fixture' },
-          method: 'GET',
-          path: '/api/v1/members',
-          originalUrl: '/api/v1/members',
-        } as AuthenticatedRequest,
-        {} as never,
-        next,
-      );
-      return next;
+      const req = {
+        headers: { authorization: 'Bearer fixture' },
+        method,
+        path,
+        originalUrl: path,
+      } as AuthenticatedRequest;
+      await middleware.use(req, {} as never, next);
+      return { next, profile: req.profile };
     };
-    expect(await run()).toHaveBeenCalledWith();
+    const active = await run();
+    expect(active.next).toHaveBeenCalledWith();
+    expect(active.profile?.subscriptionReadOnly).toBe(false);
     await prisma.profile.update({ where: { user_id: users[1] }, data: { status: 'inactive' } });
-    expect(await run()).toHaveBeenCalledWith(expect.any(ForbiddenException));
+    expect((await run()).next).toHaveBeenCalledWith(expect.any(ForbiddenException));
     await prisma.profile.update({ where: { user_id: users[1] }, data: { status: 'active' } });
     await prisma.platformSubscription.update({
       where: { church_id: churches[1] },
       data: { paid_until: new Date('2020-01-01') },
     });
     const expired = await run();
-    expect((expired.mock.calls[0][0] as HttpException).getStatus()).toBe(402);
+    expect(expired.next).toHaveBeenCalledWith();
+    expect(expired.profile?.subscriptionReadOnly).toBe(true);
+    expect(expired.profile?.permissions).not.toContain('members:new:create');
+    const blocked = await run('POST');
+    expect(blocked.next).toHaveBeenCalledWith(expect.any(HttpException));
+    const error = blocked.next.mock.calls[0][0] as HttpException;
+    expect(error.getStatus()).toBe(403);
+    expect(error.getResponse()).toMatchObject({ code: 'SUBSCRIPTION_READ_ONLY' });
+    expect((await run('POST', '/api/v1/reports/export')).next).toHaveBeenCalledWith();
+    expect((await run('POST', '/api/v1/billing/checkout')).next).toHaveBeenCalledWith();
+    // A church that has never paid still does not gain paid read access.
+    await prisma.platformSubscription.update({
+      where: { church_id: churches[1] },
+      data: { paid_until: null },
+    });
+    const unpaid = await run();
+    expect(unpaid.next).toHaveBeenCalledWith(expect.any(HttpException));
+    expect((unpaid.next.mock.calls[0][0] as HttpException).getStatus()).toBe(402);
     await prisma.platformSubscription.update({
       where: { church_id: churches[1] },
       data: { paid_until: new Date('2099-01-01') },
     });
+    const renewed = await run('POST');
+    expect(renewed.next).toHaveBeenCalledWith();
+    expect(renewed.profile?.subscriptionReadOnly).toBe(false);
     await prisma.church.update({ where: { id: churches[1] }, data: { archived_at: new Date() } });
-    expect(await run()).toHaveBeenCalledWith(expect.any(ForbiddenException));
+    expect((await run()).next).toHaveBeenCalledWith(expect.any(ForbiddenException));
   });
 });
