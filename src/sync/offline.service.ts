@@ -1,3 +1,4 @@
+import { readOnlyPermission } from '../billing/subscription-access';
 import { subscriptionError } from '../billing/plan-errors';
 import {
   BadRequestException,
@@ -115,9 +116,16 @@ export class OfflineService {
       churchId: viewer.church_id,
       branchId,
       branchName: branch.name,
-      permissions: viewer.permissions,
+      permissions: viewer.subscriptionReadOnly
+        ? (viewer.permissions ?? []).filter(readOnlyPermission)
+        : viewer.permissions,
       issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      expiresAt: new Date(
+        Math.min(
+          Date.now() + 7 * 86400000,
+          viewer.subscriptionPaidUntil ? Date.parse(viewer.subscriptionPaidUntil) : Infinity,
+        ),
+      ).toISOString(),
       records: { member: members, visitor: visitors, form: forms },
     };
   }

@@ -1,3 +1,4 @@
+import { readOnlyPermission } from '../billing/subscription-access';
 import { assertAssignableRoles } from '../billing/role-policy';
 import { AccountEmailService } from '../company-email/account-email.service';
 import { StaffInvitationService } from '../company-email/staff-invitation.service';
@@ -155,11 +156,12 @@ export class ProfileService {
     return {
       ...this.mapToResponseDto(profile, {
         permissions: filterPlanPermissions(
-          permissions,
-          entitlement.active ? entitlement.features : [],
+          entitlement.readOnly ? permissions.filter(readOnlyPermission) : permissions,
+          entitlement.active || entitlement.readOnly ? entitlement.features : [],
         ),
       }),
-      planFeatures: entitlement.active ? entitlement.features : [],
+      planFeatures: entitlement.active || entitlement.readOnly ? entitlement.features : [],
+      subscriptionReadOnly: entitlement.readOnly,
     };
   }
 

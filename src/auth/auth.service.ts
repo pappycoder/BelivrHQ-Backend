@@ -1,3 +1,4 @@
+import { createRegistrationCheckout } from './registration-checkout';
 import { registrationLegalAcceptance } from './registration-legal-acceptance';
 import { AccountEmailService } from '../company-email/account-email.service';
 import { signInCodeEmail } from '../company-email/company-email.templates';
@@ -126,6 +127,9 @@ export class AuthService {
       throw new InternalServerErrorException('Failed to create user account');
     }
 
+    if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0)
+      throw new ConflictException('Account already exists. Please sign in.');
+
     const userId = authData.user.id;
 
     // Create Church + Profile in a transaction
@@ -196,27 +200,14 @@ export class AuthService {
       await this.companyEmails.dispatch(result.emailEvent);
       this.logger.log('Account registered');
 
-      // Supabase already authenticates confirmed signups. Release that session
-      // only after the church/profile commit and normal session approval.
-      let registrationSession: Partial<LoginResponseDto> = {};
-      if (authData.session) {
-        try {
-          await this.authenticator.approve(
-            userId,
-            authData.session.access_token,
-            'password-session',
-          );
-          registrationSession = {
-            accessToken: authData.session.access_token,
-            refreshToken: authData.session.refresh_token,
-            expiresAt: authData.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
-          };
-        } catch {
-          this.logger.warn('Registration completed; session approval requires a sign-in retry');
-        }
-      }
+      // Signup grants billing access only; sign-in remains a separate step.
+      const registrationCheckoutToken = createRegistrationCheckout(this.config, {
+        userId,
+        churchId: result.church.id,
+        profileId: result.profile.id,
+      });
       return {
-        ...registrationSession,
+        registrationCheckoutToken,
         requiresEmailConfirmation: !authData.session,
         userId,
         email: dto.email,

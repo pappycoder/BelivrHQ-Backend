@@ -1,5 +1,5 @@
 import { LEGACY_BRAND } from '../brand/brand';
-import { assertPlanFeature } from '../billing/entitlements';
+import { assertPlanFeature, assertPlanReadableFeature } from '../billing/entitlements';
 import { featureForMediaFolder } from '../billing/feature-policy';
 /**
  * @file Media upload service with Supabase Storage integration.
@@ -824,7 +824,7 @@ export class MediaService {
     )
       throw new NotFoundException('Media not found');
     const feature = featureForMediaFolder(asset.folder);
-    if (feature) await assertPlanFeature(this.prisma, churchId, feature);
+    if (feature) await assertPlanReadableFeature(this.prisma, churchId, feature);
     const permissions = viewer.permissions ?? [];
     const allowed =
       asset.uploaded_by_user_id === userId ||

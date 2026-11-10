@@ -6,6 +6,8 @@ import { join, relative } from 'node:path';
 // cannot be described as one static ALL-permissions requirement. New exceptions
 // must be reviewed here rather than silently bypassing the global guard.
 const exceptions: Record<string, string[]> = {
+  // Every method verifies the signed, expiring, billing-only signup capability and tenant/profile ownership.
+  'billing/registration-billing.controller.ts': ['status', 'quote', 'checkout', 'verify', 'close'],
   // Public links are token scoped. Private methods use kind-dependent register
   // grants plus tenant/branch scope in IntakeService (covered by intake tests).
   'intake/intake.controller.ts': ['meta', 'submit', 'link', 'list', 'detail', 'accept', 'reject'],
@@ -94,6 +96,11 @@ const exceptions: Record<string, string[]> = {
   'integrations/payment-callbacks.controller.ts': ['receive'],
 };
 const publicRoutes = new Set([
+  'billing/registration-billing.controller.ts:status',
+  'billing/registration-billing.controller.ts:quote',
+  'billing/registration-billing.controller.ts:checkout',
+  'billing/registration-billing.controller.ts:verify',
+  'billing/registration-billing.controller.ts:close',
   'intake/intake.controller.ts:meta',
   'intake/intake.controller.ts:submit',
   'bot-protection/bot-protection.controller.ts:challenge',

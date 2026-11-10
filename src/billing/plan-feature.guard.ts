@@ -1,3 +1,4 @@
+import { isSubscriptionRead, subscriptionWriteExempt } from './subscription-access';
 import { measureStage } from '../prisma/query-metrics';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../auth/decorators/permissions.decorator';
@@ -21,7 +22,17 @@ export class PlanFeatureGuard implements CanActivate {
     const entitlement = await measureStage('entitlements', () =>
       requestEntitlements(this.prisma, req.profile!.church_id, req.subscriptionSnapshot),
     );
-    const features = entitlement.active ? entitlement.features : [];
+    if (
+      entitlement.readOnly &&
+      !isSubscriptionRead(req.method, path) &&
+      !subscriptionWriteExempt(path)
+    )
+      throw new ForbiddenException({
+        code: 'SUBSCRIPTION_READ_ONLY',
+        message:
+          'Renew your subscription to make changes. Viewing, exports and billing remain available.',
+      });
+    const features = entitlement.active || entitlement.readOnly ? entitlement.features : [];
     // Composite endpoints (including offline/sync) must not use premium grants
     // from a role to return data outside the church's current subscription.
     req.profile.permissions = filterPlanPermissions(req.profile.permissions ?? [], features);

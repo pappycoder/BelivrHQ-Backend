@@ -1,3 +1,9 @@
+import { entitlementsFromSubscription } from '../../billing/entitlements';
+import {
+  isSubscriptionRead,
+  subscriptionWriteExempt,
+  readOnlyPermission,
+} from '../../billing/subscription-access';
 import { hydratedProfile } from '../../auth/services/hydrated-profile';
 /**
  * @file request-context.middleware.ts
@@ -111,6 +117,13 @@ export class RequestContextMiddleware implements NestMiddleware {
           churchId: profile.church_id,
           subscription: subscription ?? null,
         };
+        const entitlement = entitlementsFromSubscription(subscription ?? null);
+        const route = (req.originalUrl ?? req.url ?? req.path ?? '')
+          .split('?')[0]
+          .replace(/^\/api\/v1(?=\/|$)/, '');
+        const readAllowed =
+          entitlement.readOnly &&
+          (isSubscriptionRead(req.method, route) || subscriptionWriteExempt(route));
         const billingExempt =
           /^\/api\/v1\/(?:auth(?:\/|$)|billing(?:\/|$)|profiles\/me$|assistant\/(?:context|message)$)/.test(
             (req.originalUrl ?? req.url ?? req.path ?? '').split('?')[0],
@@ -119,13 +132,32 @@ export class RequestContextMiddleware implements NestMiddleware {
           profile.status === 'active' &&
           !profile.archived_at &&
           !profile.church?.archived_at &&
-          (!subscription?.paid_until || subscription.paid_until <= new Date()) &&
+          !entitlement.active &&
+          !readAllowed &&
+          !entitlement.readOnly &&
           !billingExempt
         ) {
           next(
             new HttpException(
               'A BelivrHQ subscription is required. Your administrator can complete checkout.',
               402,
+            ),
+          );
+          return;
+        }
+        if (
+          entitlement.readOnly &&
+          !isSubscriptionRead(req.method, route) &&
+          !subscriptionWriteExempt(route)
+        ) {
+          next(
+            new HttpException(
+              {
+                code: 'SUBSCRIPTION_READ_ONLY',
+                message:
+                  'Your subscription has ended. You can view and export records, or renew through billing.',
+              },
+              403,
             ),
           );
           return;
@@ -150,7 +182,11 @@ export class RequestContextMiddleware implements NestMiddleware {
           status: profile.status,
           profile_archived_at: profile.archived_at?.toISOString(),
           is_admin_hq: profile.is_admin_hq,
-          permissions,
+          permissions: entitlement.readOnly ? permissions.filter(readOnlyPermission) : permissions,
+          subscriptionReadOnly: entitlement.readOnly,
+          subscriptionPaidUntil: entitlement.active
+            ? entitlement.subscription?.paid_until?.toISOString()
+            : undefined,
           church_archived_at: profile.church?.archived_at?.toISOString(),
         };
       }

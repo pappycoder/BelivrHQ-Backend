@@ -77,7 +77,7 @@ describe('Hydrated scope and report security', () => {
     ['/api/v1/members', null, 402],
     ['/api/v1/giving/transactions', null, 402],
     ['/api/v1/sync/bootstrap', null, 402],
-    ['/api/v1/members', new Date(Date.now() - 60000), 402],
+    ['/api/v1/members', new Date(Date.now() - 60000), 403],
     ['/api/v1/billing/checkout', null, 0],
     ['/api/v1/billing/verify', null, 0],
     ['/api/v1/auth/logout', null, 0],

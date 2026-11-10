@@ -107,7 +107,11 @@ describe('AuthService', () => {
     };
     resend = { sendEmail: jest.fn().mockResolvedValue(undefined) };
     config = {
-      get: jest.fn().mockReturnValue('https://church-os-web.vercel.app'),
+      get: jest
+        .fn()
+        .mockImplementation((key: string) =>
+          key === 'ALTCHA_HMAC_KEY' ? 'a'.repeat(64) : 'https://church-os-web.vercel.app',
+        ),
       getOrThrow: jest.fn().mockReturnValue('https://church-os-web.vercel.app'),
     };
     accountEmails = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
@@ -190,6 +194,15 @@ describe('AuthService', () => {
       churchName: 'Grace Community Church',
       denomination: 'Pentecostal',
     };
+
+    it('does not create a new billable church for an obfuscated existing-user response', async () => {
+      signUpMock.mockResolvedValue({
+        data: { user: { id: mockUserId, email: validDto.email, identities: [] }, session: null },
+        error: null,
+      });
+      await expect(service.register(validDto)).rejects.toThrow('Account already exists');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
 
     it.each([
       [false, false, false],
@@ -284,13 +297,7 @@ describe('AuthService', () => {
 
         expect(result).toEqual({
           requiresEmailConfirmation: !hasSession,
-          ...(hasSession && !approvalFailure
-            ? {
-                accessToken: 'signup-access',
-                refreshToken: 'signup-refresh',
-                expiresAt: 1900000000,
-              }
-            : {}),
+          registrationCheckoutToken: expect.any(String),
           userId: mockUserId,
           email: validDto.email,
           profileId: mockProfileId,
@@ -299,9 +306,9 @@ describe('AuthService', () => {
           role: 'church_admin',
         });
         expect(signInMock).not.toHaveBeenCalled();
-        if (hasSession)
-          expect(approve).toHaveBeenCalledWith(mockUserId, 'signup-access', 'password-session');
-        else expect(approve).not.toHaveBeenCalled();
+        expect(approve).not.toHaveBeenCalled();
+        expect(result).not.toHaveProperty('accessToken');
+        expect(result).not.toHaveProperty('refreshToken');
 
         expect(profileCreate).toHaveBeenCalledWith({
           data: expect.objectContaining({

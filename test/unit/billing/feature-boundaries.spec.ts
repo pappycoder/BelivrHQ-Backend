@@ -325,21 +325,18 @@ describe('Composite routes, missing entitlements and narrow payment exceptions',
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
   });
-  it('does not grant giving to an expired Essentials subscription', async () => {
+  it.each([
+    ['essentials', '/giving/transactions'],
+    ['network', '/forms'],
+  ])('retains %s read access after natural expiry', async (plan, path) => {
     await expect(
-      make('essentials', new Date(0)).canActivate(
-        requestContext({
-          method: 'GET',
-          path: '/giving/categories',
-          profile: { church_id: 'church' },
-        }),
+      make(plan as never, new Date(0)).canActivate(
+        requestContext({ method: 'GET', path, profile: { church_id: 'church' } }),
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-  it('does not grant expired Network subscriptions premium access', async () => {
+    ).resolves.toBe(true);
     await expect(
-      make('network', new Date(0)).canActivate(
-        requestContext({ method: 'GET', path: '/forms', profile: { church_id: 'church' } }),
+      make(plan as never, new Date(0)).canActivate(
+        requestContext({ method: 'POST', path, profile: { church_id: 'church' } }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });

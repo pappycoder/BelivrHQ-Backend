@@ -121,4 +121,28 @@ describe('Offline API contract', () => {
     expect(() => controller.push(request, input as OfflinePushDto)).toThrow('different account');
     expect(service.push).not.toHaveBeenCalled();
   });
+  it('bounds offline writes by paid expiry and keeps expired snapshots read-only', async () => {
+    const branchId = randomUUID();
+    const prisma = {
+      branch: { findFirst: jest.fn().mockResolvedValue({ id: branchId, name: 'Branch' }) },
+      member: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new OfflineService(prisma as never, {} as never);
+    const until = new Date(Date.now() + 60000).toISOString();
+    const viewer = {
+      id: randomUUID(),
+      church_id: randomUUID(),
+      role: 'church_admin',
+      is_admin_hq: true,
+      permissions: ['offline:read', 'members:all:read', 'members:new:create'],
+      subscriptionPaidUntil: until,
+    };
+    const active = await service.snapshot(viewer, branchId);
+    expect(active.expiresAt).toBe(until);
+    const expired = await service.snapshot(
+      { ...viewer, subscriptionPaidUntil: undefined, subscriptionReadOnly: true },
+      branchId,
+    );
+    expect(expired.permissions).toEqual(['offline:read', 'members:all:read']);
+  });
 });

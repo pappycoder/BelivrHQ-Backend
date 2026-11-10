@@ -108,7 +108,9 @@ export class IntegrationAccountsService {
   async list(churchId: string) {
     const entitlement = await churchEntitlements(this.prisma, churchId);
     const eligibleChannels = CHANNELS.filter(
-      (kind) => entitlement.active && entitlement.features.includes(this.channelFeature(kind)),
+      (kind) =>
+        (entitlement.active || entitlement.readOnly) &&
+        entitlement.features.includes(this.channelFeature(kind)),
     );
     const providers = PROVIDERS.filter((provider) =>
       provider.channels.some((kind) => eligibleChannels.includes(kind)),

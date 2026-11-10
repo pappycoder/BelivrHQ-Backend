@@ -90,6 +90,11 @@ export class ProfileResponseDto {
     type: [String],
   })
   planFeatures?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Expired paid subscription permits viewing/exports and billing only',
+  })
+  subscriptionReadOnly?: boolean;
   @ApiProperty({ description: 'Profile ID', example: '22222222-2222-2222-2222-222222222222' })
   profileId!: string;
 

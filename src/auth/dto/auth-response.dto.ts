@@ -9,16 +9,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterResponseDto {
-  @ApiPropertyOptional({
-    description: 'Registration session, omitted when email confirmation is required',
-  })
-  accessToken?: string;
-
-  @ApiPropertyOptional()
-  refreshToken?: string;
-
-  @ApiPropertyOptional()
-  expiresAt?: number;
+  @ApiProperty({ description: 'Registration billing credential; never a dashboard session' })
+  registrationCheckoutToken!: string;
 
   @ApiPropertyOptional()
   requiresEmailConfirmation?: boolean;

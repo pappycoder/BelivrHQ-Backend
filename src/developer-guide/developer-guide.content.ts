@@ -39,27 +39,23 @@ const ALL_FLOWS: Flow[] = [
     "firstName": "John",
     "lastName": "Doe",
     "churchName": "Victory Chapel",
-    "role": "senior_pastor"
+    "termsAccepted": true,
+    "acceptedTermsVersion": "2026-10-24"
   }'`,
         response: `{
   "success": true,
   "data": {
-    "user": { "id": "uuid", "email": "pastor@mychurch.org" },
-    "profile": {
-      "id": "uuid",
-      "firstName": "John",
-      "lastName": "Doe",
-      "role": "senior_pastor"
-    },
-    "church": { "id": "uuid", "name": "Victory Chapel" },
-    "session": {
-      "access_token": "eyJhbGciOi...",
-      "refresh_token": "eyJhbGciOi...",
-      "expires_in": 3600
-    }
+    "userId": "user-uuid",
+    "profileId": "profile-uuid",
+    "churchId": "church-uuid",
+    "email": "pastor@mychurch.org",
+    "churchName": "Victory Chapel",
+    "role": ["church_admin"],
+    "requiresEmailConfirmation": true,
+    "registrationCheckoutToken": "<billing-only-credential>"
   }
 }`,
-        note: 'Registration auto-creates a church, an admin profile, and returns a session token. The access_token expires in 1 hour.',
+        note: 'Registration never returns a workspace access/refresh session. The 24-hour credential authorizes only /billing/registration subscription, quote, checkout, close and verify actions through x-belivrhq-registration-checkout. The web proxy keeps it in an HttpOnly cookie. Complete verified payment, then sign in normally; email confirmation still applies.',
       },
       {
         method: 'POST',

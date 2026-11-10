@@ -1,4 +1,4 @@
-import { projectSubscription, resolvePaymentAccess } from './payment-access';
+import { accessGrants, projectSubscription, resolvePaymentAccess } from './payment-access';
 import { ForbiddenException, ConflictException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { PlatformSubscription } from '@prisma/client';
@@ -6,11 +6,32 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PLAN_CAPACITIES, planFeatures, PlanFeature } from './plans';
 
 export function entitlementsFromSubscription(subscription: PlatformSubscription | null) {
-  const access = resolvePaymentAccess(subscription?.access_grants);
+  const original = subscription;
+  const now = new Date();
+  const access = resolvePaymentAccess(subscription?.access_grants, now);
+  const grants = accessGrants(subscription?.access_grants);
+  // Only legitimately paid, naturally expired periods retain read access.
+  // Current review/refund holds must never be bypassed by this fallback.
+  const restricted = grants.some(
+    (g) => g.state !== 'clear' && Date.parse(g.start) <= +now && Date.parse(g.end) > +now,
+  );
+  const past = grants
+    .filter((g) => g.state === 'clear' && Date.parse(g.end) <= +now)
+    .sort((a, b) => Date.parse(b.end) - Date.parse(a.end));
+  const previous = past
+    .map(
+      (g) =>
+        resolvePaymentAccess(original?.access_grants, new Date(Date.parse(g.end) - 1)).selected,
+    )
+    .find((g) => !!g && Date.parse(g.end) <= +now);
+  const readOnly =
+    !access.active &&
+    !restricted &&
+    (access.tracked ? !!previous : !!(original?.paid_until && original.paid_until <= now));
   subscription = projectSubscription(subscription);
   if (subscription && access.selected)
     subscription = { ...subscription, plan: access.selected.plan, cycle: access.selected.cycle };
-  const plan = subscription?.plan ?? 'essentials';
+  const plan = (readOnly ? (previous?.plan ?? original?.plan) : subscription?.plan) ?? 'essentials';
   const agreement = subscription?.enterprise_limits as Record<string, unknown> | null;
   const enterpriseLimit = (key: string) =>
     Number.isSafeInteger(agreement?.[key]) && Number(agreement?.[key]) >= 0
@@ -26,6 +47,7 @@ export function entitlementsFromSubscription(subscription: PlatformSubscription 
       : PLAN_CAPACITIES[plan];
   return {
     subscription,
+    readOnly,
     plan,
     limits,
     features: planFeatures(plan),
@@ -105,4 +127,19 @@ export async function reserveStaffSeat(prisma: PrismaService, churchId: string, 
 }
 export async function releaseStaffSeat(prisma: PrismaService, id: string) {
   await prisma.staffInvitationReservation.deleteMany({ where: { id } });
+}
+
+/** Read/download paths may retain expired paid access; writes use assertPlanFeature. */
+export async function assertPlanReadableFeature(
+  prisma: PrismaService,
+  churchId: string,
+  feature: PlanFeature,
+) {
+  const entitlement = await churchEntitlements(prisma, churchId);
+  if (!(entitlement.active || entitlement.readOnly) || !entitlement.features.includes(feature))
+    throw new ForbiddenException({
+      code: 'PLAN_FEATURE_REQUIRED',
+      message: 'This feature is not available on your church subscription.',
+      details: { feature },
+    });
 }

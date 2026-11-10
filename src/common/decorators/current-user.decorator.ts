@@ -37,6 +37,8 @@ export interface AuthenticatedRequest extends Request {
     /** HQ access override: when true, the viewer sees data from ALL branches */
     is_admin_hq?: boolean;
     permissions?: string[];
+    subscriptionReadOnly?: boolean;
+    subscriptionPaidUntil?: string;
     two_factor_enabled?: boolean;
     authenticator?: { revision: string } | null;
   };
