@@ -84,3 +84,14 @@ After a successful migration deployment on `main` or `staging`, CI runs `npm run
 - New roles require entries in `DEFAULT_ROLES` and `DEFAULT_PERMISSION_MATRIX` in `prisma/seeds/shared/permissions.seed.ts`. Permission names must exist in the generated catalog. Only the new role receives those defaults.
 
 The role/permission/mapping inserts share one transaction. A transaction-scoped database advisory lock serializes concurrent seed runs because PostgreSQL's nullable role uniqueness key does not itself prevent duplicate global roles. A failure rolls back new reference records instead of leaving a partially initialized role. Production seeding creates no churches, accounts, demo members, transactions or other church data.
+
+
+## Subscription checkout returns and display name
+
+`WEB_URL` is the canonical subscription return origin. New web clients also supply `callbackOrigin` so local `localhost`, `127.0.0.1` and IPv6 loopback checkouts return to the same browser origin as their registration cookie. Only the canonical origin is accepted in production; development/test additionally accept loopback HTTP(S) origins. Paths, credentials, query strings and unrelated hosts are rejected, and the return path stays `/subscription?payment_window=1`. Older clients without this field continue using `WEB_URL`.
+
+New BelivrHQ subscription payments send Flutterwave `customizations.title = BelivrHQ` and a subscription description using the documented [Standard API customization fields](https://developer.flutterwave.com/docs/flutterwave-standard-1). Giving and ticket payments retain their merchant branding. Existing checkout URLs and payment records remain unchanged. This sets the checkout heading; legal merchant names, bank beneficiary names and account approval remain controlled by Flutterwave's merchant configuration. No provider dashboard settings are modified by this change.
+
+Deploy this backend change before the updated web client, since older APIs reject the new `callbackOrigin` field. No migration or new environment variable is required. Existing payment links retain their original provider callback and display settings; they are not rewritten.
+
+If checkout shows the account owner's personal name as the receiver/beneficiary, `customizations.title` does not change it. Ask Flutterwave to verify the merchant account tied to the active API keys, registered-business approval and beneficiary display name. See [Flutterwave business account guidance](https://www.flutterwave.com/cm/support/my-account/selecting-the-correct-flutterwave-business-account). This provider-managed name has not been verified or changed from this workspace.

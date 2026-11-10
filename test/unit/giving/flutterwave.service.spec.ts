@@ -79,6 +79,45 @@ describe('FlutterwaveService', () => {
       );
     });
 
+    it('sends the BelivrHQ checkout title for subscriptions without changing payment identity', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: async () => ({
+          status: 'success',
+          data: { link: 'https://checkout.flutterwave.com/pay/test' },
+        }),
+      });
+      await service.initializeTransaction(
+        'admin@example.org',
+        5000,
+        'BHQSUB_fixture',
+        { purpose: 'belivrhq_subscription', churchId: 'church-a' },
+        { callbackUrl: 'http://127.0.0.1:3000/subscription?payment_window=1', currency: 'NGN' },
+      );
+      const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+      expect(body).toMatchObject({
+        tx_ref: 'BHQSUB_fixture',
+        amount: 5000,
+        currency: 'NGN',
+        redirect_url: 'http://127.0.0.1:3000/subscription?payment_window=1',
+        customer: { email: 'admin@example.org' },
+        customizations: { title: 'BelivrHQ', description: 'Church workspace subscription' },
+      });
+    });
+    it('does not replace church giving or ticket merchant branding', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        json: async () => ({
+          status: 'success',
+          data: { link: 'https://checkout.flutterwave.com/pay/test' },
+        }),
+      });
+      await service.initializeTransaction('payer@example.org', 1000, 'giving-ref', {
+        church_id: 'church-a',
+      });
+      expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)).not.toHaveProperty(
+        'customizations',
+      );
+    });
+
     it('should throw BadRequestException when not configured', async () => {
       config.get.mockReturnValue('');
 
