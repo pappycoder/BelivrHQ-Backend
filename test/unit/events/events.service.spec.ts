@@ -166,6 +166,73 @@ describe('EventsService', () => {
     );
   });
 
+  describe('event creation policy', () => {
+    const input = { title: 'Community conference', startDate: '2026-08-01T09:00:00.000Z' };
+    it('defaults new events to conference while retaining legacy records', async () => {
+      prisma.event.create.mockResolvedValue({ ...mockEvent, type: 'conference' });
+      await service.createEvent(input, mockChurchId, mockUserId);
+      expect(prisma.event.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'conference' }),
+        }),
+      );
+    });
+    it('rejects service creation and reassignment without writing', async () => {
+      await expect(
+        service.createEvent({ ...input, type: 'service' }, mockChurchId, mockUserId),
+      ).rejects.toThrow(BadRequestException);
+      prisma.event.findFirst.mockResolvedValue(mockEvent);
+      await expect(
+        service.updateEvent(mockEventId, { type: 'service' }, mockChurchId, mockUserId),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.event.create).not.toHaveBeenCalled();
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+    it.each([{ isFree: false }, { isFree: true, price: 100 }])(
+      'blocks Community paid creation and conversion: %j',
+      async (pricing) => {
+        prisma.platformSubscription.findUnique.mockResolvedValue({
+          plan: 'community',
+          paid_until: new Date(Date.now() + 86400000),
+        });
+        await expect(
+          service.createEvent({ ...input, ...pricing }, mockChurchId, mockUserId),
+        ).rejects.toThrow(ForbiddenException);
+        prisma.event.findFirst.mockResolvedValue(mockEvent);
+        await expect(
+          service.updateEvent(mockEventId, pricing, mockChurchId, mockUserId),
+        ).rejects.toThrow(ForbiddenException);
+        expect(prisma.event.create).not.toHaveBeenCalled();
+        expect(prisma.event.update).not.toHaveBeenCalled();
+      },
+    );
+    it('allows Community free creation', async () => {
+      prisma.platformSubscription.findUnique.mockResolvedValue({
+        plan: 'community',
+        paid_until: new Date(Date.now() + 86400000),
+      });
+      prisma.event.create.mockResolvedValue({ ...mockEvent, type: 'conference' });
+      await expect(
+        service.createEvent({ ...input, isFree: true }, mockChurchId, mockUserId),
+      ).resolves.toBeDefined();
+    });
+    it.each(['network', 'enterprise'])('allows paid events on %s', async (plan) => {
+      prisma.platformSubscription.findUnique.mockResolvedValue({
+        plan,
+        paid_until: new Date(Date.now() + 86400000),
+      });
+      prisma.event.create.mockResolvedValue({
+        ...mockEvent,
+        type: 'conference',
+        is_free: false,
+        price: 100,
+      });
+      await expect(
+        service.createEvent({ ...input, isFree: false, price: 100 }, mockChurchId, mockUserId),
+      ).resolves.toBeDefined();
+    });
+  });
+
   describe('createEvent', () => {
     it('should create an event and return EventResponseDto', async () => {
       prisma.event.create.mockResolvedValue(mockEvent);

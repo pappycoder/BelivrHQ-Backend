@@ -87,6 +87,12 @@ export class EventsService {
     churchId: string,
     userId: string,
   ): Promise<EventResponseDto> {
+    if (dto.type === 'service') {
+      throw new BadRequestException('Create services in Services, not Events.');
+    }
+    if (dto.isFree === false || Number(dto.price) > 0) {
+      await assertPlanFeature(this.prisma, churchId, 'tickets');
+    }
     const branchId = await contentBranch(
       this.prisma,
       this.branchScope.resolve(),
@@ -105,7 +111,7 @@ export class EventsService {
         branch_id: branchId,
         title: dto.title,
         description: dto.description,
-        type: (dto.type as never) || 'service',
+        type: (dto.type as never) || 'conference',
         start_date: new Date(dto.startDate),
         end_date: dto.endDate ? new Date(dto.endDate) : null,
         recurrence: schedule.recurrence,
@@ -304,6 +310,13 @@ export class EventsService {
 
     if (existing.archived_at) {
       throw new NotFoundException('Event not found');
+    }
+
+    if (dto.type === 'service') {
+      throw new BadRequestException('Create services in Services, not Events.');
+    }
+    if (dto.isFree === false || Number(dto.price) > 0) {
+      await assertPlanFeature(this.prisma, churchId, 'tickets');
     }
 
     const data: Prisma.EventUpdateInput = {};

@@ -8,7 +8,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsIn,
   IsInt,
   IsOptional,
@@ -19,7 +18,7 @@ import {
 import { EVENT_RECURRENCES, type EventRecurrence } from './create-event.dto';
 
 export class UpdateEventDto {
-  @ApiPropertyOptional({ description: 'Event title', example: 'Sunday Worship Service' })
+  @ApiPropertyOptional({ description: 'Event title', example: 'Community Conference' })
   @IsString()
   @IsOptional()
   title?: string;
@@ -31,9 +30,9 @@ export class UpdateEventDto {
 
   @ApiPropertyOptional({
     description: 'Event type',
-    enum: ['service', 'conference', 'lifecycle', 'training', 'social'],
+    enum: ['conference', 'lifecycle', 'training', 'social'],
   })
-  @IsEnum(['service', 'conference', 'lifecycle', 'training', 'social'] as const)
+  @IsIn(['conference', 'lifecycle', 'training', 'social'] as const)
   @IsOptional()
   type?: string;
 

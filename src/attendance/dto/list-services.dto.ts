@@ -8,7 +8,7 @@
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { SERVICE_CATEGORIES } from './create-service.dto';
 
 /**
@@ -47,6 +47,10 @@ export class ListServicesDto {
   category?: string;
 
   @ApiPropertyOptional({ description: 'Filter by active status' })
+  @Transform(({ obj, key }) => {
+    const raw = (obj as Record<string, unknown>)[key];
+    return raw === 'true' ? true : raw === 'false' ? false : raw;
+  })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
