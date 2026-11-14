@@ -70,6 +70,9 @@ describe('BroadcastService', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
+    (prisma.$transaction as unknown as jest.Mock).mockImplementation((fn) => fn(prisma));
+    prisma.broadcast.updateMany.mockResolvedValue({ count: 1 });
+    prisma.broadcastRecipient.findFirst.mockResolvedValue({ id: 'rr-1', status: 'pending' });
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     queues = {
       broadcast: { add: jest.fn().mockResolvedValue(undefined) },
@@ -295,6 +298,7 @@ describe('BroadcastService', () => {
           churchId: mockChurchId,
           memberId: mockMemberId,
         }),
+        { jobId: `broadcast-${mockBroadcastId}-rr-1` },
       );
     });
 
@@ -325,6 +329,7 @@ describe('BroadcastService', () => {
           templateName: 'belivrhq:sunday_reminder',
           churchId: mockChurchId,
         }),
+        { jobId: `broadcast-${mockBroadcastId}-rr-1` },
       );
     });
 

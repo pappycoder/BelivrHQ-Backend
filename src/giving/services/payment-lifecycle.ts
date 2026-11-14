@@ -10,6 +10,12 @@ export interface PaymentAdjustment {
   stage?: string;
 }
 export interface PaymentLifecycle {
+  applicationReview?: {
+    decision: 'apply' | 'revoke';
+    reason: string;
+    reviewedBy: string;
+    reviewedAt: string;
+  };
   review?: {
     fingerprint: string;
     decision: 'release' | 'revoke';
@@ -117,6 +123,9 @@ export function applyAdjustment(
     (amount > 0 && Math.round(refundedAmount * 100) === Math.round(amount * 100));
   return {
     financialReversal,
+    ...(saved.applicationReview
+      ? { applicationReview: saved.applicationReview as PaymentLifecycle['applicationReview'] }
+      : {}),
     ...(review ? { review } : {}),
     ...(typeof saved.chargeStatus === 'string' ? { chargeStatus: saved.chargeStatus } : {}),
     adjustments: merged,

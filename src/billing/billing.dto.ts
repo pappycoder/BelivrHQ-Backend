@@ -30,3 +30,8 @@ export class ReviewSubscriptionPaymentDto extends VerifySubscriptionDto {
   @IsIn(['release', 'revoke']) decision!: 'release' | 'revoke';
   @IsString() @MinLength(10) @MaxLength(500) reason!: string;
 }
+
+export class ResolveUnappliedPaymentDto extends VerifySubscriptionDto {
+  @IsIn(['apply', 'revoke']) decision!: 'apply' | 'revoke';
+  @IsString() @MinLength(10) @MaxLength(500) reason!: string;
+}

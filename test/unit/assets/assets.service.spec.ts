@@ -77,6 +77,7 @@ describe('AssetsService', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
+    (prisma.$transaction as unknown as jest.Mock).mockImplementation((fn) => fn(prisma));
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     service = new AssetsService(
       prisma as unknown as PrismaService,
@@ -735,7 +736,7 @@ describe('AssetsService', () => {
   });
 
   describe('returnLoan', () => {
-    it('should record asset return and activate asset', async () => {
+    it('should record asset return without changing equipment status', async () => {
       prisma.asset.findFirst.mockResolvedValue(mockAsset);
       prisma.assetLoan.findFirst.mockResolvedValue({
         id: 'loan-1',

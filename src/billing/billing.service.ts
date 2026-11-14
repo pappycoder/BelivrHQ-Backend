@@ -141,7 +141,17 @@ export class BillingService {
       limits: entitlement.limits,
       features: entitlement.features,
       usage: { members, staff: staff + pendingInvitations, locations, pendingInvitations },
-      payments,
+      payments: payments.map((payment) => ({
+        ...payment,
+        unappliedReview:
+          payment.status === 'success' &&
+          !!payment.verified_at &&
+          payment.application_status === 'review' &&
+          !accessGrants(subscription?.access_grants).some(
+            (grant) => grant.reference === payment.reference,
+          ) &&
+          !['review', 'revoked'].includes(String(record(payment.lifecycle).access)),
+      })),
       subscription: entitlement.subscription,
       accessReview: resolvePaymentAccess(subscription?.access_grants).held,
       active: entitlement.active,
@@ -518,6 +528,134 @@ export class BillingService {
     return this.status(churchId);
   }
 
+  /** Resolve verified money that never created a grant. This does not issue a refund. */
+  async resolveUnappliedPayment(
+    churchId: string,
+    reviewer: { id: string; roles: string[] },
+    reference: string,
+    decision: 'apply' | 'revoke',
+    reason: string,
+  ) {
+    if (!reviewer.roles.includes('super_admin'))
+      throw new ForbiddenException('BelivrHQ review is required');
+    if (!['apply', 'revoke'].includes(decision) || reason.trim().length < 10 || reason.length > 500)
+      throw new BadRequestException(
+        'Choose a resolution and provide a reason between 10 and 500 characters',
+      );
+    // Reverify merchant-bound facts and adjustments before deciding about paid access.
+    await this.reconcilePayment(churchId, reference);
+    await this.reconcileAdjustments(churchId, reference);
+    const emailEvent = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
+      const payment = await tx.subscriptionPayment.findFirstOrThrow({
+        where: { church_id: churchId, reference },
+      });
+      const subscription = await tx.platformSubscription.findUniqueOrThrow({
+        where: { church_id: churchId },
+      });
+      const lifecycle = record(payment.lifecycle);
+      const previous = record(lifecycle.applicationReview);
+      if (
+        previous.decision === decision &&
+        (decision === 'apply'
+          ? payment.application_status === 'applied'
+          : payment.application_status === 'revoked')
+      )
+        return undefined;
+      if (
+        payment.status !== 'success' ||
+        !payment.verified_at ||
+        payment.application_status !== 'review' ||
+        accessGrants(subscription.access_grants).some((grant) => grant.reference === reference)
+      )
+        throw new ConflictException(
+          'Only a verified unapplied payment awaiting review can be resolved here',
+        );
+      if (lifecycle.access && lifecycle.access !== 'clear')
+        throw new ConflictException(
+          'Resolve the provider refund or dispute before applying this payment',
+        );
+      const reviewed = {
+        ...lifecycle,
+        applicationReview: {
+          decision,
+          reason: reason.trim(),
+          reviewedBy: reviewer.id,
+          reviewedAt: new Date().toISOString(),
+        },
+      };
+      let appliedEnd: Date | undefined;
+      if (decision === 'apply') {
+        if (payment.intent !== 'renewal')
+          throw new ConflictException(
+            'A stale prorated upgrade cannot be applied. Revoke this application and arrange a fresh checkout or provider refund',
+          );
+        const grants = accessGrants(subscription.access_grants);
+        const now = new Date();
+        if (grants.some((grant) => grant.state === 'review' && Date.parse(grant.end) > +now))
+          throw new ConflictException('Resolve existing subscription payment holds first');
+        const start = new Date(
+          Math.max(
+            +now,
+            +(projectSubscription(subscription).paid_until ?? now),
+            ...grants
+              .filter((grant) => grant.state === 'clear' && !grant.upgrade)
+              .map((grant) => Date.parse(grant.end)),
+          ),
+        );
+        const end = subscriptionEnd(start, payment.cycle);
+        appliedEnd = end;
+        await tx.platformSubscription.update({
+          where: { church_id: churchId },
+          data: {
+            access_grants: appendAccessGrant(subscription.access_grants, subscription, {
+              reference,
+              plan: payment.plan,
+              cycle: payment.cycle,
+              start: start.toISOString(),
+              end: end.toISOString(),
+              state: 'clear',
+            }) as unknown as Prisma.InputJsonValue,
+            plan: payment.plan,
+            cycle: payment.cycle,
+            period_started_at: start,
+            paid_until: end,
+          },
+        });
+      }
+      const claimed = await tx.subscriptionPayment.updateMany({
+        where: { church_id: churchId, reference, status: 'success', application_status: 'review' },
+        data: {
+          application_status: decision === 'apply' ? 'applied' : 'revoked',
+          lifecycle: reviewed as unknown as Prisma.InputJsonValue,
+          checkout_url: null,
+        },
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException('Payment review changed. Refresh billing.');
+      await tx.auditLog.create({
+        data: {
+          church_id: churchId,
+          user_id: reviewer.id,
+          entity: 'subscription_payment_application_review',
+          entity_id: reference,
+          action: 'UPDATE',
+          new_values: { decision, reason: reason.trim() },
+        },
+      });
+      if (appliedEnd)
+        return this.companyEmails.enqueueSubscription(
+          tx,
+          payment,
+          !subscription.paid_until,
+          appliedEnd,
+        );
+      return undefined;
+    });
+    await this.companyEmails.dispatch(emailEvent);
+    return this.status(churchId);
+  }
+
   async closeCheckout(churchId: string, reference: string) {
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM churches WHERE id = ${churchId} FOR UPDATE`;
@@ -810,13 +948,15 @@ export class BillingService {
               ? { status: 'success' as const }
               : {}),
           application_status:
-            lifecycle.access === 'clear'
-              ? grant
-                ? 'applied'
-                : payment.verified_at
-                  ? 'pending'
-                  : payment.application_status
-              : lifecycle.access,
+            !grant && record(lifecycle.applicationReview).decision === 'revoke'
+              ? 'revoked'
+              : lifecycle.access === 'clear'
+                ? grant
+                  ? 'applied'
+                  : payment.verified_at
+                    ? 'pending'
+                    : payment.application_status
+                : lifecycle.access,
           checkout_url: null,
         },
       });

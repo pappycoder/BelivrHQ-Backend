@@ -21,6 +21,7 @@ import {
   VerifySubscriptionDto,
   SchedulePlanDto,
   ReviewSubscriptionPaymentDto,
+  ResolveUnappliedPaymentDto,
 } from './billing.dto';
 import { BillingAdminGuard } from './plan-feature.guard';
 import { RateLimit } from '../common/guards/rate-limit.guard';
@@ -54,6 +55,19 @@ export class BillingController {
   @RequirePermissions('billing:update')
   review(@Req() req: AuthenticatedRequest, @Body() dto: ReviewSubscriptionPaymentDto) {
     return this.billing.reviewPayment(
+      req.profile!.church_id,
+      { id: req.profile!.id, roles: req.profile!.roles ?? [req.profile!.role] },
+      dto.reference,
+      dto.decision,
+      dto.reason,
+    );
+  }
+  @Post('payment-application-review')
+  @HttpCode(200)
+  @RequirePermissions('billing:update')
+  @RateLimit({ limit: 10, windowSeconds: 60 })
+  resolveUnapplied(@Req() req: AuthenticatedRequest, @Body() dto: ResolveUnappliedPaymentDto) {
+    return this.billing.resolveUnappliedPayment(
       req.profile!.church_id,
       { id: req.profile!.id, roles: req.profile!.roles ?? [req.profile!.role] },
       dto.reference,

@@ -183,6 +183,11 @@ export class AuditLoggingService {
    * which depends on `AuditLoggingService`, so a direct constructor dependency
    * would be circular. Lazy resolution breaks that cycle while still working.
    */
+  /** Notify after a caller has committed its own transactional audit entry. */
+  async notifyMutation(params: AuditLogParams): Promise<void> {
+    if (NOTIFICATION_ACTIONS.includes(params.action)) await this.createCrudNotification(params);
+  }
+
   private async createCrudNotification(params: AuditLogParams): Promise<void> {
     try {
       if (!params.userId) return;

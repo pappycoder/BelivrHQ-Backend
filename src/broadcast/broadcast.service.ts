@@ -351,21 +351,17 @@ export class BroadcastService {
    * Cancels a scheduled or draft broadcast.
    */
   async cancel(broadcastId: string, churchId: string, userId: string): Promise<void> {
-    const broadcast = await this.prisma.broadcast.findFirst({
-      where: { id: broadcastId, church_id: churchId, ...this.broadcastScope(churchId) },
-    });
-
-    if (!broadcast) {
-      throw new NotFoundException('Broadcast not found');
-    }
-
-    if (broadcast.status === 'sent' || broadcast.status === 'cancelled') {
-      throw new BadRequestException(`Cannot cancel a ${broadcast.status} broadcast`);
-    }
-
-    await this.prisma.broadcast.update({
-      where: { id: broadcastId },
-      data: { status: 'cancelled' },
+    const broadcast = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM broadcasts WHERE id = ${broadcastId} AND church_id = ${churchId} FOR UPDATE`;
+      const existing = await tx.broadcast.findFirst({
+        where: { id: broadcastId, church_id: churchId, ...this.broadcastScope(churchId) },
+      });
+      if (!existing) throw new NotFoundException('Broadcast not found');
+      if (existing.status === 'sent' || existing.status === 'cancelled') {
+        throw new BadRequestException(`Cannot cancel a ${existing.status} broadcast`);
+      }
+      await tx.broadcast.update({ where: { id: broadcastId }, data: { status: 'cancelled' } });
+      return existing;
     });
 
     await this.audit.log({
@@ -404,10 +400,11 @@ export class BroadcastService {
 
     await this.integrations.resolve(churchId, channel(broadcast.channel));
 
-    await this.prisma.broadcast.update({
-      where: { id: broadcastId },
+    const started = await this.prisma.broadcast.updateMany({
+      where: { id: broadcastId, church_id: churchId, status: { notIn: ['cancelled', 'sent'] } },
       data: { status: 'sending' },
     });
+    if (!started.count) return;
 
     const recipients = await this.prisma.broadcastRecipient.findMany({
       where: { broadcast_id: broadcastId, status: 'pending' },
@@ -417,58 +414,72 @@ export class BroadcastService {
     const variables = Array.isArray(template.variables) ? (template.variables as string[]) : [];
 
     for (const recipient of recipients) {
-      try {
-        const member = recipient.member_id
-          ? await this.prisma.member.findUnique({
-              where: { id: recipient.member_id },
-            })
-          : null;
-
-        const variableValues = this.buildVariableValues(variables, member);
-
-        await this.enqueueMessage(
-          broadcast.channel,
-          recipient.phone,
-          template.content,
-          variableValues,
-          churchId,
-          recipient.member_id ?? undefined,
-          {
-            name: template.name,
-            externalId: template.external_id,
-            language: template.language,
-          },
-        );
-
-        await this.prisma.broadcastRecipient.update({
-          where: { id: recipient.id },
-          data: { status: 'sent', sent_at: new Date() },
-        });
-      } catch (error) {
-        this.logger.error(
-          `Failed to enqueue broadcast message for ${recipient.phone}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        await this.prisma.broadcastRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            status: 'failed',
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
+      // Cancellation and each recipient claim serialize on the campaign row. A cancelled
+      // campaign cannot claim later recipients; accepted or in-flight jobs may still deliver.
+      const continued = await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM broadcasts WHERE id = ${broadcastId} AND church_id = ${churchId} FOR UPDATE`;
+          const current = await tx.broadcast.findFirst({
+            where: { id: broadcastId, church_id: churchId, status: 'sending' },
+          });
+          if (!current) return false;
+          const pending = await tx.broadcastRecipient.findFirst({
+            where: { id: recipient.id, broadcast_id: broadcastId, status: 'pending' },
+          });
+          if (!pending) return true;
+          try {
+            const member = recipient.member_id
+              ? await tx.member.findUnique({ where: { id: recipient.member_id } })
+              : null;
+            await this.enqueueMessage(
+              broadcast.channel,
+              recipient.phone,
+              template.content,
+              this.buildVariableValues(variables, member),
+              churchId,
+              recipient.member_id ?? undefined,
+              {
+                name: template.name,
+                externalId: template.external_id,
+                language: template.language,
+              },
+              `broadcast-${broadcastId}-${recipient.id}`,
+            );
+          } catch (error) {
+            await tx.broadcastRecipient.update({
+              where: { id: recipient.id },
+              data: {
+                status: 'failed',
+                error: error instanceof Error ? error.message : String(error),
+              },
+            });
+            return true;
+          }
+          // A database failure after queue acceptance must abort and retry, not be
+          // mislabeled as an enqueue failure. Stable job IDs deduplicate that retry.
+          await tx.broadcastRecipient.update({
+            where: { id: recipient.id },
+            data: { status: 'sent', sent_at: new Date(), error: null },
+          });
+          return true;
+        },
+        { timeout: 15000 },
+      );
+      if (!continued) return;
     }
 
-    await this.prisma.broadcast.update({
-      where: { id: broadcastId },
+    const completed = await this.prisma.broadcast.updateMany({
+      where: { id: broadcastId, church_id: churchId, status: 'sending' },
       data: { status: 'sent', sent_at: new Date() },
     });
+    if (!completed.count) return;
 
     await this.notifications
       .broadcastToChurch(
         churchId,
         'broadcast',
-        'Broadcast Sent',
-        `A ${broadcast.channel} broadcast has been sent to ${recipients.length} recipients.`,
+        'Broadcast queued',
+        `A ${broadcast.channel} broadcast finished queueing.`,
         { broadcastId, channel: broadcast.channel, recipientCount: recipients.length },
       )
       .catch((err) => this.logger.warn(`Broadcast notification failed: ${(err as Error).message}`));
@@ -573,41 +584,55 @@ export class BroadcastService {
     churchId: string,
     memberId: string | undefined,
     template: { name: string; externalId: string | null; language: string },
+    jobId: string,
   ): Promise<void> {
+    const options = { jobId };
     switch (channel) {
       case 'whatsapp':
         if (template.externalId) {
-          await this.whatsappQueue.add('send-template', {
-            to,
-            templateName: template.externalId,
-            language: template.language,
-            variables,
-            churchId,
-            memberId,
-          });
+          await this.whatsappQueue.add(
+            'send-template',
+            {
+              to,
+              templateName: template.externalId,
+              language: template.language,
+              variables,
+              churchId,
+              memberId,
+            },
+            options,
+          );
         } else {
           const interpolated = this.interpolateTemplate(content, variables);
-          await this.whatsappQueue.add('send', {
-            to,
-            message: interpolated,
-            churchId,
-            memberId,
-          });
+          await this.whatsappQueue.add(
+            'send',
+            {
+              to,
+              message: interpolated,
+              churchId,
+              memberId,
+            },
+            options,
+          );
         }
         break;
       case 'sms': {
         const interpolated = this.interpolateTemplate(content, variables);
-        await this.smsQueue.add('send', { to, message: interpolated, churchId });
+        await this.smsQueue.add('send', { to, message: interpolated, churchId }, options);
         break;
       }
       case 'email': {
         const interpolated = this.interpolateTemplate(content, variables);
-        await this.emailQueue.add('send', {
-          to,
-          subject: template.name,
-          html: interpolated,
-          churchId,
-        });
+        await this.emailQueue.add(
+          'send',
+          {
+            to,
+            subject: template.name,
+            html: interpolated,
+            churchId,
+          },
+          options,
+        );
         break;
       }
       default:

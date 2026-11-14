@@ -838,23 +838,30 @@ export class FormsService {
     dto: UpdateSubmissionStatusDto,
     userId: string,
   ): Promise<FormSubmissionResponseDto> {
-    const submission = await this.findSubmissionOrFail(churchId, formId, submissionId);
-
-    if (submission.status !== SubmissionStatus.pending) {
-      throw new BadRequestException('Only pending submissions can be approved or rejected');
+    if (dto.status !== SubmissionStatus.approved && dto.status !== SubmissionStatus.rejected) {
+      throw new BadRequestException('Choose approved or rejected');
     }
-
+    const submission = await this.findSubmissionOrFail(churchId, formId, submissionId);
     const oldValues = this.submissionToPlain(submission);
-    const now = new Date();
-
-    const updated = await this.prisma.formSubmission.update({
-      where: { id: submissionId },
-      data: {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const decision = {
         status: dto.status,
         approved_by_id: userId,
-        approved_at: now,
+        approved_at: new Date(),
         rejection_reason: dto.status === SubmissionStatus.rejected ? dto.rejectionReason : null,
-      },
+      };
+      const claimed = await tx.formSubmission.updateMany({
+        where: {
+          id: submissionId,
+          church_id: churchId,
+          form_id: formId,
+          status: SubmissionStatus.pending,
+        },
+        data: decision,
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException('This submission has already been reviewed');
+      return { ...submission, ...decision, rejection_reason: decision.rejection_reason ?? null };
     });
 
     await this.audit.log({

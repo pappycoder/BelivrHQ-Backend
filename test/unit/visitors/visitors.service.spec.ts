@@ -9,7 +9,7 @@ describe('VisitorsService', () => {
   let service: VisitorsService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prismaMock: any;
-  let auditMock: { log: jest.Mock };
+  let auditMock: { log: jest.Mock; notifyMutation: jest.Mock };
 
   const churchId = '11111111-1111-1111-1111-111111111111';
   const userId = '22222222-2222-2222-2222-222222222222';
@@ -80,7 +80,13 @@ describe('VisitorsService', () => {
       },
     };
 
-    auditMock = { log: jest.fn().mockResolvedValue(undefined) };
+    prismaMock.$queryRaw = jest.fn().mockResolvedValue([]);
+    prismaMock.$transaction = jest.fn((fn) => fn(prismaMock));
+    prismaMock.auditLog = { create: jest.fn().mockResolvedValue({}) };
+    auditMock = {
+      log: jest.fn().mockResolvedValue(undefined),
+      notifyMutation: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -537,7 +543,7 @@ describe('VisitorsService', () => {
       );
     });
 
-    it('should reject if already converted', async () => {
+    it('should return the existing conversion on retry', async () => {
       (prismaMock.visitor.findUnique as jest.Mock).mockResolvedValueOnce({
         ...mockVisitor,
         follow_up_status: 'converted',
@@ -550,7 +556,8 @@ describe('VisitorsService', () => {
           churchId,
           userId,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).resolves.toMatchObject({ memberId: 'some-id' });
+      expect(prismaMock.member.create).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException for missing visitor', async () => {

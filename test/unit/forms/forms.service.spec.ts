@@ -94,6 +94,8 @@ describe('FormsService', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
+    prisma.formSubmission.updateMany.mockResolvedValue({ count: 1 });
+    (prisma.$transaction as unknown as jest.Mock).mockImplementation((fn) => fn(prisma));
     prisma.platformSubscription.findUnique.mockResolvedValue({
       plan: 'community',
       paid_until: new Date(Date.now() + 86400000),
@@ -966,11 +968,12 @@ describe('FormsService', () => {
       expect(result.rejectionReason).toBe('Incomplete information');
     });
 
-    it('should throw BadRequestException for non-pending submissions', async () => {
+    it('should conflict for non-pending submissions', async () => {
       prisma.formSubmission.findFirst.mockResolvedValue({
         ...mockSubmission,
         status: SubmissionStatus.approved,
       });
+      prisma.formSubmission.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
         service.updateSubmissionStatus(
@@ -980,7 +983,7 @@ describe('FormsService', () => {
           { status: SubmissionStatus.rejected },
           mockUserId,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

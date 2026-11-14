@@ -1194,58 +1194,63 @@ export class AssetsService {
     dto: CreateLoanDto,
     userId: string,
   ): Promise<LoanResponseDto> {
-    const asset = await this.prisma.asset.findFirst({
-      where: { id: assetId, church_id: churchId, ...this.requestContext.branchWhere(churchId) },
-    });
-
-    if (!asset) {
-      throw new NotFoundException('Asset not found');
-    }
-
-    if (asset.archived_at) {
-      throw new NotFoundException('Asset is archived');
-    }
-
-    const activeLoan = await this.prisma.assetLoan.findFirst({
-      where: {
-        asset_id: assetId,
-        status: { in: [AssetLoanStatus.borrowed, AssetLoanStatus.overdue] },
-      },
-    });
-
-    if (activeLoan) {
-      throw new BadRequestException('Asset is already on loan');
-    }
-
-    if (dto.borrowerMemberId) {
-      const member = await this.prisma.member.findFirst({
-        where: { id: dto.borrowerMemberId, church_id: churchId },
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM assets WHERE id = ${assetId} AND church_id = ${churchId} FOR UPDATE`;
+      const asset = await tx.asset.findFirst({
+        where: { id: assetId, church_id: churchId, ...this.requestContext.branchWhere(churchId) },
       });
-      if (!member) {
-        throw new NotFoundException('Borrower member not found');
+
+      if (!asset) {
+        throw new NotFoundException('Asset not found');
       }
-    }
 
-    if (!dto.borrowerMemberId && !dto.borrowedByName) {
-      throw new BadRequestException('Provide borrowerMemberId or borrowedByName');
-    }
+      if (asset.archived_at) {
+        throw new NotFoundException('Asset is archived');
+      }
 
-    const loan = await this.prisma.assetLoan.create({
-      data: {
-        asset_id: assetId,
-        borrower_member_id: dto.borrowerMemberId ?? null,
-        borrowed_by_name: dto.borrowedByName ?? null,
-        expected_return_date: new Date(dto.expectedReturnDate),
-        condition_before: dto.conditionBefore ?? null,
-        notes: dto.notes,
-      },
-      include: { member: { select: { first_name: true, last_name: true } } },
+      if (asset.status !== AssetStatus.active) {
+        throw new BadRequestException('Only active assets can be loaned');
+      }
+
+      const activeLoan = await tx.assetLoan.findFirst({
+        where: {
+          asset_id: assetId,
+          status: { in: [AssetLoanStatus.borrowed, AssetLoanStatus.overdue] },
+        },
+      });
+
+      if (activeLoan) {
+        throw new BadRequestException('Asset is already on loan');
+      }
+
+      if (dto.borrowerMemberId) {
+        const member = await tx.member.findFirst({
+          where: { id: dto.borrowerMemberId, church_id: churchId },
+        });
+        if (!member) {
+          throw new NotFoundException('Borrower member not found');
+        }
+      }
+
+      if (!dto.borrowerMemberId && !dto.borrowedByName) {
+        throw new BadRequestException('Provide borrowerMemberId or borrowedByName');
+      }
+
+      const loan = await tx.assetLoan.create({
+        data: {
+          asset_id: assetId,
+          borrower_member_id: dto.borrowerMemberId ?? null,
+          borrowed_by_name: dto.borrowedByName ?? null,
+          expected_return_date: new Date(dto.expectedReturnDate),
+          condition_before: dto.conditionBefore ?? null,
+          notes: dto.notes,
+        },
+        include: { member: { select: { first_name: true, last_name: true } } },
+      });
+
+      return loan;
     });
-
-    await this.prisma.asset.update({
-      where: { id: assetId },
-      data: { status: AssetStatus.maintenance },
-    });
+    const loan = result;
 
     await this.audit.log({
       userId,
@@ -1295,46 +1300,47 @@ export class AssetsService {
     dto: UpdateLoanDto,
     userId: string,
   ): Promise<LoanResponseDto> {
-    const asset = await this.prisma.asset.findFirst({
-      where: { id: assetId, church_id: churchId, ...this.requestContext.branchWhere(churchId) },
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM assets WHERE id = ${assetId} AND church_id = ${churchId} FOR UPDATE`;
+      const asset = await tx.asset.findFirst({
+        where: { id: assetId, church_id: churchId, ...this.requestContext.branchWhere(churchId) },
+      });
+
+      if (!asset) {
+        throw new NotFoundException('Asset not found');
+      }
+
+      if (asset.archived_at) {
+        throw new NotFoundException('Asset is archived');
+      }
+
+      const loan = await tx.assetLoan.findFirst({
+        where: { id: loanId, asset_id: assetId },
+        include: { member: { select: { first_name: true, last_name: true } } },
+      });
+
+      if (!loan) {
+        throw new NotFoundException('Loan record not found');
+      }
+
+      if (loan.status === AssetLoanStatus.returned) {
+        throw new BadRequestException('Asset has already been returned');
+      }
+
+      const updated = await tx.assetLoan.update({
+        where: { id: loanId },
+        data: {
+          actual_return_date: dto.actualReturnDate ? new Date(dto.actualReturnDate) : new Date(),
+          condition_after: dto.conditionAfter ?? null,
+          status: AssetLoanStatus.returned,
+          notes: dto.notes,
+        },
+        include: { member: { select: { first_name: true, last_name: true } } },
+      });
+
+      return { loan, updated };
     });
-
-    if (!asset) {
-      throw new NotFoundException('Asset not found');
-    }
-
-    if (asset.archived_at) {
-      throw new NotFoundException('Asset is archived');
-    }
-
-    const loan = await this.prisma.assetLoan.findFirst({
-      where: { id: loanId, asset_id: assetId },
-      include: { member: { select: { first_name: true, last_name: true } } },
-    });
-
-    if (!loan) {
-      throw new NotFoundException('Loan record not found');
-    }
-
-    if (loan.status === AssetLoanStatus.returned) {
-      throw new BadRequestException('Asset has already been returned');
-    }
-
-    const updated = await this.prisma.assetLoan.update({
-      where: { id: loanId },
-      data: {
-        actual_return_date: dto.actualReturnDate ? new Date(dto.actualReturnDate) : new Date(),
-        condition_after: dto.conditionAfter ?? null,
-        status: AssetLoanStatus.returned,
-        notes: dto.notes,
-      },
-      include: { member: { select: { first_name: true, last_name: true } } },
-    });
-
-    await this.prisma.asset.update({
-      where: { id: assetId },
-      data: { status: AssetStatus.active },
-    });
+    const { loan, updated } = result;
 
     await this.audit.log({
       userId,

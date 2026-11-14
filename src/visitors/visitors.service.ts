@@ -519,77 +519,105 @@ export class VisitorsService {
     churchId: string,
     userId: string,
   ): Promise<{ visitor: VisitorResponseDto; memberId: string }> {
-    const visitor = await this.prisma.visitor.findUnique({ where: { id } });
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM visitors WHERE id = ${id} AND church_id = ${churchId} FOR UPDATE`;
+      const visitor = await tx.visitor.findUnique({
+        where: { id },
+        include: {
+          assigned_to: { select: { first_name: true, last_name: true } },
+          branch: { select: { id: true, name: true } },
+        },
+      });
 
-    if (
-      !visitor ||
-      visitor.church_id !== churchId ||
-      !this.isVisible(churchId, visitor.branch_id)
-    ) {
-      throw new NotFoundException('Visitor not found');
-    }
+      if (
+        !visitor ||
+        visitor.church_id !== churchId ||
+        !this.isVisible(churchId, visitor.branch_id)
+      ) {
+        throw new NotFoundException('Visitor not found');
+      }
 
-    if (visitor.archived_at) {
-      throw new NotFoundException('Visitor not found');
-    }
+      if (visitor.archived_at) {
+        throw new NotFoundException('Visitor not found');
+      }
 
-    if (visitor.follow_up_status === 'converted') {
-      throw new BadRequestException('Visitor has already been converted');
-    }
+      if (visitor.converted_member_id) {
+        return { visitor, memberId: visitor.converted_member_id, created: false };
+      }
+      if (visitor.follow_up_status === 'converted') {
+        throw new BadRequestException('Visitor has already been converted');
+      }
 
-    // Carry the visitor's own details into the member record so nothing is lost.
-    const visitorCustomFields =
-      visitor.custom_fields && typeof visitor.custom_fields === 'object'
-        ? (visitor.custom_fields as Record<string, unknown>)
-        : {};
+      // Carry the visitor's own details into the member record so nothing is lost.
+      const visitorCustomFields =
+        visitor.custom_fields && typeof visitor.custom_fields === 'object'
+          ? (visitor.custom_fields as Record<string, unknown>)
+          : {};
 
-    const member = await this.prisma.member.create({
-      data: {
-        church_id: churchId,
-        branch_id: this.requestContext.branchIdForWrite(churchId, dto.branchId),
-        first_name: dto.firstName,
-        last_name: dto.lastName,
-        gender: visitor.gender,
-        email: dto.email || visitor.email,
-        phone: dto.phone || visitor.phone,
-        whatsapp_number: visitor.whatsapp_number,
-        status: 'active',
-        custom_fields: visitorCustomFields as Prisma.InputJsonValue,
-      },
+      const branchId = this.requestContext.branchIdForWrite(churchId, dto.branchId);
+      if (
+        branchId &&
+        !(await tx.branch.findFirst({
+          where: { id: branchId, church_id: churchId, archived_at: null },
+        }))
+      ) {
+        throw new BadRequestException('Branch not found in this church');
+      }
+      const member = await tx.member.create({
+        data: {
+          church_id: churchId,
+          branch_id: branchId,
+          first_name: dto.firstName,
+          last_name: dto.lastName,
+          gender: visitor.gender,
+          email: dto.email || visitor.email,
+          phone: dto.phone || visitor.phone,
+          whatsapp_number: visitor.whatsapp_number,
+          status: 'active',
+          custom_fields: visitorCustomFields as Prisma.InputJsonValue,
+        },
+      });
+
+      const updatedVisitor = await tx.visitor.update({
+        where: { id },
+        data: {
+          follow_up_status: 'converted',
+          converted_member_id: member.id,
+          converted_at: new Date(),
+          // A converted visitor becomes a member and is soft-deleted so it never
+          // surfaces again in visitor pulls (list/search/follow-up board).
+          deleted_at: new Date(),
+        },
+        include: {
+          assigned_to: { select: { first_name: true, last_name: true } },
+          branch: { select: { id: true, name: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          user_id: userId,
+          church_id: churchId,
+          entity: 'visitor',
+          action: 'UPDATE',
+          entity_id: id,
+          old_values: { follow_up_status: visitor.follow_up_status },
+          new_values: { follow_up_status: 'converted', converted_member_id: member.id },
+        },
+      });
+      return { visitor: updatedVisitor, memberId: member.id, created: true };
     });
-
-    const updatedVisitor = await this.prisma.visitor.update({
-      where: { id },
-      data: {
-        follow_up_status: 'converted',
-        converted_member_id: member.id,
-        converted_at: new Date(),
-        // A converted visitor becomes a member and is soft-deleted so it never
-        // surfaces again in visitor pulls (list/search/follow-up board).
-        deleted_at: new Date(),
-      },
-      include: {
-        assigned_to: { select: { first_name: true, last_name: true } },
-        branch: { select: { id: true, name: true } },
-      },
-    });
-
-    await this.audit.log({
-      userId,
-      churchId,
-      entity: 'visitor',
-      action: 'UPDATE',
-      entityId: id,
-      oldValues: { follow_up_status: visitor.follow_up_status },
-      newValues: { follow_up_status: 'converted', converted_member_id: member.id },
-    });
-
-    this.logger.log(`Visitor ${id} converted to member ${member.id}`);
-
-    return {
-      visitor: this.toResponseDto(updatedVisitor),
-      memberId: member.id,
-    };
+    if (result.created) {
+      await this.audit.notifyMutation({
+        userId,
+        churchId,
+        entity: 'visitor',
+        action: 'UPDATE',
+        entityId: id,
+        newValues: { follow_up_status: 'converted', converted_member_id: result.memberId },
+      });
+    }
+    return { visitor: this.toResponseDto(result.visitor), memberId: result.memberId };
   }
 
   private isVisible(churchId: string, branchId?: string | null): boolean {
