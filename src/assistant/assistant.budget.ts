@@ -1,3 +1,4 @@
+import { redisNamespace, redisKey } from '../redis/redis-namespace';
 import { brandConfig, LEGACY_BRAND } from '../brand/brand';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -36,13 +37,14 @@ export class AssistantBudget {
       day: '2-digit',
     }).format(new Date());
     const prefix = `${LEGACY_BRAND.assistantBudgetPrefix}${day}`;
+    const namespace = redisNamespace((name) => this.config.get(name));
     const keys = [
       `${prefix}:user:${churchId}:${profileId}`,
       `${prefix}:church:${churchId}`,
       `${prefix}:global`,
       `${prefix}:spend:church:${churchId}`,
       `${prefix}:spend:global`,
-    ];
+    ].map((key) => redisKey(key, namespace));
     const args = [
       1,
       30,

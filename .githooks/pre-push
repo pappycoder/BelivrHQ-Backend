@@ -1,0 +1,2 @@
+#!/bin/sh
+node scripts/check-private-env.cjs --push "$1"

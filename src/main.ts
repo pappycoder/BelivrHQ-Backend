@@ -51,7 +51,7 @@ async function bootstrap(): Promise<void> {
   if (env.SENTRY_DSN) {
     Sentry.init({
       dsn: env.SENTRY_DSN,
-      environment: env.NODE_ENV,
+      environment: process.env.VERCEL_ENV || env.NODE_ENV,
       integrations: [nodeProfilingIntegration()],
       tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
       profilesSampleRate: env.NODE_ENV === 'production' ? 0.05 : 1.0,

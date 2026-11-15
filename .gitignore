@@ -35,3 +35,8 @@ lerna-debug.log*
 
 # Private operations-console database backups
 .ops/
+
+# Private Vercel sync files and atomic-write scratch files. Commit only config/vercel/*.env.example.
+.env.vercel.shared*
+.env.vercel.preview*
+.env.vercel.production*

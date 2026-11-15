@@ -90,10 +90,22 @@ const envSchema = z
     // ─── Redis (Cache + Queue) ────────────────────────────────
     REDIS_URL: z
       .string()
-      .refine((val) => val.startsWith('redis://') || val.startsWith('https://'), {
-        message: 'REDIS_URL must start with redis:// (local) or https:// (Upstash)',
-      }),
+      .refine(
+        (val) =>
+          val.startsWith('redis://') || val.startsWith('rediss://') || val.startsWith('https://'),
+        {
+          message: 'REDIS_URL must start with redis://, rediss:// or https:// (Upstash)',
+        },
+      ),
     UPSTASH_REDIS_TOKEN: z.string().optional(),
+    REDIS_NAMESPACE: optionalSetting(
+      z
+        .string()
+        .regex(
+          /^[a-zA-Z0-9_-]{1,64}$/,
+          'REDIS_NAMESPACE must contain 1 to 64 letters, numbers, underscores or hyphens',
+        ),
+    ),
 
     // ─── Payments (Optional for MVP, required for production) ─
     SUBSCRIPTION_PAYSTACK_CURRENCIES: z

@@ -1,3 +1,4 @@
+import { queuePrefix } from '../redis/redis-namespace';
 /**
  * @file queues.module.ts
  * @description BullMQ background job queue infrastructure.
@@ -54,6 +55,7 @@ const DEFAULT_JOB_OPTIONS = {
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
+        prefix: queuePrefix((name) => config.get(name)),
         connection: {
           url: config.get<string>('REDIS_URL', 'redis://localhost:6379'),
           maxRetriesPerRequest: null,

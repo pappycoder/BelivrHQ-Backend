@@ -1,3 +1,4 @@
+import { redisNamespace, redisKey } from './redis-namespace';
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis as UpstashRedis } from '@upstash/redis';
@@ -10,8 +11,10 @@ export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly _client: RedisClient;
   private readonly _driver: 'ioredis' | 'upstash';
+  private readonly _namespace: string;
 
   constructor(private readonly config: ConfigService) {
+    this._namespace = redisNamespace((name) => this.config.get(name));
     const url = this.config.get<string>('REDIS_URL');
     if (!url) {
       throw new Error('REDIS_URL must be set');
@@ -36,6 +39,10 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  key(key: string): string {
+    return redisKey(key, this._namespace || '');
+  }
+
   get client(): RedisClient {
     return this._client;
   }
@@ -52,6 +59,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async get<T = unknown>(key: string): Promise<T | null> {
+    key = this.key(key);
     if (this._driver === 'upstash') {
       return (this._client as UpstashRedis).get<T>(key);
     }
@@ -66,6 +74,7 @@ export class RedisService implements OnModuleDestroy {
 
   /** One atomic read of related keys, with the same decoding as get(). */
   async mget(...keys: string[]): Promise<unknown[]> {
+    keys = keys.map((key) => this.key(key));
     if (!keys.length) return [];
     if (this._driver === 'upstash') return (this._client as UpstashRedis).mget(...keys);
     const values = await (this._client as IORedis).mget(...keys);
@@ -80,6 +89,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
+    key = this.key(key);
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
     if (this._driver === 'upstash') {
       if (ttlSeconds) {
@@ -98,12 +108,14 @@ export class RedisService implements OnModuleDestroy {
 
   /** Atomically consume a one-use authentication challenge. */
   async consume(key: string): Promise<unknown | null> {
+    key = this.key(key);
     if (this._driver === 'upstash') return (this._client as UpstashRedis).getdel(key);
     return (this._client as IORedis).getdel(key);
   }
 
   /** Bounded SCAN iteration; Redis DEL does not expand glob patterns. */
   async deleteMatching(pattern: string): Promise<void> {
+    pattern = this.key(pattern);
     let cursor = '0';
     do {
       if (this._driver === 'upstash') {
@@ -122,6 +134,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async del(key: string): Promise<void> {
+    key = this.key(key);
     if (this._driver === 'upstash') {
       await (this._client as UpstashRedis).del(key);
     } else {
@@ -140,6 +153,7 @@ export class RedisService implements OnModuleDestroy {
    * @returns The new counter value
    */
   async incr(key: string, ttlSeconds = 0): Promise<number> {
+    key = this.key(key);
     // One atomic round trip: a counter must never be left without its TTL.
     if (!ttlSeconds) return this._client.incr(key);
     const script =
@@ -150,6 +164,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async exists(key: string): Promise<boolean> {
+    key = this.key(key);
     if (this._driver === 'upstash') {
       const result = await (this._client as UpstashRedis).exists(key);
       return result === 1;
@@ -159,6 +174,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async expire(key: string, ttlSeconds: number): Promise<void> {
+    key = this.key(key);
     if (this._driver === 'upstash') {
       await (this._client as UpstashRedis).expire(key, ttlSeconds);
     } else {

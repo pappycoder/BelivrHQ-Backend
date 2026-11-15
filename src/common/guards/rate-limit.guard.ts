@@ -1,3 +1,4 @@
+import { redisNamespace, redisKey } from '../../redis/redis-namespace';
 import { secretKeys } from '../../config/secret-keys';
 import { LEGACY_BRAND } from '../../brand/brand';
 import { measureStage, queryMetrics } from '../../prisma/query-metrics';
@@ -269,6 +270,7 @@ export class RateLimitGuard implements CanActivate {
           redis: this.redis.client as unknown as Redis,
           limiter: Ratelimit.slidingWindow(config.limit, `${config.windowSeconds} s`),
           analytics: true,
+          prefix: redisKey('@upstash/ratelimit', redisNamespace()),
         });
         this.limiterCache.set(cacheKey, limiter);
       }
