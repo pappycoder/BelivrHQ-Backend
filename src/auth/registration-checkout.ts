@@ -1,3 +1,4 @@
+import { secretKeys } from '../config/secret-keys';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
 export const REGISTRATION_CHECKOUT_TTL = 86400;
@@ -11,11 +12,12 @@ interface Claims extends Identity {
   expires: number;
   nonce: string;
 }
-function key(config: { get<T = string>(name: string): T | undefined }): string {
-  const value = config.get<string>('ALTCHA_HMAC_KEY');
-  if (!value || value.length < 32)
+function keys(config: { get<T = string>(name: string): T | undefined }): string[] {
+  try {
+    return secretKeys('ALTCHA_HMAC_KEY', (name) => config.get(name));
+  } catch {
     throw new ServiceUnavailableException('Registration checkout is unavailable.');
-  return value;
+  }
 }
 function signature(payload: string, secret: string) {
   return createHmac('sha256', secret)
@@ -35,21 +37,26 @@ export function createRegistrationCheckout(
       nonce: randomBytes(16).toString('hex'),
     } satisfies Claims),
   ).toString('base64url');
-  return `${payload}.${signature(payload, key(config)).toString('base64url')}`;
+  return `${payload}.${signature(payload, keys(config)[0]).toString('base64url')}`;
 }
 export function readRegistrationCheckout(
   config: { get<T = string>(name: string): T | undefined },
   token: unknown,
 ): Claims {
-  const secret = key(config);
+  const secrets = keys(config);
   try {
     if (typeof token !== 'string' || token.length > 2048) throw new Error();
     const parts = token.split('.');
     if (parts.length !== 2) throw new Error();
     const [payload, signed] = parts;
-    const expected = signature(payload, secret),
-      actual = Buffer.from(signed, 'base64url');
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error();
+    const actual = Buffer.from(signed, 'base64url');
+    if (
+      !secrets.some((secret) => {
+        const expected = signature(payload, secret);
+        return actual.length === expected.length && timingSafeEqual(actual, expected);
+      })
+    )
+      throw new Error();
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as Claims;
     if (
       data.purpose !== 'registration-billing' ||

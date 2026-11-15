@@ -43,7 +43,9 @@ describe('bot protection with real signed ALTCHA proofs', () => {
       }),
     };
     bots = new BotProtectionService(
-      { get: () => secret } as unknown as ConfigService,
+      {
+        get: (name: string) => (name === 'ALTCHA_HMAC_KEY' ? secret : undefined),
+      } as unknown as ConfigService,
       redis as unknown as RedisService,
     );
   });
@@ -54,6 +56,37 @@ describe('bot protection with real signed ALTCHA proofs', () => {
     expect(solution).not.toBeNull();
     return { challenge, solution };
   }
+
+  it('accepts a pre-rotation proof once while issuing new proofs with the new key', async () => {
+    const payload = await solved();
+    const values: Record<string, string> = {
+      ALTCHA_HMAC_KEY: 'rotated-altcha-key-'.repeat(4),
+      ALTCHA_HMAC_KEY_PREVIOUS_KEYS: JSON.stringify([secret]),
+    };
+    const rotated = new BotProtectionService(
+      { get: (name: string) => values[name] } as unknown as ConfigService,
+      redis as unknown as RedisService,
+    );
+    const body = { altcha: encode(payload), website: '' };
+    await expect(rotated.verify('POST', publicPath, body)).resolves.toBeUndefined();
+    await expect(rotated.verify('POST', publicPath, body)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    const challenge = await rotated.challenge('POST', publicPath);
+    const solution = await solveChallenge({ challenge, deriveKey });
+    const currentOnly = new BotProtectionService(
+      {
+        get: (name: string) => (name === 'ALTCHA_HMAC_KEY' ? values.ALTCHA_HMAC_KEY : undefined),
+      } as unknown as ConfigService,
+      redis as unknown as RedisService,
+    );
+    await expect(
+      currentOnly.verify('POST', publicPath, {
+        altcha: encode({ challenge, solution }),
+        website: '',
+      }),
+    ).resolves.toBeUndefined();
+  });
 
   it('accepts a signed proof exactly once, even with simultaneous requests', async () => {
     const payload = await solved();

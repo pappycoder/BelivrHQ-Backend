@@ -73,6 +73,41 @@ describe('Environment defaults', () => {
     expect(environment(values)).toMatchObject(values);
   });
 
+  it('validates rotation settings and normalizes pasted hex keys', () => {
+    const env = environment({
+      INTEGRATIONS_ENCRYPTION_KEY: ' \n' + 'A'.repeat(64) + '\r\n',
+      INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS: JSON.stringify(['b'.repeat(64)]),
+    });
+    expect(env.INTEGRATIONS_ENCRYPTION_KEY).toBe('A'.repeat(64));
+    expect(env.INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS).toBe(JSON.stringify(['b'.repeat(64)]));
+  });
+  it.each([
+    { TWO_FACTOR_ENCRYPTION_KEY: 'bad-key' },
+    {
+      INTEGRATIONS_ENCRYPTION_KEY: 'a'.repeat(64),
+      INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS: '["bad-key"]',
+    },
+    { TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS_KEYS: JSON.stringify(['a'.repeat(64)]) },
+    { ALTCHA_HMAC_KEY: '' },
+    {
+      NODE_ENV: 'production',
+      PASTORAL_ENCRYPTION_KEY: 'p'.repeat(32),
+      PASTORAL_ENCRYPTION_KEY_PREVIOUS_KEYS: JSON.stringify(['dev-only-change-in-production-32b']),
+    },
+  ])('rejects unsafe configuration without logging secrets: %j', (values) => {
+    const exit = jest.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('configuration rejected');
+    });
+    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() => environment(values)).toThrow('configuration rejected');
+      expect(JSON.stringify(log.mock.calls)).not.toContain('bad-key');
+    } finally {
+      exit.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it('rejects a blank production-required pastoral encryption key', () => {
     const exit = jest.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('configuration rejected');

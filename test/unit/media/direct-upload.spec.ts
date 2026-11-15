@@ -13,6 +13,8 @@ describe('direct media authorization and completion', () => {
     permissions: ['sermons:update'],
   } as ViewerScope;
   let service: MediaService;
+  let settings: Record<string, string>;
+  const legacyKey = 'test-only-signing-key-'.repeat(2);
   let prisma: ReturnType<typeof createPrismaMock>;
   let storage: { createSignedUploadUrl: jest.Mock; info: jest.Mock };
   let audit: { log: jest.Mock };
@@ -24,6 +26,7 @@ describe('direct media authorization and completion', () => {
     branchId: 'branch-a',
   };
   beforeEach(() => {
+    settings = {};
     jest
       .mocked(assertPlanFeature)
       .mockReset()
@@ -53,8 +56,8 @@ describe('direct media authorization and completion', () => {
       } as never,
       {
         get: (key: string, fallback: unknown) =>
-          key === 'WEB_URL' ? 'https://church.example' : fallback,
-        getOrThrow: () => 'test-only-signing-key',
+          settings[key] ?? (key === 'WEB_URL' ? 'https://church.example' : fallback),
+        getOrThrow: () => settings.SUPABASE_SERVICE_ROLE_KEY ?? legacyKey,
       } as never,
       prisma as never,
       audit as never,
@@ -66,6 +69,26 @@ describe('direct media authorization and completion', () => {
       } as never,
     );
   });
+  it('supports dedicated signing-key rotation without accepting the Supabase fallback indefinitely', async () => {
+    const legacy = await service.prepareDirectUpload(input, churchId, 'user-a', viewer);
+    settings.MEDIA_UPLOAD_SIGNING_KEY = 'new-upload-key-'.repeat(4);
+    settings.MEDIA_UPLOAD_SIGNING_KEY_PREVIOUS_KEYS = JSON.stringify([legacyKey]);
+    await expect(
+      service.completeDirectUpload(legacy.ticket, churchId, 'user-a', viewer),
+    ).resolves.toBeDefined();
+    settings.MEDIA_UPLOAD_SIGNING_KEY_PREVIOUS_KEYS = '[]';
+    storage.info.mockClear();
+    await expect(
+      service.completeDirectUpload(legacy.ticket, churchId, 'user-a', viewer),
+    ).rejects.toThrow('Invalid upload authorization');
+    expect(storage.info).not.toHaveBeenCalled();
+    const current = await service.prepareDirectUpload(input, churchId, 'user-a', viewer);
+    settings.SUPABASE_SERVICE_ROLE_KEY = 'rotated-provider-service-role';
+    await expect(
+      service.completeDirectUpload(current.ticket, churchId, 'user-a', viewer),
+    ).resolves.toBeDefined();
+  });
+
   it('verifies stored bytes before publishing a private library asset and is idempotent', async () => {
     const grant = await service.prepareDirectUpload(input, churchId, 'user-a', viewer);
     expect(prisma.mediaAsset.upsert).not.toHaveBeenCalled();

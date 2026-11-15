@@ -1,3 +1,4 @@
+import { secretKeys } from '../config/secret-keys';
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt, createHash } from 'crypto';
@@ -13,10 +14,12 @@ export class BotProtectionService {
     private readonly redis: RedisService,
   ) {}
 
-  private secret(): string {
-    const key = this.config.get<string>('ALTCHA_HMAC_KEY');
-    if (!key || key.length < 32) throw this.unavailable();
-    return key;
+  private secrets(): string[] {
+    try {
+      return secretKeys('ALTCHA_HMAC_KEY', (name) => this.config.get(name));
+    } catch {
+      throw this.unavailable();
+    }
   }
 
   private unavailable() {
@@ -45,7 +48,7 @@ export class BotProtectionService {
       cost: 1,
       counter: randomInt(1, 100001),
       deriveKey,
-      hmacSignatureSecret: this.secret(),
+      hmacSignatureSecret: this.secrets()[0],
       expiresAt: new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000),
       data: { scope: this.scope(method, path, userId) },
     });
@@ -103,14 +106,17 @@ export class BotProtectionService {
       !/^[a-f0-9]{64}$/.test(solution.derivedKey)
     )
       this.invalid();
-    const secret = this.secret();
+    const secrets = this.secrets();
     let verified = false;
-    try {
-      verified = (
-        await verifySolution({ challenge, solution, deriveKey, hmacSignatureSecret: secret })
-      ).verified;
-    } catch {
-      this.invalid();
+    for (const secret of secrets) {
+      try {
+        verified = (
+          await verifySolution({ challenge, solution, deriveKey, hmacSignatureSecret: secret })
+        ).verified;
+      } catch {
+        /* Try retained signing keys without weakening proof validation. */
+      }
+      if (verified) break;
     }
     if (!verified) this.invalid();
     let issued: unknown;

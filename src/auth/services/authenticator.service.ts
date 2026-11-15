@@ -1,3 +1,5 @@
+import { secretKeys } from '../../config/secret-keys';
+import { encryptStored, decryptStored } from '../../config/stored-encryption';
 import { LEGACY_BRAND } from '../../brand/brand';
 import {
   Injectable,
@@ -8,14 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-  timingSafeEqual,
-} from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { TOTP, Secret } from 'otpauth';
 import { toDataURL } from 'qrcode';
 import { JWTPayload } from 'jose';
@@ -39,40 +34,31 @@ export class AuthenticatorService {
     private readonly jwks: JwksService,
   ) {}
 
-  private key(): Buffer {
-    const value = this.config.get<string>('TWO_FACTOR_ENCRYPTION_KEY');
-    if (!value || !/^[a-f\d]{64}$/i.test(value))
+  private keys(): string[] {
+    try {
+      return secretKeys('TWO_FACTOR_ENCRYPTION_KEY', (name) => this.config.get(name));
+    } catch {
       throw new ServiceUnavailableException(
         'Authenticator security is not configured. Contact your administrator.',
       );
-    return Buffer.from(value, 'hex');
+    }
   }
-
   private encrypt(userId: string, secret: string): string {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    cipher.setAAD(Buffer.from(`${LEGACY_BRAND.totpDomain}${userId}`));
-    const content = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
-    return [
-      'v1',
-      iv.toString('hex'),
-      cipher.getAuthTag().toString('hex'),
-      content.toString('hex'),
-    ].join(':');
+    return encryptStored(
+      'TWO_FACTOR_ENCRYPTION_KEY',
+      this.keys()[0],
+      secret,
+      `${LEGACY_BRAND.totpDomain}${userId}`,
+    );
   }
-
   private decrypt(userId: string, value: string): string {
-    const [version, iv, tag, content] = value.split(':');
-    if (version !== 'v1' || !iv || !tag || !content)
-      throw new ServiceUnavailableException('Authenticator data is unavailable.');
     try {
-      const decipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(iv, 'hex'));
-      decipher.setAAD(Buffer.from(`${LEGACY_BRAND.totpDomain}${userId}`));
-      decipher.setAuthTag(Buffer.from(tag, 'hex'));
-      return Buffer.concat([
-        decipher.update(Buffer.from(content, 'hex')),
-        decipher.final(),
-      ]).toString('utf8');
+      return decryptStored(
+        'TWO_FACTOR_ENCRYPTION_KEY',
+        this.keys(),
+        value,
+        `${LEGACY_BRAND.totpDomain}${userId}`,
+      ).plaintext;
     } catch {
       throw new ServiceUnavailableException(
         'Unable to decrypt authenticator data. Contact your administrator.',
@@ -123,7 +109,7 @@ export class AuthenticatorService {
   }
 
   async setup(userId: string, email: string) {
-    this.key();
+    this.keys();
     if (await this.prisma.profileAuthenticator.findUnique({ where: { user_id: userId } }))
       throw new BadRequestException('Authenticator is already enabled.');
     const secret = new Secret({ size: 20 }).base32;
@@ -144,7 +130,8 @@ export class AuthenticatorService {
     const pending = typeof raw === 'string' ? (JSON.parse(raw) as PendingSetup) : raw;
     if (!pending || pending.userId !== userId)
       throw new BadRequestException('Authenticator setup expired. Start again.');
-    const step = this.matchedStep(this.decrypt(userId, pending.ciphertext), code);
+    const secret = this.decrypt(userId, pending.ciphertext);
+    const step = this.matchedStep(secret, code);
     const sessionId = await this.sessionId(userId, token);
     if (!(await this.redis.consume(`mfa:setup:${factorId}`)))
       throw new BadRequestException('Setup was already used.');
@@ -156,7 +143,8 @@ export class AuthenticatorService {
       await tx.profileAuthenticator.create({
         data: {
           user_id: userId,
-          secret_ciphertext: pending.ciphertext,
+          // A setup created before rotation must never persist old-key ciphertext.
+          secret_ciphertext: this.encrypt(userId, secret),
           revision: pending.revision,
           last_used_step: step,
           recovery_hashes: recoveryCodes.map((code) =>

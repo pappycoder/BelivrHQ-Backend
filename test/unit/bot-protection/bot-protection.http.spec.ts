@@ -35,7 +35,13 @@ describe('HTTP bot protection pipeline (isolated, no database)', () => {
       providers: [
         BotProtectionService,
         { provide: IntakeService, useValue: { submit: businessWrite } },
-        { provide: ConfigService, useValue: { get: () => 'http-test-secret-'.repeat(4) } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (name: string) =>
+              name === 'ALTCHA_HMAC_KEY' ? 'http-test-secret-'.repeat(4) : undefined,
+          },
+        },
         {
           provide: RedisService,
           useValue: {

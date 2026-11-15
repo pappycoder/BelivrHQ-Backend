@@ -1,3 +1,4 @@
+import { normalizeSecret, previousSecrets, SECRET_RULES, SecretName } from './secret-keys';
 import { z } from 'zod';
 import { databasePoolDefaults } from '../prisma/pool-config';
 
@@ -6,6 +7,37 @@ const databaseDefaults = databasePoolDefaults(process.env);
 // Empty feature-key slots are unconfigured; production requirements still apply.
 function optionalSetting<T extends z.ZodType>(schema: T) {
   return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
+
+function secretSetting(name: SecretName) {
+  return z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .transform((value, ctx) => {
+        try {
+          return normalizeSecret(name, value)!;
+        } catch (error) {
+          ctx.addIssue({ code: 'custom', message: (error as Error).message });
+          return z.NEVER;
+        }
+      })
+      .optional(),
+  );
+}
+function previousSetting(name: SecretName) {
+  return optionalSetting(
+    z.string().superRefine((value, ctx) => {
+      try {
+        previousSecrets(name, value);
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${name}_PREVIOUS_KEYS must be a JSON array of at most 5 valid, nonempty keys`,
+        });
+      }
+    }),
+  );
 }
 
 /**
@@ -23,7 +55,8 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     WEB_URL: z.url().default('http://localhost:3000'),
-    ALTCHA_HMAC_KEY: z.string().min(32, 'ALTCHA_HMAC_KEY must contain at least 32 characters'),
+    ALTCHA_HMAC_KEY: secretSetting('ALTCHA_HMAC_KEY'),
+    ALTCHA_HMAC_KEY_PREVIOUS_KEYS: previousSetting('ALTCHA_HMAC_KEY'),
 
     // ─── Database (Prisma + PostgreSQL) ───────────────────────
     DATABASE_URL: z.string().startsWith('postgresql://', {
@@ -80,13 +113,8 @@ const envSchema = z
     // ─── Church provider accounts and callback verification ───
     PUBLIC_API_URL: optionalSetting(z.url()),
     FLUTTERWAVE_WEBHOOK_SECRET: z.string().optional(),
-    INTEGRATIONS_ENCRYPTION_KEY: z.preprocess(
-      (value) => (value === '' ? undefined : value),
-      z
-        .string()
-        .regex(/^[a-fA-F0-9]{64}$/)
-        .optional(),
-    ),
+    INTEGRATIONS_ENCRYPTION_KEY: secretSetting('INTEGRATIONS_ENCRYPTION_KEY'),
+    INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS: previousSetting('INTEGRATIONS_ENCRYPTION_KEY'),
     ENABLE_SMS_FALLBACK: z
       .preprocess((value) => value === true || value === 'true', z.boolean())
       .default(false),
@@ -101,26 +129,54 @@ const envSchema = z
     // ─── Storage (Supabase Storage) ──────────────────────────
     SUPABASE_STORAGE_BUCKET: z.string().default('media'),
     SUPABASE_PRIVATE_STORAGE_BUCKET: z.string().default('media-private'),
-    INTERNAL_PROXY_SECRET: optionalSetting(z.string().min(32)),
-
-    // AES-256-GCM key for encrypting pastoral note content at rest
-    PASTORAL_ENCRYPTION_KEY: optionalSetting(
-      z.string().min(16, 'PASTORAL_ENCRYPTION_KEY must be at least 16 characters'),
-    ),
-
-    // Dedicated 32-byte hex key; no development fallback for authenticator secrets.
-    TWO_FACTOR_ENCRYPTION_KEY: z.preprocess(
-      (value) => (value === '' ? undefined : value),
-      z
-        .string()
-        .regex(/^[a-fA-F0-9]{64}$/, 'TWO_FACTOR_ENCRYPTION_KEY must be 64 hexadecimal characters')
-        .optional(),
-    ),
+    MEDIA_UPLOAD_SIGNING_KEY: secretSetting('MEDIA_UPLOAD_SIGNING_KEY'),
+    MEDIA_UPLOAD_SIGNING_KEY_PREVIOUS_KEYS: previousSetting('MEDIA_UPLOAD_SIGNING_KEY'),
+    INTERNAL_PROXY_SECRET: secretSetting('INTERNAL_PROXY_SECRET'),
+    INTERNAL_PROXY_SECRET_PREVIOUS_KEYS: previousSetting('INTERNAL_PROXY_SECRET'),
+    PASTORAL_ENCRYPTION_KEY: secretSetting('PASTORAL_ENCRYPTION_KEY'),
+    PASTORAL_ENCRYPTION_KEY_PREVIOUS_KEYS: previousSetting('PASTORAL_ENCRYPTION_KEY'),
+    TWO_FACTOR_ENCRYPTION_KEY: secretSetting('TWO_FACTOR_ENCRYPTION_KEY'),
+    TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS_KEYS: previousSetting('TWO_FACTOR_ENCRYPTION_KEY'),
 
     // ─── Monitoring (Optional) ────────────────────────────────
     SENTRY_DSN: z.string().optional(),
   })
   .superRefine((value, ctx) => {
+    if (!value.ALTCHA_HMAC_KEY)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ALTCHA_HMAC_KEY'],
+        message: 'ALTCHA_HMAC_KEY is required (at least 32 characters)',
+      });
+    for (const name of Object.keys(SECRET_RULES) as SecretName[]) {
+      try {
+        if (!value[name] && previousSecrets(name, value[`${name}_PREVIOUS_KEYS`]).length)
+          ctx.addIssue({
+            code: 'custom',
+            path: [`${name}_PREVIOUS_KEYS`],
+            message: `Configure ${name} before previous keys`,
+          });
+      } catch {
+        /* The field validator reports invalid lists. */
+      }
+    }
+    if (value.NODE_ENV === 'production' && value.PASTORAL_ENCRYPTION_KEY_PREVIOUS_KEYS) {
+      try {
+        if (
+          previousSecrets(
+            'PASTORAL_ENCRYPTION_KEY',
+            value.PASTORAL_ENCRYPTION_KEY_PREVIOUS_KEYS,
+          ).includes('dev-only-change-in-production-32b')
+        )
+          ctx.addIssue({
+            code: 'custom',
+            path: ['PASTORAL_ENCRYPTION_KEY_PREVIOUS_KEYS'],
+            message: 'Development fallback keys cannot be retained in production',
+          });
+      } catch {
+        /* The field validator reports invalid lists. */
+      }
+    }
     if (
       value.NODE_ENV === 'production' &&
       (!value.PASTORAL_ENCRYPTION_KEY ||

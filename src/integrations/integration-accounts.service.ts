@@ -7,7 +7,9 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { secretKeys } from '../config/secret-keys';
+import { encryptStored, decryptStored } from '../config/stored-encryption';
 import { isEmail } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLoggingService } from '../common/services/audit-logging.service';
@@ -53,23 +55,20 @@ export class IntegrationAccountsService {
     private readonly audit: AuditLoggingService,
     private readonly transport: ProviderTransportService,
   ) {}
-  private key() {
-    const value = this.config.get<string>('INTEGRATIONS_ENCRYPTION_KEY');
-    if (!value || !/^[a-fA-F0-9]{64}$/.test(value))
+  private keys() {
+    try {
+      return secretKeys('INTEGRATIONS_ENCRYPTION_KEY', (name) => this.config.get(name));
+    } catch {
       throw new ServiceUnavailableException('Integration encryption is not configured');
-    return Buffer.from(value, 'hex');
+    }
   }
   encrypt(churchId: string, accountId: string, provider: string, input: Record<string, string>) {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    cipher.setAAD(Buffer.from(`${churchId}:${accountId}:${provider}:v1`));
-    const data = Buffer.concat([cipher.update(JSON.stringify(input), 'utf8'), cipher.final()]);
-    return [
-      'v1',
-      iv.toString('base64'),
-      cipher.getAuthTag().toString('base64'),
-      data.toString('base64'),
-    ].join('.');
+    return encryptStored(
+      'INTEGRATIONS_ENCRYPTION_KEY',
+      this.keys()[0],
+      JSON.stringify(input),
+      `${churchId}:${accountId}:${provider}:v1`,
+    );
   }
   decrypt(
     churchId: string,
@@ -78,15 +77,13 @@ export class IntegrationAccountsService {
     value: string,
   ): Record<string, string> {
     try {
-      const [v, iv, tag, data, extra] = value.split('.');
-      if (v !== 'v1' || extra || !iv || !tag || !data) throw new Error();
-      const cipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(iv, 'base64'));
-      cipher.setAAD(Buffer.from(`${churchId}:${accountId}:${provider}:v1`));
-      cipher.setAuthTag(Buffer.from(tag, 'base64'));
       return JSON.parse(
-        Buffer.concat([cipher.update(Buffer.from(data, 'base64')), cipher.final()]).toString(
-          'utf8',
-        ),
+        decryptStored(
+          'INTEGRATIONS_ENCRYPTION_KEY',
+          this.keys(),
+          value,
+          `${churchId}:${accountId}:${provider}:v1`,
+        ).plaintext,
       ) as Record<string, string>;
     } catch {
       throw new ServiceUnavailableException('Integration credentials cannot be decrypted');

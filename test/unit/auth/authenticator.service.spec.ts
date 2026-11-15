@@ -1,3 +1,4 @@
+import { decryptStored } from '../../../src/config/stored-encryption';
 import { TOTP } from 'otpauth';
 import { AuthenticatorService } from '../../../src/auth/services/authenticator.service';
 import { createPrismaMock } from '../../helpers/prisma-mock.helper';
@@ -6,8 +7,10 @@ describe('Backend authenticator security', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let service: AuthenticatorService;
   let redis: { get: jest.Mock; set: jest.Mock; consume: jest.Mock; incr: jest.Mock };
+  let settings: Record<string, string>;
   const userId = 'user-1';
   beforeEach(() => {
+    settings = { TWO_FACTOR_ENCRYPTION_KEY: '11'.repeat(32) };
     prisma = createPrismaMock();
     const store = new Map<string, unknown>();
     redis = {
@@ -25,7 +28,9 @@ describe('Backend authenticator security', () => {
     service = new AuthenticatorService(
       prisma as never,
       redis as never,
-      { get: () => '11'.repeat(32) } as never,
+      {
+        get: (name: string) => settings[name],
+      } as never,
       { verifyToken: async () => ({ payload: { sub: userId, session_id: 'session-1' } }) } as never,
     );
     (prisma.$transaction as unknown as jest.Mock).mockImplementation(async (callback) =>
@@ -55,6 +60,21 @@ describe('Backend authenticator security', () => {
     );
     expect(prisma.profileAuthenticator.create).not.toHaveBeenCalled();
   });
+  it('finishes a pre-rotation setup while persisting only current-key ciphertext', async () => {
+    prisma.profileAuthenticator.findUnique.mockResolvedValue(null);
+    const setup = await service.setup(userId, 'test@example.com');
+    settings.TWO_FACTOR_ENCRYPTION_KEY = '22'.repeat(32);
+    settings.TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS_KEYS = JSON.stringify(['11'.repeat(32)]);
+    prisma.profileAuthenticator.create.mockImplementation(async ({ data }) => data);
+    const code = new TOTP({ secret: setup.secret }).generate();
+    await service.activate(userId, 'signed-token', setup.factorId, code);
+    const saved = prisma.profileAuthenticator.create.mock.calls[0][0].data.secret_ciphertext;
+    expect(service['decrypt'](userId, saved)).toBe(setup.secret);
+    expect(() => decryptStored('TWO_FACTOR_ENCRYPTION_KEY', ['11'.repeat(32)], saved)).toThrow();
+    delete settings.TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS_KEYS;
+    expect(service['decrypt'](userId, saved)).toBe(setup.secret);
+  });
+
   it('creates one-use hashed recovery codes and approves only the verified session', async () => {
     const { result } = await enroll();
     expect(result.recoveryCodes).toHaveLength(10);

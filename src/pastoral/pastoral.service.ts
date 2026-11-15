@@ -1,4 +1,5 @@
-import { LEGACY_BRAND } from '../brand/brand';
+import { secretKeys } from '../config/secret-keys';
+import { encryptStored, decryptStored, deriveStoredKey } from '../config/stored-encryption';
 import { RequestContextService } from '../common/services/request-context.service';
 /**
  * @file pastoral.service.ts
@@ -38,34 +39,16 @@ import { PastoralNoteResponseDto } from './dto/pastoral-note-response.dto';
 import { CreateLifeEventDto } from './dto/create-life-event.dto';
 import { ListLifeEventsDto } from './dto/list-life-events.dto';
 import { LifeEventResponseDto } from './dto/life-event-response.dto';
-import * as crypto from 'crypto';
-
-/**
- * Encryption algorithm used for pastoral note content.
- * AES-256-GCM provides both confidentiality and integrity.
- */
-const ALGORITHM = 'aes-256-gcm';
-
-/**
- * Length of the random IV (initialization vector) for each encryption operation.
- */
-const IV_LENGTH = 16;
-
-/**
- * Length of the authentication tag for GCM mode.
- */
-const AUTH_TAG_LENGTH = 16;
-
 @Injectable()
 export class PastoralService {
   // Initialize the logger for this service
   private readonly logger = new Logger(PastoralService.name);
 
   /**
-   * Encryption key derived from PASTORAL_ENCRYPTION_KEY env var.
+   * Current and retained pastoral encryption passphrases.
    * Falls back to a dev-only key for local development.
    */
-  private readonly encryptionKey: Buffer;
+  private readonly encryptionKeys: Buffer[];
 
   constructor(
     // Inject PrismaService for database access
@@ -83,8 +66,9 @@ export class PastoralService {
       throw new Error('PASTORAL_ENCRYPTION_KEY must be configured in production');
     }
     const rawKey = configuredKey || 'dev-only-change-in-production-32b';
-    // Derive a 32-byte AES-256 key using scrypt with a fixed salt
-    this.encryptionKey = crypto.scryptSync(rawKey, LEGACY_BRAND.pastoralSalt, 32);
+    this.encryptionKeys = secretKeys('PASTORAL_ENCRYPTION_KEY', (name) =>
+      name === 'PASTORAL_ENCRYPTION_KEY' ? rawKey : process.env[name],
+    ).map((secret) => deriveStoredKey('PASTORAL_ENCRYPTION_KEY', secret));
   }
 
   /**
@@ -627,62 +611,16 @@ export class PastoralService {
    * @returns Encrypted string in format: iv:authTag:ciphertext (all hex-encoded)
    */
   encrypt(plaintext: string): string {
-    // Generate a random initialization vector
-    const iv = crypto.randomBytes(IV_LENGTH);
-    // Create the AES-256-GCM cipher with the derived key and IV
-    const cipher = crypto.createCipheriv(ALGORITHM, this.encryptionKey, iv, {
-      authTagLength: AUTH_TAG_LENGTH,
-    });
-
-    // Encrypt the plaintext in chunks and finalize
-    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-
-    // Extract the authentication tag for integrity verification
-    const authTag = cipher.getAuthTag();
-
-    // Return the combined payload: iv:authTag:ciphertext (all hex)
-    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+    return encryptStored('PASTORAL_ENCRYPTION_KEY', this.encryptionKeys[0], plaintext);
   }
 
-  /**
-   * Decrypts AES-256-GCM encrypted content.
-   *
-   * @param encryptedPayload - Encrypted string in format: iv:authTag:ciphertext
-   * @returns Decrypted plaintext
-   * @throws Error if decryption fails (tampered data, wrong key)
-   */
   decrypt(encryptedPayload: string): string {
-    // Split the payload into iv, auth tag, and ciphertext components
-    const [ivHex, authTagHex, ciphertext] = encryptedPayload.split(':');
-
-    // Validate the payload format has all three components
-    if (!ivHex || !authTagHex || !ciphertext) {
-      this.logger.error('Invalid encrypted payload format');
-      return '[Decryption failed: invalid format]';
-    }
-
-    // Attempt decryption within a try-catch for error handling
+    if (encryptedPayload.split(':').length !== 3) return '[Decryption failed: invalid format]';
     try {
-      // Reconstruct the IV and auth tag from hex strings
-      const iv = Buffer.from(ivHex, 'hex');
-      const authTag = Buffer.from(authTagHex, 'hex');
-      // Create the decipher with the derived key and reconstructed IV
-      const decipher = crypto.createDecipheriv(ALGORITHM, this.encryptionKey, iv, {
-        authTagLength: AUTH_TAG_LENGTH,
-      });
-
-      // Set the auth tag for GCM integrity verification
-      decipher.setAuthTag(authTag);
-
-      // Decrypt the ciphertext and finalize
-      let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-
-      return decrypted;
-    } catch (error) {
-      // Return a placeholder if decryption fails (wrong key, tampered data)
-      this.logger.error(`Decryption failed: ${error}`);
+      return decryptStored('PASTORAL_ENCRYPTION_KEY', this.encryptionKeys, encryptedPayload)
+        .plaintext;
+    } catch {
+      this.logger.error('Pastoral note decryption failed; check configured encryption keys.');
       return '[Decryption failed]';
     }
   }

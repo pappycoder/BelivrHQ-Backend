@@ -1,3 +1,4 @@
+import { secretKeys } from '../config/secret-keys';
 import { LEGACY_BRAND } from '../brand/brand';
 import { assertPlanFeature, assertPlanReadableFeature } from '../billing/entitlements';
 import { featureForMediaFolder } from '../billing/feature-policy';
@@ -121,8 +122,14 @@ export class MediaService {
     this.bucket = this.config.get<string>('SUPABASE_STORAGE_BUCKET', 'media');
   }
 
-  private signUpload(payload: string) {
-    return createHmac('sha256', this.config.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY'))
+  private uploadKeys(): string[] {
+    if (this.config.get<string>('MEDIA_UPLOAD_SIGNING_KEY'))
+      return secretKeys('MEDIA_UPLOAD_SIGNING_KEY', (name) => this.config.get(name));
+    return [this.config.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY')];
+  }
+
+  private signUpload(payload: string, secret = this.uploadKeys()[0]) {
+    return createHmac('sha256', secret)
       .update(`${LEGACY_BRAND.uploadDomain}${payload}`)
       .digest('base64url');
   }
@@ -201,14 +208,18 @@ export class MediaService {
     viewer?: ViewerScope,
   ): Promise<MediaResponseDto> {
     const [payload, signature, extra] = ticket.split('.');
-    const expected = this.signUpload(payload ?? '');
     if (
       !payload ||
       !signature ||
       extra ||
       !/^[A-Za-z0-9_-]{43}$/.test(signature) ||
-      signature.length !== expected.length ||
-      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+      !this.uploadKeys().some((secret) => {
+        const expected = this.signUpload(payload, secret);
+        return (
+          signature.length === expected.length &&
+          timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+        );
+      })
     )
       throw new ForbiddenException('Invalid upload authorization');
     const grant = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {

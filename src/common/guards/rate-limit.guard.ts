@@ -1,3 +1,4 @@
+import { secretKeys } from '../../config/secret-keys';
 import { LEGACY_BRAND } from '../../brand/brand';
 import { measureStage, queryMetrics } from '../../prisma/query-metrics';
 /**
@@ -196,13 +197,18 @@ export class RateLimitGuard implements CanActivate {
     const modern = request.headers['x-belivrhq-proxy-secret'] !== undefined;
     const supplied =
       request.headers[modern ? 'x-belivrhq-proxy-secret' : LEGACY_BRAND.proxySecretHeader];
-    const secret = process.env.INTERNAL_PROXY_SECRET;
+    let secrets: string[] = [];
+    if (process.env.INTERNAL_PROXY_SECRET) {
+      secrets = secretKeys('INTERNAL_PROXY_SECRET', (name) => process.env[name]);
+    }
     const forwarded = request.headers[modern ? 'x-belivrhq-client-ip' : LEGACY_BRAND.proxyIpHeader];
     if (
-      secret &&
       typeof supplied === 'string' &&
-      Buffer.byteLength(secret) === Buffer.byteLength(supplied) &&
-      timingSafeEqual(Buffer.from(secret), Buffer.from(supplied)) &&
+      secrets.some(
+        (secret) =>
+          Buffer.byteLength(secret) === Buffer.byteLength(supplied) &&
+          timingSafeEqual(Buffer.from(secret), Buffer.from(supplied)),
+      ) &&
       typeof forwarded === 'string' &&
       isIP(forwarded)
     )

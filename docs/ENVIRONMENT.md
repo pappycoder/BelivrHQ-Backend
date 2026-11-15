@@ -34,7 +34,7 @@ Keep `DATABASE_URL`, Supabase URL/service-role/anon credentials, `REDIS_URL` and
 
 An HTTPS Upstash connection also requires `UPSTASH_REDIS_TOKEN`. This REST endpoint does not supply BullMQ's TCP transport. The outstanding production worker/TCP configuration is described in the rebrand rollout notes; this cleanup does not provision it.
 
-Preserve encryption keys for existing data. `PASTORAL_ENCRYPTION_KEY` is required in production, `INTEGRATIONS_ENCRYPTION_KEY` enables encrypted provider accounts, and `TWO_FACTOR_ENCRYPTION_KEY` enables backend authenticator setup/verification. Blank optional keys do not enable those features. Do not replace an existing key with a newly generated one during configuration cleanup.
+Preserve encryption keys for existing data. `PASTORAL_ENCRYPTION_KEY` is required in production, `INTEGRATIONS_ENCRYPTION_KEY` enables encrypted provider accounts, and `TWO_FACTOR_ENCRYPTION_KEY` enables backend authenticator setup/verification. Blank optional keys do not enable those features. Do not replace an existing key with a newly generated one during configuration cleanup. For planned rotation, use the current/previous key overlap and verified re-encryption process in [Key generation and rotation](KEY-ROTATION.md). Run `npm run keys:check` against target settings before deployment.
 
 Organization Flutterwave, historical Paystack verification, Resend and optional AI credentials are needed only for enabled features. Church-owned messaging/payment credentials belong in Integrations, not global environment variables. AI model/rate settings have no guessed defaults: paid answers require an explicit model and valid current rates.
 
