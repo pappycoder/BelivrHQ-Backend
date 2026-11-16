@@ -15,6 +15,7 @@ test('every validation is required and failures, cancellation or skips block dep
   const config = require('../../jest.config.ts').default;
   assert.deepEqual(config.coverageThreshold.global, { branches: 80, functions: 80, lines: 80, statements: 80 });
   assert.ok(workflow.jobs.test.steps.some((step) => step.run?.includes('npm run test:cov')));
+  assert.equal(JSON.parse(fs.readFileSync('test/jest-e2e.json', 'utf8')).maxWorkers, 1);
 
   const command = checks.steps[0].run;
   const script = command.slice(command.indexOf("'") + 1, command.lastIndexOf("'"));

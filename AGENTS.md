@@ -1,3 +1,5 @@
+- **2026-11-16 — Shared-database CI isolation.** Serialized E2E suite workers because schema-hardening tests acquire locks across shared tables; explicit concurrency tests within suites remain concurrent. Avoid redundant ENABLE RLS locks on already-protected tables and add a real PostgreSQL writer-lock regression. Hosted migrations remain unapplied; coverage thresholds stay unchanged.
+
 - **2026-11-16 — Audit report integrity.** Reject inconsistent vulnerability totals and malformed array-shaped finding collections instead of treating them as a clean scan. Extended the existing fail-closed parser regressions; three policy cases and the current live dependency audit pass. Backend workflow policy also locks all four existing 80% coverage thresholds and coverage collection.
 
 - **2026-11-16 — Pinned CLI deployment response compatibility.** Inspected installed Vercel CLI 65.9.0 serialization and supported both its standard raw deployment JSON and agent envelope. Error payloads remain rejected and REST candidate identity/readiness checks remain mandatory. Added raw-response success/error refusal regressions; all 23 release/workflow checks pass.

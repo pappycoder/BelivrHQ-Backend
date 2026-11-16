@@ -76,7 +76,10 @@ BEGIN
     'webhook_deliveries',
     '_prisma_migrations'
   ] LOOP
-    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
+    -- Avoid an unnecessary ACCESS EXCLUSIVE lock on already-hardened hosted tables.
+    IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid=format('public.%I', table_name)::regclass) THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
+    END IF;
     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC', table_name);
     FOREACH browser_role IN ARRAY ARRAY['anon','authenticated'] LOOP
       IF EXISTS (SELECT FROM pg_roles WHERE rolname=browser_role) THEN

@@ -24,7 +24,7 @@ const maintenanceSql = readFileSync(
 );
 
 describe('Backend-only PostgreSQL access boundary', () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
   afterAll(async () => {
     await pool.end();
   });
@@ -56,6 +56,24 @@ describe('Backend-only PostgreSQL access boundary', () => {
     );
     expect(result.rows).toHaveLength(tables.length);
     expect(result.rows.filter((row) => !row.rls || row.anon || row.authenticated)).toEqual([]);
+  });
+
+  it('reapplies hardening while an already-protected table is being written', async () => {
+    const writer = await pool.connect();
+    const migration = await pool.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query('LOCK TABLE public.members IN ROW EXCLUSIVE MODE');
+      await migration.query('BEGIN');
+      await migration.query("SET LOCAL lock_timeout = '1s'");
+      // A normal writer must not block a redundant ENABLE RLS on hardened tables.
+      await migration.query(sql);
+    } finally {
+      await migration.query('ROLLBACK');
+      await writer.query('ROLLBACK');
+      migration.release();
+      writer.release();
+    }
   });
 
   it('closes a Supabase-style grant bypass without rewriting rows or touching unrelated objects', async () => {
