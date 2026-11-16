@@ -14,11 +14,16 @@ import { AuthModule } from '../auth/auth.module';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { WebhookDeliveryProcessor } from './webhook-delivery.processor';
+import { WebhookDispatchService } from './webhook-dispatch.service';
 
 @Module({
   imports: [AuthModule, BullModule.registerQueue({ name: 'webhook-delivery' })],
   controllers: [WebhooksController],
-  providers: [WebhooksService, ...(workersEnabled() ? [WebhookDeliveryProcessor] : [])],
+  providers: [
+    WebhooksService,
+    WebhookDispatchService,
+    ...(workersEnabled() ? [WebhookDeliveryProcessor] : []),
+  ],
   exports: [WebhooksService],
 })
 export class WebhooksModule implements OnModuleDestroy {

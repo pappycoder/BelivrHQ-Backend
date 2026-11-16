@@ -12,8 +12,7 @@ import { resolveWebhookUrl } from './safe-webhook-request';
  */
 
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import { WebhookDispatchService } from './webhook-dispatch.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLoggingService } from '../common/services/audit-logging.service';
 import { CreateWebhookSubscriptionDto } from './dto/create-webhook-subscription.dto';
@@ -31,7 +30,7 @@ export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLoggingService,
-    @InjectQueue('webhook-delivery') private readonly webhookQueue: Queue,
+    private readonly dispatch: WebhookDispatchService,
   ) {}
 
   /**
@@ -63,7 +62,7 @@ export class WebhooksService {
       newValues: { url: dto.url, events: dto.events },
     });
 
-    this.logger.log(`Webhook subscription created: ${subscription.id} for ${dto.url}`);
+    this.logger.log(`Webhook subscription created: ${subscription.id}`);
 
     return this.mapSubscriptionToDto(subscription);
   }
@@ -170,20 +169,9 @@ export class WebhooksService {
       },
     });
 
-    await this.webhookQueue.add(
-      'deliver',
-      {
-        deliveryId: delivery.id,
-        subscriptionId: subscription.id,
-        url: subscription.url,
-        secret: subscription.secret,
-        event: 'test.ping',
-        payload: { test: true, timestamp: new Date().toISOString() },
-      },
-      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-    );
+    await this.dispatch.dispatch(delivery.id);
 
-    this.logger.log(`Test webhook delivery queued: ${delivery.id}`);
+    this.logger.log(`Test webhook delivery persisted: ${delivery.id}`);
 
     return { deliveryId: delivery.id };
   }
@@ -215,22 +203,9 @@ export class WebhooksService {
           },
         });
 
-        await this.webhookQueue.add(
-          'deliver',
-          {
-            deliveryId: delivery.id,
-            subscriptionId: sub.id,
-            url: sub.url,
-            secret: sub.secret,
-            event,
-            payload,
-          },
-          { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-        );
-
-        queued++;
-      } catch (err) {
-        this.logger.error(`Failed to queue webhook for ${sub.id}: ${(err as Error).message}`);
+        if (await this.dispatch.dispatch(delivery.id)) queued++;
+      } catch {
+        this.logger.warn(`Webhook event persistence failed for subscription ${sub.id}`);
       }
     }
 

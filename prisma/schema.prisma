@@ -1862,5 +1862,6 @@ model WebhookDelivery {
   created_at DateTime @default(now())
 
   @@index([subscription_id, status])
+  @@index([status, next_retry_at, id])
   @@map("webhook_deliveries")
 }
