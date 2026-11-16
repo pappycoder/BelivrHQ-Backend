@@ -8,11 +8,13 @@
 
 import { Module } from '@nestjs/common';
 import { HealthController } from './health.controller';
+import { HealthService } from './health.service';
 import { QueuesModule } from '../queues/queues.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 
 @Module({
   imports: [QueuesModule, WebhooksModule],
   controllers: [HealthController],
+  providers: [HealthService],
 })
 export class HealthModule {}
