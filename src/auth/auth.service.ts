@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 import { createRegistrationCheckout } from './registration-checkout';
 import { registrationLegalAcceptance } from './registration-legal-acceptance';
 import { AccountEmailService } from '../company-email/account-email.service';
@@ -102,9 +103,7 @@ export class AuthService {
       });
 
     if (authError) {
-      this.logger.error(
-        `Supabase signUp error: ${authError.message} (status: ${authError.status})`,
-      );
+      this.logger.error(`Supabase signUp error: ${errorDiagnostic(authError)}`);
       if (authError.message?.includes('already registered')) {
         throw new ConflictException('An account with this email already exists');
       }
@@ -119,7 +118,7 @@ export class AuthService {
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
-      this.logger.error(`Supabase signUp failed: ${authError.message}`);
+      this.logger.error(`Supabase signUp failed: ${errorDiagnostic(authError)}`);
       throw new InternalServerErrorException('Failed to create user account');
     }
 
@@ -219,7 +218,7 @@ export class AuthService {
     } catch (error) {
       // If Prisma fails after Supabase user was created, log but don't rethrow auth user
       this.logger.error(
-        `Failed to create church/profile for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to create church/profile for user ${userId}: ${errorDiagnostic(error)}`,
       );
       throw new InternalServerErrorException('Failed to complete registration');
     }
@@ -489,7 +488,7 @@ export class AuthService {
   }
 
   private msg(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return errorDiagnostic(err);
   }
 
   /**
@@ -595,9 +594,7 @@ export class AuthService {
     try {
       raw = await this.redis.get<string>(key);
     } catch (err) {
-      this.logger.warn(
-        `2FA pending lookup skipped (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
+      this.logger.warn(`2FA pending lookup skipped (Redis unavailable): ${errorDiagnostic(err)}`);
     }
     if (!raw) {
       throw new UnauthorizedException('No pending sign-in found. Please sign in again.');
@@ -689,9 +686,7 @@ export class AuthService {
     try {
       existing = await this.redis.get<string>(key);
     } catch (err) {
-      this.logger.warn(
-        `2FA pending read skipped (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
+      this.logger.warn(`2FA pending read skipped (Redis unavailable): ${errorDiagnostic(err)}`);
     }
     const base = existing
       ? ((typeof existing === 'string' ? JSON.parse(existing) : existing) as {
@@ -739,15 +734,15 @@ export class AuthService {
     try {
       await this.redis.set(`auth:blacklist:${token}`, userId, ttlSeconds);
     } catch (err) {
-      this.logger.warn(
-        `Token blacklist write failed (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
+      this.logger.warn(`Token blacklist write failed (Redis unavailable): ${errorDiagnostic(err)}`);
     }
 
     // Revoke all sessions in Supabase (invalidates refresh tokens)
     const { error } = await this.supabase.client.auth.admin.signOut(token);
     if (error) {
-      this.logger.warn(`Failed to revoke Supabase sessions for user ${userId}: ${error.message}`);
+      this.logger.warn(
+        `Failed to revoke Supabase sessions for user ${userId}: ${errorDiagnostic(error)}`,
+      );
     }
 
     // Audit-log the logout
@@ -942,7 +937,7 @@ export class AuthService {
     if (error) {
       if (!error.status || error.status >= 500)
         throw new ServiceUnavailableException('Session refresh is temporarily unavailable');
-      this.logger.warn(`Session refresh failed: ${error.message}`);
+      this.logger.warn(`Session refresh failed: ${errorDiagnostic(error)}`);
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 

@@ -18,8 +18,8 @@ import { roleAvailableOnPlan } from '../../billing/role-policy';
  *    name, and its permissions are stored directly in `RolePermission`
  *    as an absolute set.
  *
- * Role grants are cached in Redis with 15-minute TTL; the global permission-name
- * catalogue uses a 30-second per-process cache loaded directly from PostgreSQL.
+ * Mutable role grants are read from PostgreSQL on each authorization resolution.
+ * The global permission-name catalogue uses a 30-second per-process cache.
  *
  * The `super_admin` role is always locked to ALL permissions.
  *
@@ -40,9 +40,8 @@ import { AuditLoggingService } from '../../common/services/audit-logging.service
 import { RolePermission } from '@prisma/client';
 import { isRetiredRole, RETIRED_ROLE_NAMES, accessRoles } from '../role-policy';
 
-const CACHE_TTL_SECONDS = 15 * 60; // 15 minutes
-// Bump the namespace when changing seeded role mappings so deployments don't
-// keep serving permission arrays cached under the previous template set.
+// Best-effort cleanup for older instances during rollout. New authorization
+// decisions never read or populate this legacy mutable-grant cache.
 const CACHE_PREFIX = 'perms:v31:';
 
 /** Role names that churches cannot claim or modify. */
@@ -124,29 +123,13 @@ export class PermissionsService {
       return this.getAllPermissionNames();
     }
 
-    const cacheKey = `${CACHE_PREFIX}${churchId}:${roleName}`;
-    try {
-      const cached = await this.redis.get<string[]>(cacheKey);
-      if (cached) {
-        return cached;
-      }
-    } catch (err) {
-      this.logger.warn(
-        `Permission cache read skipped (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
+    // Mutable grants are authorization data. A TTL plus best-effort deletion
+    // cannot guarantee revocation: failed invalidation or a racing loader can
+    // keep revoked grants alive. Always resolve current role grants from DB.
     const permissions = await this.resolvePermissions(churchId, roleName);
     // Inbox access includes composing messages, for template and custom roles.
     if (permissions.includes('emails:read') && !permissions.includes('emails:create')) {
       permissions.push('emails:create');
-    }
-    try {
-      await this.redis.set(cacheKey, permissions, CACHE_TTL_SECONDS);
-    } catch (err) {
-      this.logger.warn(
-        `Permission cache write skipped (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
     }
     return permissions;
   }
@@ -775,10 +758,8 @@ export class PermissionsService {
   private async invalidateCache(churchId: string, roleName: string): Promise<void> {
     try {
       await this.redis.del(`${CACHE_PREFIX}${churchId}:${roleName}`);
-    } catch (err) {
-      this.logger.warn(
-        `Permission cache invalidation skipped (Redis unavailable): ${err instanceof Error ? err.message : err}`,
-      );
+    } catch {
+      this.logger.warn('Legacy permission cache invalidation unavailable');
     }
   }
 }

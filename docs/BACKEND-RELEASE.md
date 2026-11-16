@@ -2,7 +2,7 @@
 
 Worker hosting is deferred. Root `vercel.json` explicitly keeps Git deployments enabled and contains no active daemon. API readiness defaults to requiring database, Redis and queue transport, while reporting absent workers with `workersRequired: false`. Merging this configuration does not start a worker or require a new Vercel CI token. See [Vercel Git configuration](https://vercel.com/docs/project-configuration/git-configuration).
 
-The existing checked migration/reference-seed steps remain in CI. Candidate preflight, CLI installation and promotion run only when `BACKEND_RELEASE_ENABLED=true` is explicitly configured in the matching GitHub environment. Keep that flag unset/false while using Git deployments. Git deployments and CI migrations are independent in this mode: coverage or migration failures do not establish that Vercel stopped deploying. Review/apply the two new webhook migrations before deploying code that uses the new schema; worker deferral does not remove that dependency.
+The existing checked migration/reference-seed steps remain in CI. Candidate preflight, CLI installation and promotion run only when `BACKEND_RELEASE_ENABLED=true` is explicitly configured in the matching GitHub environment. Keep that flag unset/false while using Git deployments. Git deployments and CI migrations are independent in this mode: coverage or migration failures do not establish that Vercel stopped deploying. Review/apply the two new webhook migrations and the backend-only database access and private maintenance-function migrations before deploying this branch; worker deferral does not remove that dependency.
 
 ## Configuration before activation
 

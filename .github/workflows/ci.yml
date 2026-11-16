@@ -1,5 +1,8 @@
 name: BelivrHQ Backend CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: ['**']

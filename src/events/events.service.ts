@@ -2257,7 +2257,7 @@ export class EventsService {
       },
     });
 
-    this.logger.log(`Walk-in check-in: ${dto.firstName} ${dto.lastName} → event ${eventId}`);
+    this.logger.log(`Walk-in check-in recorded for event ${eventId}`);
 
     return this.mapAttendanceToDto(attendance);
   }

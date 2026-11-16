@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../../common/privacy';
 /**
  * @file receipt.service.ts
  * @description PDF receipt generation service for giving transactions.
@@ -194,9 +195,7 @@ export class ReceiptService {
 
         doc.end();
       } catch (error) {
-        this.logger.error(
-          `Receipt generation failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        this.logger.error(`Receipt generation failed: ${errorDiagnostic(error)}`);
         reject(error);
       }
     });

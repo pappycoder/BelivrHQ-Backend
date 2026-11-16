@@ -3,7 +3,7 @@
 Date: 2026-11-16 (Africa/Lagos)
 Branch: `fix/backend-production-readiness`
 Baseline: `525bb51`
-Status: Implementation in progress; local source changes prepared, hosted rollout pending.
+Status: Implementation in progress; local source changes prepared, hosted rollout pending. See [project security audit](PROJECT-SECURITY-AUDIT-2026-11-16.md) for confirmed findings, remediation and remaining verification.
 
 Worker rollout decision, 2026-11-16: hosting and activation are on hold. Retain the implemented worker code and disabled template; do not activate consumers until the operator resumes rollout. API worker enforcement is now opt-in through `REQUIRE_QUEUE_WORKERS=true`, with explicit worker diagnostics in deferred mode. Git deployments remain enabled; candidate promotion is opt-in and refuses concurrent Git deployment mode. This deferral does not close the remaining coverage, container, schema migration, recovery and hosted release checks. The branch remains unmerged.
 

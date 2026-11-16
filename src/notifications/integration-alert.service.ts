@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 /**
  * @file integration-alert.service.ts
  * @description Fault-tolerance alerting for external integrations.
@@ -90,6 +91,6 @@ export class IntegrationAlertService {
   }
 
   private msg(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return errorDiagnostic(err);
   }
 }
