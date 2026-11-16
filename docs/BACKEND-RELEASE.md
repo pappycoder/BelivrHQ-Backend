@@ -16,6 +16,17 @@ Workers remain on hold. No active daemon is configured; template instances remai
 6. Upload only the nonsecret candidate manifest as a one-day workflow artifact. Promotion waits for every enabled candidate preparation to succeed, downloads the current run's manifest, revalidates identity/readiness and rechecks the branch head before moving a domain.
 7. Main promotes its Production candidate; staging aliases only `staging-api.belivrhq.com`. Verify readiness after promotion. An error after traffic moves is a deployment incident, not proof that traffic never moved.
 
+### Database targets
+
+| Trigger | GitHub environment / database secret | Hosted release |
+| --- | --- | --- |
+| Push to `main`, after checks pass | `production.DATABASE_URL` | Primary Production API |
+| Push to `staging`, after checks pass | `staging.DATABASE_URL` | Primary Preview API |
+| PR or another branch | Disposable CI database only | None |
+| Legacy test project | No enabled release job; stored legacy secret unused | On hold |
+
+A release runs migrations and the reference seed against its one selected database, not every database configured in GitHub. Primary deployment credentials do not enable the separate legacy team or its release profile.
+
 The wrapper intentionally has separate `preflight`, `prepare` and `promote` commands. The simulated `publish` function is retained only for isolated library regressions; CI does not invoke a combined upload-and-promote command.
 
 ## GitHub configuration
@@ -32,12 +43,14 @@ The workflow sets its release-enabled flag explicitly; a missing secret/configur
 
 ## Verification and remaining release blockers
 
-Local validation passed: 146 backend unit suites / 2,613 tests; 33 PostgreSQL 16 suites / 226 tests; compiled API/worker smoke; 14 operations integration checks; actual Docker context export, worker-image build and packaged Prisma/sharp/runtime import checks. Twenty-three release/profile/workflow refusal tests plus three audit-policy regressions pass in each repository. The browser suite passes all 18 checks; the web unit suite passes 687 tests. No worker host was activated.
+Local validation passed: 148 backend unit suites / 2,696 tests; 33 PostgreSQL 16 suites / 226 tests; compiled API/worker smoke; 14 operations integration checks; actual Docker context export, worker-image build and packaged Prisma/sharp/runtime import checks. Twenty-three release/profile/workflow refusal tests plus three audit-policy regressions pass in each repository. The browser suite passes all 18 checks; the web unit suite passes 687 tests. No worker host was activated.
 
-Backend coverage still fails the unchanged 80% thresholds (last measured lines 64.76%). The required check must stay red until meaningful tests close the gap. Do not lower thresholds, bypass protection or claim all production-readiness work is complete. Supabase backup/PITR, offsite object/key recovery, restore ownership, provider acceptance, alert recipients and representative hosted capacity still require actual evidence and operator configuration. See `RECOVERY-AND-CAPACITY.md`.
+Backend coverage still fails the unchanged 80% thresholds (last measured statements 64.97%, branches 59.80%, lines 65.44%, functions 61.26%). The required check must stay red until meaningful tests close the gap. Do not lower thresholds, bypass protection or claim all production-readiness work is complete. Supabase backup/PITR, offsite object/key recovery, restore ownership, provider acceptance, alert recipients and representative hosted capacity still require actual evidence and operator configuration. See `RECOVERY-AND-CAPACITY.md`.
 
 No main/staging merge, application deployment or hosted schema migration was performed in this CI-gating pass. Hosted promotion remains to be rehearsed after checks pass. Migrations must remain compatible with the previously deployed API; never automatically roll back schemas, encrypted data or keys.
 
 References: [Vercel Git controls](https://vercel.com/docs/project-configuration/git-configuration), [project Git provider controls](https://vercel.com/docs/rest-api/projects/update-an-existing-project).
 
 Database integration suites share one schema and run with one Jest worker; deliberate transaction/concurrency checks inside each suite remain concurrent. The RLS migration skips redundant ENABLE operations on already-protected tables. Tables that still need RLS enabled require the normal exclusive DDL lock, so review migration timing for active workloads.
+
+The unit job always retains `backend-unit-coverage` for seven days when a coverage report was generated, including threshold failures. All 2,696 unit assertions currently pass; the coverage gate still exits nonzero. New webhook network and provider-callback regressions improve coverage but do not complete the required global coverage remediation.
