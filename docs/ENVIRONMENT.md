@@ -96,6 +96,6 @@ Deploy this backend change before the updated web client, since older APIs rejec
 
 If checkout shows the account owner's personal name as the receiver/beneficiary, `customizations.title` does not change it. Ask Flutterwave to verify the merchant account tied to the active API keys, registered-business approval and beneficiary display name. See [Flutterwave business account guidance](https://www.flutterwave.com/cm/support/my-account/selecting-the-correct-flutterwave-business-account). This provider-managed name has not been verified or changed from this workspace.
 
-## Private Vercel env files
+## Private Vercel configuration
 
-Use `.env.vercel.shared`, `.env.vercel.preview` and `.env.vercel.production` for deliberate local-to-Vercel sync. Shared keys, Redis and Sentry are separated from environment-specific connections. Push/pull preserve explicit empty values; unreadable Vercel Secrets preserve local copies. Commands, namespaces and Git protection are documented in [Local Vercel environment sync](VERCEL-ENV-SYNC.md).
+Use one Git-ignored `.env.vercel.json` file with `shared`, `preview` and `production` sections for local-to-Vercel sync. Readable values come from the decrypted CLI export, while hidden Secret values become empty assignments with no local fallback. Existing three-file configurations are migrated with private backups. Commands, Redis isolation and Git protection are documented in [Local Vercel environment sync](VERCEL-ENV-SYNC.md).

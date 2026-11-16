@@ -37,6 +37,7 @@ describe('Private-env Git guards', () => {
   it.each([
     '.env',
     '.env.vercel.shared',
+    '.env.vercel.json',
     '.env.vercel.preview',
     '.env.vercel.production',
     'config/private.env',

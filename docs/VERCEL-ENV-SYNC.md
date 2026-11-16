@@ -1,15 +1,39 @@
-# Local Preview and Production environment sync
+# Local Vercel environment sync
 
-Use these private files in the backend repository:
+Edit one private, Git-ignored file: **`.env.vercel.json`**. It separates common settings from Preview and Production settings:
 
-| File | Purpose |
-| --- | --- |
-| `.env` | Existing local runtime configuration; splitting and pulling leave it unchanged |
-| `.env.vercel.shared` | Shared application encryption/signing keys and overlap lists, Redis connection/token, Sentry DSN, and explicitly shared defaults |
-| `.env.vercel.preview` | Preview database/Supabase credentials, origins, provider test credentials and cache/queue namespace |
-| `.env.vercel.production` | Existing live database/Supabase credentials, origins and provider credentials |
+```json
+{
+  "shared": {
+    "NODE_ENV": "production",
+    "INTEGRATIONS_ENCRYPTION_KEY": "",
+    "INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS": [],
+    "SENTRY_DSN": ""
+  },
+  "preview": {
+    "WEB_URL": "",
+    "PUBLIC_API_URL": "",
+    "DATABASE_URL": "",
+    "REDIS_URL": "",
+    "UPSTASH_REDIS_TOKEN": ""
+  },
+  "production": {
+    "WEB_URL": "",
+    "PUBLIC_API_URL": "",
+    "DATABASE_URL": "",
+    "REDIS_URL": "",
+    "UPSTASH_REDIS_TOKEN": ""
+  }
+}
+```
 
-Real files and pre-pull backups are Git-ignored and created with private permissions (0600). The files under `config/vercel/*.env.example` contain placeholders only and may be committed. A nonempty environment-specific value overrides the shared value. **An explicit empty environment-specific value also overrides the shared value.** An absent assignment is different from an empty assignment.
+This is a shortened example; the actual file includes all existing settings and six current-key/previous-key-list pairs. See `config/vercel/env.example.json` for the full placeholder template. Keep actual values out of source control. The local runtime `.env` is separate and remains unchanged.
+
+## Sections and values
+
+`shared` applies to both environments. `preview` and `production` override shared assignments, **including explicit empty strings**. Keep `WEB_URL`, `PUBLIC_API_URL`, `DATABASE_URL`, `REDIS_URL` and `UPSTASH_REDIS_TOKEN` in their target sections; the tool refuses to push them from shared. Supabase connections, provider test/live credentials and origins should match the appropriate database/environment.
+
+Values are normally strings. Previous-key lists can be JSON arrays of strings, which are serialized correctly for Vercel. A deliberately empty list representation pulled from a hidden Secret remains `""`; a newly added list defaults to `[]`. Only actual old keys belong in a previous-key list. The tool never generates or guesses them. Numeric/boolean JSON settings are converted to env strings.
 
 ## Commands
 
@@ -17,21 +41,27 @@ Run from `BelivrHQ-Backend`:
 
 | Command | Action |
 | --- | --- |
-| `npm run env:vercel:init` | Create missing private files; seed shared/live fields from existing `.env` without generating keys or overwriting existing files |
-| `npm run env:vercel:split` | Fill missing shared/live assignments from `.env`; retain all existing deployment values, including explicit empty assignments and keep local HTTP/loopback origins, migration-only keys and namespace settings local |
-| `npm run env:vercel:plan` | Review both targets locally; show variable names, source files, types, explicit empty assignments and missing required settings, never secret values |
+| `npm run env:vercel:init` | Create/validate the single private file |
+| `npm run env:vercel:migrate` | Consolidate the old three files into JSON and archive the originals privately |
+| `npm run env:vercel:keys` | Ensure all shared current-key and previous-key-list slots exist |
+| `npm run env:vercel:split` | Explicitly fill missing assignments from local `.env`; existing assignments, including empty values, remain unchanged |
+| `npm run env:vercel:plan` | Review both targets locally; show names, types, source sections and explicit empty assignments, never values |
 | `npm run env:vercel:plan:preview` | Review Preview only |
 | `npm run env:vercel:plan:production` | Review Production only |
-| `npm run env:vercel:pull` | Pull readable values for both targets into the appropriate files |
-| `npm run env:vercel:pull:preview` | Pull Preview only; preserve Production's file and shared values that Production may still need |
-| `npm run env:vercel:pull:production` | Pull Production only; preserve Preview's file |
-| `npm run env:vercel:push` | Push both targets after validating the complete local input |
+| `npm run env:vercel:pull` | Pull both targets into the corresponding sections |
+| `npm run env:vercel:pull:preview` | Pull Preview only |
+| `npm run env:vercel:pull:production` | Pull Production only |
+| `npm run env:vercel:push` | Push both targets |
 | `npm run env:vercel:push:preview` | Push Preview only |
 | `npm run env:vercel:push:production` | Push Production only |
-| `npm run env:git:check` | Check that no private env/cache/backup files are tracked |
-| `npm run env:git:install` | Install this clone's commit/push guards without replacing existing custom hooks |
+| `npm run env:git:check` | Check that private env/cache/backup files are not tracked |
+| `npm run env:git:install` | Install this clone's private-env commit/push guards |
 
-Vercel CLI 65.9+ is required for push. The installed CLI is the interface; nonempty values are sent on stdin, never shell commands or command-line arguments. Empty strings use an explicit empty CLI argument to avoid an interactive value prompt; they contain no secret. A linked backend project and authorized Vercel account are required for both remote operations:
+Existing sync commands automatically consolidate legacy files if JSON does not yet exist. Migration preserves plain-text values and empty assignments, adds missing key/list slots, and clears recognized Vercel encrypted-storage payloads that the earlier pull incorrectly wrote as values. Originals remain under ignored `.ops/vercel-env-*` backups. Once JSON exists it is authoritative; the three old files are no longer edited or recreated. Initialization/migration does not prefill credentials from `.env`.
+
+## Project linking and remote access
+
+Vercel CLI 65.9+ and an authorized account are required. Link this directory to the existing backend project:
 
 ```sh
 vercel login
@@ -40,47 +70,48 @@ npm run env:vercel:pull
 npm run env:vercel:plan
 ```
 
-Choose the existing **backend** project when linking. The script binds every operation to the project and organization IDs in this directory's `.vercel/project.json`. Do not link the web project here. There is no automatic push, deployment or database write during ordinary builds or env pulls.
+The tool supports `.vercel/project.json` and repository mappings in `.vercel/repo.json`, including exact directory mappings in ancestor repositories. Per-directory links take precedence. Ambiguous, malformed and mismatched links are rejected. Every CLI operation specifies the linked backend project and organization explicitly; do not link the web project here.
 
-## Empty values and removals
+No ordinary build triggers env sync, hosted deployment or database re-encryption. After a push, redeploy the selected environment for its new settings to take effect.
 
-`SETTING=` is intentional data:
+## Readable exports and hidden Secrets
 
-- Push uploads an empty string as readable Config (there is no secret content), replacing that target's hosted value with empty. It does not substitute a shared value or skip the assignment.
-- Pull writes a readable empty hosted value as empty. It does not substitute local defaults, the original `.env`, another environment's value or a nonempty shared value.
-- Removing an assignment from a local file does not delete the hosted variable. Host-side deletion is a separate explicit Vercel operation.
-- Required runtime blanks produce a visible warning during the plan. Explicit push still applies requested blank values; a missing production pastoral/HMAC/database key can prevent startup. Invalid **nonempty** encryption keys are rejected before any hosted updates.
+`vercel env list --json` is used for **metadata only**. Its `value` field can contain an encrypted storage envelope, even for readable Config settings; it is not a plaintext export. Readable values are obtained through Vercel's supported `vercel env pull` command into a fresh private temporary file. No existing local values are supplied to that export. The temporary directory is removed afterward, and CLI output is suppressed. The tool rejects encrypted envelopes instead of saving them as URLs or settings. A missing expected readable export aborts the pull before replacing configuration.
 
-Review `EMPTY` entries before pushing. An empty slot originally copied from a template is still an explicit empty assignment when pushed.
+Write-only Secret values cannot be retrieved from Vercel. As requested, every hidden/unreadable Secret becomes an **empty local assignment** with no fallback to `.env`, existing JSON values or backups. Legacy `sensitive` types and secret visibility receive the same treatment. Empty represents an unavailable value here; it does not prove the hosted Secret itself is empty. Export placeholders are never stored as usable credentials.
 
-## Pull reconciliation and write-only secrets
+When both targets return matching shared values, including hidden values represented as empty, the value is stored in `shared` and stale scoped overrides are removed. If only one target lists a redacted shared key, its representation is still empty in shared, so a newly entered shared replacement is not shadowed by an obsolete scoped blank. Different pulled values stay environment-specific. URLs always stay in their target sections, even if both URL values happen to match. A one-target pull leaves the other target's effective settings unchanged.
 
-Vercel Config values are readable; Vercel Secret values cannot be retrieved after saving. Pull therefore lists metadata/available values through `vercel env list --json` and never assumes a placeholder is the original secret. Old `sensitive` entries receive the same protection as current `secret` entries. Local secret copies are preserved and reported as **not verified against Vercel**. If no nonempty local copy exists, the script reports the variable name; recover it from your secret manager. A pull cannot recover a deleted encryption key or determine whether an unreadable remote Secret is empty. It never replaces real local keys with `redactedkey` or similar CLI placeholders.
+Branch-specific Preview overrides and Vercel-managed variables are not imported into default target sections. Local-only assignments absent from hosted metadata remain, including newly prepared settings that have not been pushed. Pull does not seed any value from the runtime `.env`. Configuration is backed up privately before replacement.
 
-When both targets return a readable shared setting with the same value (including empty), it is stored once in the shared file. If the values differ, both are stored explicitly in their target files; neither is arbitrarily promoted as the common value. A one-target pull stores differing values in that target file so the other environment's effective settings remain unchanged. Branch-specific Preview overrides and Vercel-managed variables are not imported into the default files. Existing local-only assignments are kept. Pre-pull copies are saved under ignored `.ops/vercel-env-*` directories before any replacement.
+## Empty assignments and secret updates
 
-If the Vercel team enforces Separate Production Secret Values, shared nonempty Secrets may be rejected by Vercel. Keep those values separate or use the team-approved policy; the sync tool never downgrades a nonempty credential to readable Config to bypass that restriction.
+`"SETTING": ""` is intentional data. Pull preserves an empty readable value and represents a hidden Secret as empty. Push uploads that empty string and clears the target's hosted value; it does not skip it or fall back to shared. Removing a local assignment does not delete a hosted variable.
 
-Preview and Production credentials may already differ. Pull preserves that difference. Making existing encryption keys shared still requires the rotation process on **each affected database**; env sync does not re-encrypt stored records or silently change keys.
+The plan marks empty assignments and warns about required runtime blanks. Explicit push still applies requested empty values. Missing database/HMAC/pastoral settings can prevent runtime startup; invalid nonempty encryption keys are rejected before push. Populate replacement values after pulling and review the plan before pushing. Pulling again will blank them again if Vercel stores them as hidden Secrets.
 
-## Shared Redis and Sentry
+Nonempty credentials are sent on stdin using Vercel's Secret type, never shell interpolation or command-line arguments. Empty values use Config plus an explicit empty argument so they can be read back as empty without prompting. Config does not mean source-controlled: the complete JSON file remains private.
 
-The connection/token may be shared. Preview cache, counters, challenges, rate limits, AI usage budgets and BullMQ queues use the namespace `belivrhq-preview` by default. Production keeps the previous unprefixed cache keys and `bull` queue prefix, preserving existing jobs. `REDIS_NAMESPACE` can explicitly choose a different isolated namespace using letters/numbers/underscores/hyphens. Configure persistent staging workers with the same namespace as the Preview API. Production workers and API must also match. Never put the same namespace on both environments sharing one Redis service. Deploy the namespace-aware code before sharing Redis, stop old Preview workers during cutover, and restart all corresponding APIs/workers with matching settings. Existing jobs are not moved between namespaces. Local development using that same Redis should set its own namespace, such as `belivrhq-local`.
+## Secret and Config classification
 
-Namespaces prevent accidental cache/queue crossover; anyone holding the shared Redis credentials still has access to the shared service. Sharing cryptographic keys also couples the security and rotation of both environments. Sentry may use the same DSN; API events are tagged with `VERCEL_ENV` so Preview and Production can be filtered separately. BullMQ still needs a supported TCP Redis connection on its persistent worker; an Upstash HTTPS REST URL alone is not a TCP transport.
+Secret: database URLs, Supabase service-role credentials, Redis connections/tokens, all encryption/signing keys and retained lists, provider API keys, webhook secrets and unknown nonempty settings. Config: app/Supabase origins, public Supabase anon keys, bucket names, sender address, modern public Sentry DSNs, environment labels, namespaces, ports, feature flags, models, budgets and pool options. Legacy Sentry DSNs with a password component remain Secret; Sentry auth tokens remain Secret if added.
 
-## Git protection
+Secret status does not prevent local updates. Existing unreadable secrets cannot be recovered merely by changing their type; supply the correct local value when replacing them. Vercel's Separate Production Secret Values team policy may reject shared nonempty Secrets; the tool never downgrades a nonempty credential to bypass that policy. Changing encryption keys requires the separate [rotation workflow](KEY-ROTATION.md) on every affected database.
 
-`.gitignore` and `.vercelignore` exclude actual env files and private backups from Git/deployment uploads. Installed `.githooks/pre-commit` rejects private env files even if force-added. `.githooks/pre-push` scans outgoing commit history as well as the current index, catching a private file committed and then deleted before pushing. CI also checks tracked filenames. Install the hooks in each clone with `env:git:install`; an existing custom hooks directory must integrate these guards instead of being overwritten. These are accidental-leak guards: Git's `--no-verify` can bypass local hooks, and filename checks do not detect a secret pasted into arbitrary source files. Example files must remain placeholders only.
+## Environment-specific Redis and shared Sentry
 
-## Current local setup
+Redis connections and tokens belong separately in `preview` and `production`, never in `shared`. The existing shared Redis URL/token were identified as Production credentials and moved there unchanged. Preview has its own slots for a separate Redis connection and token. Pull keeps both values scoped even if Vercel returns identical or hidden values for both environments; plan/push reject them in shared.
 
-Existing `.env` values have been split without changing the local runtime file or rotating keys. Shared fields were copied once; remaining deployable values filled Production's initial slots. Future splitting preserves explicit empty values as intentional data. The local-only API origin was left out of the live configuration. Preview-specific database and Supabase settings were not guessed or copied from Production. The Vercel CLI currently returns `Not authorized`; authenticate with the correct team/account and link the backend project before performing a real pull. No hosted environment value has been changed.
+Preview still uses the `belivrhq-preview` cache/queue namespace by default. Production retains existing unprefixed caches and the `bull` queue prefix so current jobs remain available. Explicit `REDIS_NAMESPACE` values must match the API and workers for their respective environment. Redis credentials were moved in local configuration only; no queues or cached data were migrated or cleared. BullMQ still requires a supported TCP Redis connection; an HTTPS REST endpoint alone is not TCP transport.
 
-The local integration and authenticator key values were found to contain 128 characters; both must be corrected to valid 64-character hex values before pushing. They were preserved, not truncated or regenerated. Existing encrypted records still need their original keys for migration. The pastoral key is blank and must be configured before production runtime can start.
+Sentry DSNs may remain shared and are tagged with `VERCEL_ENV` so Preview and Production can be filtered separately.
 
-References: [Vercel CLI env commands](https://vercel.com/docs/cli/env), [Config and Secret value behavior](https://vercel.com/changelog/environment-variables-now-use-config-and-secret-types), [BullMQ connection and prefix behavior](https://docs.bullmq.io/guide/connections). After pushing, redeploy the selected environment: settings changes apply to new deployments. Follow [Key rotation](KEY-ROTATION.md) separately when changing encryption keys.
+## Private files and validation
+
+`.env.vercel.json`, legacy env files, CLI exports and `.ops` backups are ignored by Git and deployment uploads; private files use permissions 0600. Installed pre-commit/pre-push guards block private env filenames even if force-added and scan outgoing history for files committed then deleted. CI also checks tracked files. Install guards in each clone with `env:git:install`; existing custom hooks are not overwritten. Deliberately bypassing hooks or pasting secrets into arbitrary source files is outside filename-based protection. Commit only placeholder templates.
+
+References: [Vercel env commands](https://vercel.com/docs/cli/env), [Vercel Secret and Config types](https://vercel.com/changelog/environment-variables-now-use-config-and-secret-types), [BullMQ prefixes](https://docs.bullmq.io/guide/connections).
 
 ## Validation
 
-182 focused unit/HTTP/Git checks passed across env reconciliation, explicit blanks, placeholder protection, isolated Redis operations, queues, caching, authentication and outgoing Git history. Production build passed with polling enabled for this host's watcher limit. Application/scoped script TypeScript, scoped lint, package alias help checks and diff checks passed. Remote push/pull protocol was tested with captured mock CLI responses; a real remote pull remains blocked by Vercel's Not authorized response. No live deployment, hosted env mutation or database migration was performed.
+56 focused checks passed: 42 env-sync regressions and 14 disposable-repository Git guard checks. Scoped script TypeScript/lint, single-file migration, actual file permissions/ignore checks and diff checks passed. A real Preview/Production pull succeeded and all four URL fields were verified as plaintext HTTPS URLs; hidden Secrets were represented as empty. No hosted settings, deployment or database records were modified.

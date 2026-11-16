@@ -1,6 +1,14 @@
 import { randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, chmodSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  chmodSync,
+  rmSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse } from 'dotenv';
 import {
@@ -25,6 +33,21 @@ export interface EnvPlan {
   warnings?: string[];
 }
 const targets: Target[] = ['preview', 'production'];
+const configFile = '.env.vercel.json';
+const scopedOnly = new Set([
+  'DATABASE_URL',
+  'WEB_URL',
+  'PUBLIC_API_URL',
+  'REDIS_URL',
+  'UPSTASH_REDIS_TOKEN',
+]);
+type Section = 'shared' | Target;
+interface ConfigState {
+  shared: Record<string, string>;
+  preview: Record<string, string>;
+  production: Record<string, string>;
+  format: 'json' | 'legacy';
+}
 const required = [
   'NODE_ENV',
   'DATABASE_URL',
@@ -42,6 +65,8 @@ const publicSettings = new Set([
   'WEB_URL',
   'PUBLIC_API_URL',
   'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SENTRY_DSN',
   'REDIS_NAMESPACE',
   'RESEND_FROM',
   'SUPABASE_STORAGE_BUCKET',
@@ -64,11 +89,21 @@ const publicSettings = new Set([
   'DB_CONNECT_TIMEOUT_MS',
   'DB_IDLE_TIMEOUT_MS',
 ]);
+function variableType(name: string, value: string): Entry['type'] {
+  if (value === '') return 'config';
+  // Modern Sentry DSNs are public ingest identifiers; preserve legacy secret-bearing DSNs.
+  if (name === 'SENTRY_DSN') {
+    try {
+      return new URL(value).password ? 'secret' : 'config';
+    } catch {
+      return 'secret';
+    }
+  }
+  return publicSettings.has(name) ? 'config' : 'secret';
+}
 const shareFromLocal = new Set([
   ...Object.keys(SECRET_RULES),
   ...Object.keys(SECRET_RULES).map((key) => `${key}_PREVIOUS_KEYS`),
-  'REDIS_URL',
-  'UPSTASH_REDIS_TOKEN',
   'SENTRY_DSN',
 ]);
 
@@ -114,10 +149,12 @@ function encode(value: string): string {
     'A local value cannot be copied safely; configure it manually in the shared file.',
   );
 }
-export function initialize(root: string): string[] {
-  const local = existsSync(join(root, '.env'))
-    ? parse(readFileSync(join(root, '.env'), 'utf8'))
-    : {};
+export function initialize(root: string, options: { seedLocal?: boolean } = {}): string[] {
+  if (existsSync(join(root, configFile))) return [];
+  const local =
+    options.seedLocal !== false && existsSync(join(root, '.env'))
+      ? parse(readFileSync(join(root, '.env'), 'utf8'))
+      : {};
   const created: string[] = [];
   for (const name of ['shared', ...targets]) {
     const destination = join(root, `.env.vercel.${name}`);
@@ -164,6 +201,141 @@ export function initialize(root: string): string[] {
     created.push(destination);
   }
   return created;
+}
+function encryptedStorageValue(value: string): boolean {
+  if (!/^[A-Za-z0-9+/=_-]+$/.test(value)) return false;
+  try {
+    const decoded = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+    return (
+      decoded &&
+      /^v[0-9]+$/.test(decoded.v) &&
+      typeof decoded.c === 'string' &&
+      (Array.isArray(decoded.k) || typeof decoded.k === 'string')
+    );
+  } catch {
+    return false;
+  }
+}
+function loadState(root: string): ConfigState {
+  if (!existsSync(join(root, configFile)))
+    return {
+      shared: readEnvFile(join(root, '.env.vercel.shared')),
+      preview: readEnvFile(join(root, '.env.vercel.preview')),
+      production: readEnvFile(join(root, '.env.vercel.production')),
+      format: 'legacy',
+    };
+  let data: unknown;
+  try {
+    data = JSON.parse(readFileSync(join(root, configFile), 'utf8'));
+  } catch {
+    throw new EnvSyncError(
+      `Cannot parse ${configFile}. Use valid JSON with shared, preview and production sections.`,
+    );
+  }
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data) ||
+    Object.keys(data).some((key) => !['shared', ...targets].includes(key))
+  )
+    throw new EnvSyncError(
+      `Invalid sections in ${configFile}. Use shared, preview and production.`,
+    );
+  const state: ConfigState = { shared: {}, preview: {}, production: {}, format: 'json' };
+  for (const section of ['shared', ...targets] as Section[]) {
+    const values = (data as Record<string, unknown>)[section];
+    if (!values || typeof values !== 'object' || Array.isArray(values))
+      throw new EnvSyncError(`Missing or invalid ${section} section in ${configFile}.`);
+    for (const [name, value] of Object.entries(values)) {
+      if (!/^[A-Z_][A-Z0-9_]*$/.test(name))
+        throw new EnvSyncError(`Invalid variable name in ${configFile} ${section}.`);
+      if (typeof value === 'string') state[section][name] = value;
+      else if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))
+        state[section][name] = String(value);
+      else if (
+        name.endsWith('_PREVIOUS_KEYS') &&
+        Array.isArray(value) &&
+        value.every((item) => typeof item === 'string')
+      )
+        state[section][name] = JSON.stringify(value);
+      else
+        throw new EnvSyncError(
+          `Invalid value type for ${section}.${name}; use a string, number, boolean or previous-key string array.`,
+        );
+    }
+  }
+  return state;
+}
+function backupFiles(root: string, files: string[]): string {
+  const backup = join(root, '.ops', `vercel-env-${Date.now()}-${randomBytes(4).toString('hex')}`);
+  mkdirSync(backup, { recursive: true, mode: 0o700 });
+  for (const file of files)
+    if (existsSync(join(root, file)))
+      writeFileSync(join(backup, file), readFileSync(join(root, file)), {
+        mode: 0o600,
+        flag: 'wx',
+      });
+  return backup;
+}
+function writeJsonState(root: string, state: ConfigState): void {
+  const data: Record<string, Record<string, unknown>> = {};
+  for (const section of ['shared', ...targets] as Section[]) {
+    data[section] = {};
+    for (const name of Object.keys(state[section]).sort()) {
+      const value = state[section][name];
+      let serialized: unknown = value;
+      if (name.endsWith('_PREVIOUS_KEYS') && value) {
+        try {
+          const parsed: unknown = JSON.parse(value);
+          if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string'))
+            serialized = parsed;
+        } catch {
+          /* Preserve malformed input so validation can report it without guessing. */
+        }
+      }
+      data[section][name] = serialized;
+    }
+  }
+  const destination = join(root, configFile),
+    temporary = `${destination}.${randomBytes(6).toString('hex')}.tmp`;
+  writeFileSync(temporary, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+  chmodSync(temporary, 0o600);
+  renameSync(temporary, destination);
+}
+function saveState(root: string, state: ConfigState, sections: Section[]): void {
+  if (state.format === 'json') {
+    backupFiles(root, [configFile]);
+    writeJsonState(root, state);
+  } else {
+    backupFiles(
+      root,
+      sections.map((section) => `.env.vercel.${section}`),
+    );
+    for (const section of sections) saveValues(root, `.env.vercel.${section}`, state[section]);
+  }
+}
+export function migrateSingleFile(root: string): { created: boolean; cleared: string[] } {
+  if (existsSync(join(root, configFile))) {
+    loadState(root);
+    return { created: false, cleared: [] };
+  }
+  initialize(root, { seedLocal: false });
+  const state = loadState(root);
+  const cleared: string[] = [];
+  for (const section of ['shared', ...targets] as Section[])
+    for (const [name, value] of Object.entries(state[section])) {
+      if (encryptedStorageValue(value)) {
+        state[section][name] = '';
+        cleared.push(`${section}.${name}`);
+      }
+    }
+  addRotationKeySlots(state.shared);
+  const oldFiles = ['shared', ...targets].map((section) => `.env.vercel.${section}`);
+  backupFiles(root, oldFiles);
+  writeJsonState(root, state);
+  loadState(root); // Verify before retiring the old editable copies.
+  for (const file of oldFiles) rmSync(join(root, file));
+  return { created: true, cleared };
 }
 function validate(plan: EnvPlan): void {
   const values = Object.fromEntries(
@@ -242,14 +414,16 @@ function validate(plan: EnvPlan): void {
   }
 }
 export function preparePlans(root: string, selected: Target[]): EnvPlan[] {
-  const shared = readEnvFile(join(root, '.env.vercel.shared'));
-  if (Object.prototype.hasOwnProperty.call(shared, 'DATABASE_URL'))
-    throw new EnvSyncError('DATABASE_URL belongs in each environment file, not the shared file.');
+  const state = loadState(root);
+  const shared = state.shared;
+  for (const name of scopedOnly)
+    if (Object.prototype.hasOwnProperty.call(shared, name))
+      throw new EnvSyncError(`${name} belongs in each environment section, not shared.`);
   const plans = selected.map((target) => {
     const entries: Record<string, Entry> = {};
     for (const [source, values] of [
       ['shared', shared],
-      [target, readEnvFile(join(root, `.env.vercel.${target}`))],
+      [target, state[target]],
     ] as const) {
       for (const [name, value] of Object.entries(values)) {
         if (
@@ -262,8 +436,8 @@ export function preparePlans(root: string, selected: Target[]): EnvPlan[] {
           );
         entries[name] = {
           value,
-          source: `.env.vercel.${source}`,
-          type: value === '' || publicSettings.has(name) ? 'config' : 'secret',
+          source: state.format === 'json' ? `${configFile} → ${source}` : `.env.vercel.${source}`,
+          type: variableType(name, value),
         };
       }
     }
@@ -305,23 +479,65 @@ export type Runner = (
     env: NodeJS.ProcessEnv;
   },
 ) => { status: number | null; stdout?: string; stderr?: string; error?: unknown };
-export function pushPlans(root: string, plans: EnvPlan[], run: Runner = spawnSync): number {
-  let project: { projectId?: string; orgId?: string };
+interface VercelProjectLink {
+  projectId: string;
+  orgId: string;
+}
+function projectLink(projectId: unknown, orgId: unknown, file: string): VercelProjectLink {
+  if (![projectId, orgId].every((id) => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id)))
+    throw new EnvSyncError(
+      `Invalid Vercel project IDs in ${file}. Run vercel link again for this backend.`,
+    );
+  return { projectId: projectId as string, orgId: orgId as string };
+}
+function readLink(file: string): Record<string, unknown> {
   try {
-    project = JSON.parse(readFileSync(join(root, '.vercel/project.json'), 'utf8'));
+    const data: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error();
+    return data as Record<string, unknown>;
   } catch {
     throw new EnvSyncError(
-      'Link this backend project first: run vercel login, then vercel link from this directory.',
+      `Cannot read Vercel project link ${file}. Run vercel link again for this backend.`,
     );
   }
-  if (
-    ![project.projectId, project.orgId].every(
-      (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id),
-    )
-  )
-    throw new EnvSyncError(
-      'Invalid Vercel project link; rerun vercel link for the backend project.',
-    );
+}
+/** CLI links may be per-directory or repository mappings. Never choose an unrelated project. */
+export function resolveVercelProject(root: string): VercelProjectLink {
+  const backend = resolve(root);
+  const direct = join(backend, '.vercel/project.json');
+  if (existsSync(direct)) {
+    const data = readLink(direct);
+    return projectLink(data.projectId, data.orgId, direct);
+  }
+  for (let directory = backend; ; directory = dirname(directory)) {
+    const file = join(directory, '.vercel/repo.json');
+    if (existsSync(file)) {
+      const data = readLink(file);
+      if (!Array.isArray(data.projects))
+        throw new EnvSyncError(`Invalid project mapping in ${file}. Run vercel link again.`);
+      const matches = data.projects.filter((entry: unknown) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const project = entry as Record<string, unknown>;
+        return (
+          typeof project.directory === 'string' && resolve(directory, project.directory) === backend
+        );
+      }) as Record<string, unknown>[];
+      if (matches.length !== 1)
+        throw new EnvSyncError(
+          matches.length
+            ? 'Multiple Vercel repository links match this backend directory. Create an explicit per-directory link before syncing.'
+            : 'The Vercel repository link does not include this backend directory. Run vercel link from the backend directory.',
+        );
+      return projectLink(matches[0].id, matches[0].orgId ?? data.orgId, file);
+    }
+    if (dirname(directory) === directory) break;
+  }
+  throw new EnvSyncError(
+    'Link this backend project first: run vercel login, then vercel link from this directory.',
+  );
+}
+export function pushPlans(root: string, plans: EnvPlan[], run: Runner = spawnSync): number {
+  const project = resolveVercelProject(root);
   const options = {
     cwd: root,
     encoding: 'utf8' as const,
@@ -373,18 +589,7 @@ export function pushPlans(root: string, plans: EnvPlan[], run: Runner = spawnSyn
   return count;
 }
 function cliContext(root: string, run: Runner) {
-  let project: { projectId?: string; orgId?: string };
-  try {
-    project = JSON.parse(readFileSync(join(root, '.vercel/project.json'), 'utf8'));
-  } catch {
-    throw new EnvSyncError('Run vercel login and vercel link for this backend before pulling.');
-  }
-  if (
-    ![project.projectId, project.orgId].every(
-      (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id),
-    )
-  )
-    throw new EnvSyncError('Invalid backend project link. Run vercel link again.');
+  const project = resolveVercelProject(root);
   return {
     project,
     options: {
@@ -421,8 +626,8 @@ export function splitLocal(root: string): {
 } {
   initialize(root);
   const local = readEnvFile(join(root, '.env'));
-  const shared = readEnvFile(join(root, '.env.vercel.shared'));
-  const production = readEnvFile(join(root, '.env.vercel.production'));
+  const state = loadState(root);
+  const { shared, production } = state;
   const localOnly: string[] = [];
   let sharedCount = 0,
     productionCount = 0;
@@ -456,21 +661,47 @@ export function splitLocal(root: string): {
       }
     }
   }
-  saveValues(root, '.env.vercel.shared', shared);
-  saveValues(root, '.env.vercel.production', production);
+  saveState(root, state, ['shared', 'production']);
   return { shared: sharedCount, production: productionCount, localOnly };
+}
+function addRotationKeySlots(shared: Record<string, string>): string[] {
+  const added: string[] = [];
+  for (const name of Object.keys(SECRET_RULES)) {
+    for (const [key, defaultValue] of [
+      [name, ''],
+      [`${name}_PREVIOUS_KEYS`, '[]'],
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(shared, key)) continue;
+      shared[key] = defaultValue;
+      added.push(key);
+    }
+  }
+  return added;
+}
+/** Add configuration slots only; never generate keys or guess previous key values. */
+export function ensureRotationKeySlots(root: string): string[] {
+  initialize(root, { seedLocal: false });
+  const state = loadState(root);
+  const added = addRotationKeySlots(state.shared);
+  if (added.length) saveState(root, state, ['shared']);
+  return added;
+}
+function hiddenValue(row: { type?: string; visibility?: string }): boolean {
+  return [row.type, row.visibility].some((value) =>
+    ['secret', 'sensitive'].includes((value || '').toLowerCase()),
+  );
 }
 interface RemoteEntry {
   key: string;
   type?: string;
   value?: unknown;
+  visibility?: string;
   target?: string[];
   gitBranch?: string | null;
 }
 export interface PullResult {
   readable: number;
-  preserved: string[];
-  missing: string[];
+  unreadable: string[];
   split: string[];
 }
 export function pullEnvironments(
@@ -478,14 +709,13 @@ export function pullEnvironments(
   selected: Target[],
   run: Runner = spawnSync,
 ): PullResult {
-  initialize(root);
+  initialize(root, { seedLocal: false });
   const { project, options } = cliContext(root, run);
-  const shared = readEnvFile(join(root, '.env.vercel.shared'));
-  const scoped = Object.fromEntries(
-    targets.map((target) => [target, readEnvFile(join(root, `.env.vercel.${target}`))]),
-  ) as Record<Target, Record<string, string>>;
+  const state = loadState(root);
+  const shared = state.shared;
+  const scoped = { preview: state.preview, production: state.production };
   const readable: Partial<Record<Target, Record<string, string>>> = {};
-  const result: PullResult = { readable: 0, preserved: [], missing: [], split: [] };
+  const result: PullResult = { readable: 0, unreadable: [], split: [] };
   for (const target of selected) {
     const response = run(
       'vercel',
@@ -516,6 +746,41 @@ export function pullEnvironments(
         'Unexpected Vercel environment-list format. No local values were replaced.',
       );
     }
+    const exportDirectory = join(root, '.ops', `vercel-download-${randomBytes(8).toString('hex')}`);
+    const exportFile = join(exportDirectory, 'values.env');
+    let exported: Record<string, string> = {};
+    const needsExport = rows.some(
+      (row) => !row.gitBranch && !hiddenValue(row) && !row.key?.startsWith('VERCEL_'),
+    );
+    if (needsExport) {
+      mkdirSync(exportDirectory, { recursive: true, mode: 0o700 });
+      writeFileSync(exportFile, '', { mode: 0o600, flag: 'wx' });
+      try {
+        const download = run(
+          'vercel',
+          [
+            'env',
+            'pull',
+            exportFile,
+            '--environment',
+            target,
+            '--yes',
+            '--project',
+            project.projectId,
+            '--scope',
+            project.orgId,
+          ],
+          options,
+        );
+        if (download.status !== 0 || download.error)
+          throw new EnvSyncError(
+            `Cannot export readable ${target} settings from Vercel. No local values were replaced.`,
+          );
+        exported = parse(readFileSync(exportFile, 'utf8'));
+      } finally {
+        rmSync(exportDirectory, { recursive: true, force: true });
+      }
+    }
     readable[target] = {};
     for (const row of rows) {
       if (!row || typeof row.key !== 'string' || !/^[A-Z_][A-Z0-9_]*$/.test(row.key))
@@ -531,32 +796,49 @@ export function pullEnvironments(
       )
         continue;
       const name = row.key;
-      const hasReadableValue =
-        !['sensitive', 'secret'].includes((row.type || '').toLowerCase()) &&
-        typeof row.value === 'string';
-      if (!hasReadableValue) {
-        const existing = Object.prototype.hasOwnProperty.call(scoped[target], name)
-          ? scoped[target][name]
-          : shared[name];
-        (existing === undefined || existing === '' ? result.missing : result.preserved).push(
-          `${target}:${name}`,
+      const hasReadableValue = !hiddenValue(row);
+      if (hasReadableValue && !Object.prototype.hasOwnProperty.call(exported, name))
+        throw new EnvSyncError(
+          `Readable ${target}.${name} was missing from Vercel's decrypted export. No local values were replaced.`,
         );
-        continue;
+      if (!hasReadableValue) {
+        // A hidden value is represented as empty, never filled from any local source.
+        readable[target]![name] = '';
+        result.unreadable.push(`${target}:${name}`);
+      } else {
+        const value = exported[name];
+        if (encryptedStorageValue(value))
+          throw new EnvSyncError(
+            `Vercel exported an encrypted storage payload for ${target}.${name}; no local values were replaced.`,
+          );
+        readable[target]![name] = value;
+        result.readable++;
       }
-      readable[target]![name] = row.value as string;
-      result.readable++;
     }
   }
   const names = new Set(selected.flatMap((target) => Object.keys(readable[target]!)));
   for (const name of names) {
+    if (scopedOnly.has(name) && selected.length === 2) delete shared[name];
     const sharedName =
-      name !== 'DATABASE_URL' &&
+      !scopedOnly.has(name) &&
       (shareFromLocal.has(name) || Object.prototype.hasOwnProperty.call(shared, name));
     const bothKnown =
       selected.length === 2 &&
       targets.every((target) => Object.prototype.hasOwnProperty.call(readable[target]!, name));
-    if (sharedName && bothKnown && readable.preview![name] === readable.production![name]) {
-      shared[name] = readable.preview![name];
+    const knownTargets = selected.filter((target) =>
+      Object.prototype.hasOwnProperty.call(readable[target]!, name),
+    );
+    const pulledValue = readable[knownTargets[0]]![name];
+    const redactedShared = knownTargets.some((target) =>
+      result.unreadable.includes(`${target}:${name}`),
+    );
+    if (
+      sharedName &&
+      selected.length === 2 &&
+      (bothKnown || redactedShared) &&
+      knownTargets.every((target) => readable[target]![name] === pulledValue)
+    ) {
+      shared[name] = pulledValue;
       for (const target of targets) delete scoped[target][name];
       continue;
     }
@@ -577,30 +859,36 @@ export function pullEnvironments(
       result.split.push(name);
     }
   }
-  // Keep a private snapshot before replacing user-editable files. CLI output and values are never logged.
-  const backup = join(root, '.ops', `vercel-env-${Date.now()}-${randomBytes(4).toString('hex')}`);
-  mkdirSync(backup, { recursive: true, mode: 0o700 });
-  for (const name of ['shared', ...selected]) {
-    const file = `.env.vercel.${name}`;
-    writeFileSync(join(backup, file), readFileSync(join(root, file)), { mode: 0o600, flag: 'wx' });
-  }
-  saveValues(root, '.env.vercel.shared', shared);
-  for (const target of selected) saveValues(root, `.env.vercel.${target}`, scoped[target]);
+  addRotationKeySlots(shared);
+  saveState(root, state, ['shared', ...selected]);
   return result;
 }
 export function main(args: string[], root = process.cwd()): void {
   if (args.includes('--help')) {
     console.log(
-      'Usage: env:vercel:init | env:vercel:split | env:vercel:plan [preview|production|all] | env:vercel:push[:preview|:production] | env:vercel:pull[:preview|:production]. Explicit empty assignments are preserved. Secret values are never logged.',
+      'Usage: env:vercel:init | env:vercel:migrate | env:vercel:keys | env:vercel:split | env:vercel:plan [preview|production|all] | env:vercel:push[:preview|:production] | env:vercel:pull[:preview|:production]. Explicit empty assignments are preserved. Secret values are never logged.',
     );
     return;
   }
-  if (args[0] === 'init' && args.length === 1) {
-    const created = initialize(root);
+  const migrated = migrateSingleFile(root);
+  if (migrated.created)
     console.log(
-      created.length
-        ? `Created ${created.map((file) => file.slice(root.length + 1)).join(', ')} with permissions 0600. Existing shared values were preserved; no keys were generated.`
-        : 'Private environment files already exist; nothing changed.',
+      `Created ${configFile} with shared, preview and production sections. Old editable files were archived privately.`,
+    );
+  if (migrated.cleared.length)
+    console.log(
+      `Encrypted storage payloads cleared; pull again for actual readable values: ${migrated.cleared.join(', ')}`,
+    );
+  if (['init', 'migrate'].includes(args[0]) && args.length === 1) {
+    console.log(`Edit ${configFile}. No hosted settings or runtime .env values were changed.`);
+    return;
+  }
+  if (args[0] === 'keys' && args.length === 1) {
+    const added = ensureRotationKeySlots(root);
+    console.log(
+      added.length
+        ? `Added shared rotation slots: ${added.join(', ')}. Current keys are blank; previous-key lists default to []. No key values were generated or copied.`
+        : 'All current-key and previous-key-list slots already exist in .env.vercel.json → shared.',
     );
     return;
   }
@@ -620,16 +908,15 @@ export function main(args: string[], root = process.cwd()): void {
     console.log(
       `Pulled ${result.readable} readable assignments, including explicit empty values. Local-only assignments were retained.`,
     );
-    if (result.preserved.length)
+    if (result.unreadable.length)
       console.log(
-        `Unreadable hosted secrets; local copies preserved (not verified against Vercel): ${result.preserved.join(', ')}`,
-      );
-    if (result.missing.length)
-      console.log(
-        `Unreadable secrets without a nonempty local copy; recover from your secret manager: ${result.missing.join(', ')}`,
+        `Unreadable sensitive values written as empty local assignments (no local fallback): ${result.unreadable.join(', ')}`,
       );
     if (result.split.length)
-      console.log(`Different hosted values kept environment-specific: ${result.split.join(', ')}`);
+      console.log(`Different pulled values kept environment-specific: ${result.split.join(', ')}`);
+    console.log(
+      'Current-key and previous-key-list slots are available in .env.vercel.json → shared. No key values were generated.',
+    );
     return;
   }
   const selected = args[0] || 'all';

@@ -40,6 +40,8 @@
     "keys:rotate:dry": "npm run keys:rotate -- all",
     "keys:rotate:apply": "npm run keys:rotate -- all --apply",
     "env:vercel:init": "node scripts/vercel-env.cjs init",
+    "env:vercel:migrate": "node scripts/vercel-env.cjs migrate",
+    "env:vercel:keys": "node scripts/vercel-env.cjs keys",
     "env:vercel:split": "node scripts/vercel-env.cjs split",
     "env:vercel:pull": "node scripts/vercel-env.cjs pull all",
     "env:vercel:pull:preview": "node scripts/vercel-env.cjs pull preview",
