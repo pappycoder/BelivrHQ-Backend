@@ -8,10 +8,11 @@
 
 import { Module, Global } from '@nestjs/common';
 import { RedisService } from './redis.service';
+import { WorkerStatusService } from '../queues/worker-status.service';
 
 @Global()
 @Module({
-  providers: [RedisService],
-  exports: [RedisService],
+  providers: [RedisService, WorkerStatusService],
+  exports: [RedisService, WorkerStatusService],
 })
 export class RedisModule {}

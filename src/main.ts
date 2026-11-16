@@ -20,8 +20,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as Sentry from '@sentry/nestjs';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
+import { initializeTelemetry } from './config/telemetry';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
@@ -47,41 +46,7 @@ import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
  * @returns {Promise<void>}
  */
 async function bootstrap(): Promise<void> {
-  // Initialize Sentry (only if SENTRY_DSN is set).
-  if (env.SENTRY_DSN) {
-    Sentry.init({
-      dsn: env.SENTRY_DSN,
-      environment: process.env.VERCEL_ENV || env.NODE_ENV,
-      integrations: [nodeProfilingIntegration()],
-      tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
-      profilesSampleRate: env.NODE_ENV === 'production' ? 0.05 : 1.0,
-      sendDefaultPii: false,
-      beforeSendTransaction(event) {
-        if (event.request) {
-          delete event.request.headers;
-          delete event.request.cookies;
-          delete event.request.data;
-          delete event.request.query_string;
-          if (event.request.url) event.request.url = event.request.url.split('?')[0];
-        }
-        for (const span of event.spans ?? []) {
-          span.data = {};
-          if (span.description) span.description = span.description.split('?')[0];
-        }
-        return event;
-      },
-      beforeSend(event) {
-        if (event.request) {
-          delete event.request.headers;
-          delete event.request.cookies;
-          delete event.request.data;
-          delete event.request.query_string;
-          if (event.request.url) event.request.url = event.request.url.split('?')[0];
-        }
-        return event;
-      },
-    });
-  }
+  initializeTelemetry(env);
 
   // Create the NestJS application instance.
   // NestFactory.create() initializes the IoC container, resolves all modules,
