@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [main, staging]
 
-# Git auto-deployment is disabled in vercel.json. Only this gated workflow
-# migrates, builds a candidate, verifies readiness and promotes traffic.
+# Vercel Git deployments stay enabled while worker rollout is deferred.
+# Candidate promotion is opt-in; its preflight refuses concurrent Git deployment mode.
 jobs:
   lint:
     name: Lint & Format
@@ -137,7 +137,7 @@ jobs:
           OPS_TEST_PG_CONTAINER: ${{ job.services.postgres.id }}
 
   migrate:
-    name: Migrate and release checked backend
+    name: Migrate checked backend (optional gated promotion)
     runs-on: ubuntu-latest
     needs: [lint, test, e2e, docker-context]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
@@ -180,6 +180,7 @@ jobs:
           }
           NODE
       - name: Validate release configuration and checked branch head
+        if: vars.BACKEND_RELEASE_ENABLED == 'true'
         run: node scripts/release-backend.cjs preflight
       - run: npm ci
       - name: Generate Prisma Client
@@ -189,6 +190,8 @@ jobs:
       - name: Seed missing default roles
         run: npm run prisma:seed-production
       - name: Install pinned deployment CLI
+        if: vars.BACKEND_RELEASE_ENABLED == 'true'
         run: npm install --global vercel@65.9.0
       - name: Build candidate, verify readiness and promote
+        if: vars.BACKEND_RELEASE_ENABLED == 'true'
         run: node scripts/release-backend.cjs publish

@@ -1,6 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { publish, settings, healthy } = require('../../scripts/lib/release-gate.cjs');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const {
+  publish,
+  settings,
+  healthy,
+  assertReleaseMode,
+} = require('../../scripts/lib/release-gate.cjs');
 
 const sha = 'a'.repeat(40);
 const env = {
@@ -58,6 +65,40 @@ function fake(options = {}) {
   return { run, calls };
 }
 const promotions = (calls) => calls.filter(([, args]) => ['promote', 'alias'].includes(args[0]));
+
+test('deferred deployment configuration keeps Git deployments enabled and all worker instances off', () => {
+  const root = JSON.parse(readFileSync(join(__dirname, '../../vercel.json'), 'utf8'));
+  const example = JSON.parse(
+    readFileSync(join(__dirname, '../../config/vercel/daemon.example.json'), 'utf8'),
+  );
+  assert.equal(root.git.deploymentEnabled, true);
+  for (const config of [root, example])
+    for (const daemon of Object.values(config.daemons || {}))
+      for (const instances of Object.values(daemon.instances || {})) assert.equal(instances, 0);
+});
+
+test('refuses gated promotion until independent Git deployment is explicitly disabled', () => {
+  for (const config of [{}, { git: {} }, { git: { deploymentEnabled: true } }])
+    assert.throws(() => assertReleaseMode(config));
+  assert.doesNotThrow(() => assertReleaseMode({ git: { deploymentEnabled: false } }));
+});
+
+test('accepts explicitly deferred workers without ignoring required dependency failures', () => {
+  const deferred = body();
+  deferred.data.workersRequired = false;
+  deferred.data.workers = {};
+  assert.equal(healthy(deferred), true);
+  delete deferred.data.workersRequired;
+  assert.equal(healthy(deferred), false);
+  deferred.data.workersRequired = true;
+  assert.equal(healthy(deferred), false);
+  deferred.data.workersRequired = false;
+  deferred.data.queues.broadcast.status = 'down';
+  assert.equal(healthy(deferred), false);
+  deferred.data.queues.broadcast.status = 'up';
+  deferred.data.services.database = 'down';
+  assert.equal(healthy(deferred), false);
+});
 
 test('rejects disabled releases, untrusted event types and unsupported branches', () => {
   for (const override of [

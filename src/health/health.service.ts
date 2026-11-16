@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,6 +22,7 @@ export interface HealthStatus {
   services: { database: 'up' | 'down'; redis: 'up' | 'down' };
   queues: Record<string, QueueMetrics>;
   workers: Record<string, 'up' | 'down'>;
+  workersRequired: boolean;
   checks: Record<string, { status: 'up' | 'down'; durationMs: number; reason?: string }>;
 }
 
@@ -31,6 +33,7 @@ export class HealthService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly workerStatus: WorkerStatusService,
+    private readonly config: ConfigService,
     @InjectQueue('whatsapp-outbound') private readonly whatsappQueue: Queue,
     @InjectQueue('email-outbound') private readonly emailQueue: Queue,
     @InjectQueue('sms-outbound') private readonly smsQueue: Queue,
@@ -93,11 +96,12 @@ export class HealthService {
       checks.workers.status = 'down';
       checks.workers.reason = 'missing_or_stale';
     }
+    const workersRequired = this.config.get<string>('REQUIRE_QUEUE_WORKERS') === 'true';
     const allUp =
       database.ok &&
       redis.ok &&
       queues.every(([, queue]) => queue.status === 'up') &&
-      Object.values(workers).every((state) => state === 'up');
+      (!workersRequired || Object.values(workers).every((state) => state === 'up'));
     return {
       status: allUp ? 'healthy' : !database.ok && !redis.ok ? 'unhealthy' : 'degraded',
       timestamp: new Date().toISOString(),
@@ -105,6 +109,7 @@ export class HealthService {
       services: { database: database.ok ? 'up' : 'down', redis: redis.ok ? 'up' : 'down' },
       queues: Object.fromEntries(queues),
       workers,
+      workersRequired,
       checks,
     };
   }

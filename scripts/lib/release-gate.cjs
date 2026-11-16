@@ -57,6 +57,13 @@ function assertCurrentHead(env, runner = spawnSync) {
   execute('git', ['diff', '--quiet', 'HEAD'], runner);
 }
 
+function assertReleaseMode(config) {
+  if (config?.git?.deploymentEnabled !== false)
+    throw new ReleaseError(
+      'Gated promotion requires Git auto-deployments to be explicitly disabled first.',
+    );
+}
+
 function healthy(body) {
   const data = body && body.success === true && body.data;
   return (
@@ -64,7 +71,8 @@ function healthy(body) {
     data.status === 'healthy' &&
     data.services?.database === 'up' &&
     data.services?.redis === 'up' &&
-    QUEUES.every((queue) => data.queues?.[queue]?.status === 'up' && data.workers?.[queue] === 'up')
+    QUEUES.every((queue) => data.queues?.[queue]?.status === 'up') &&
+    (data.workersRequired === false || QUEUES.every((queue) => data.workers?.[queue] === 'up'))
   );
 }
 
@@ -141,4 +149,12 @@ async function publish(
   return { commit: env.GITHUB_SHA, deployment: candidate.id, domain: target.domain };
 }
 
-module.exports = { ReleaseError, settings, assertCurrentHead, healthy, publish, TARGETS };
+module.exports = {
+  ReleaseError,
+  settings,
+  assertCurrentHead,
+  assertReleaseMode,
+  healthy,
+  publish,
+  TARGETS,
+};

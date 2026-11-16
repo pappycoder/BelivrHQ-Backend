@@ -17,7 +17,7 @@ export class HealthController {
   }
 
   @Get(['', 'ready'])
-  @ApiOperation({ summary: 'Readiness, including dependency and worker availability' })
+  @ApiOperation({ summary: 'Readiness with worker availability; worker requirement is opt-in' })
   @ApiResponse({ status: 200, description: 'All required services and workers are ready' })
   @ApiResponse({ status: 503, description: 'A required dependency or worker is unavailable' })
   async check(@Res({ passthrough: true }) response: Response) {

@@ -47,11 +47,13 @@ describe('API readiness and liveness', () => {
   let database: jest.Mock;
   let redis: jest.Mock;
   let snapshot: jest.Mock;
+  let requireWorkers: jest.Mock;
   let queues: { getJobCounts: jest.Mock }[];
   let service: HealthService;
   beforeEach(() => {
     database = jest.fn().mockResolvedValue([{ value: 1 }]);
     redis = jest.fn().mockResolvedValue('PONG');
+    requireWorkers = jest.fn().mockReturnValue('true');
     snapshot = jest
       .fn()
       .mockResolvedValue(Object.fromEntries(WORKER_QUEUES.map((name) => [name, 'up'])));
@@ -64,6 +66,7 @@ describe('API readiness and liveness', () => {
       { $queryRaw: database } as never,
       { ping: redis } as never,
       { snapshot } as never,
+      { get: requireWorkers } as never,
       queues[0] as never,
       queues[1] as never,
       queues[2] as never,
@@ -89,6 +92,30 @@ describe('API readiness and liveness', () => {
       delayed: 4,
     });
     expect(result.workers.broadcast).toBe('up');
+    expect(result.workersRequired).toBe(true);
+  });
+  it.each([undefined, '', 'false'])(
+    'allows deferred workers (%s) while reporting their absence',
+    async (setting) => {
+      requireWorkers.mockReturnValue(setting);
+      snapshot.mockResolvedValue({});
+      const response = { status: jest.fn() };
+      const result = await new HealthController(service).check(response as never);
+      expect(response.status).toHaveBeenCalledWith(200);
+      expect(result.status).toBe('healthy');
+      expect(result.workersRequired).toBe(false);
+      expect(Object.values(result.workers).every((state) => state === 'down')).toBe(true);
+      expect(result.checks.workers).toMatchObject({ status: 'down', reason: 'missing_or_stale' });
+    },
+  );
+  it('does not require an optional worker probe to succeed, but still requires queue connectivity', async () => {
+    requireWorkers.mockReturnValue('false');
+    snapshot.mockRejectedValue(new Error('private'));
+    expect((await service.check()).status).toBe('healthy');
+    queues[0].getJobCounts.mockRejectedValue(new Error('private'));
+    const response = { status: jest.fn() };
+    await new HealthController(service).check(response as never);
+    expect(response.status).toHaveBeenCalledWith(503);
   });
   it.each(['database', 'redis', 'worker', 'queue'])(
     'returns HTTP 503 when %s is unavailable',

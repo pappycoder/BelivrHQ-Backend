@@ -26,6 +26,12 @@ function environment(overrides: NodeJS.ProcessEnv = {}) {
 }
 
 describe('Environment defaults', () => {
+  it('requires worker readiness only through an explicit true setting', () => {
+    expect(environment().REQUIRE_QUEUE_WORKERS).toBe('false');
+    expect(environment({ REQUIRE_QUEUE_WORKERS: '' }).REQUIRE_QUEUE_WORKERS).toBe('false');
+    expect(environment({ REQUIRE_QUEUE_WORKERS: 'false' }).REQUIRE_QUEUE_WORKERS).toBe('false');
+    expect(environment({ REQUIRE_QUEUE_WORKERS: 'true' }).REQUIRE_QUEUE_WORKERS).toBe('true');
+  });
   it.each([{}, { VERCEL: '1' }, { AWS_LAMBDA_FUNCTION_NAME: 'test' }])(
     'matches the actual database runtime when overrides are omitted: %j',
     (flags) => {
@@ -88,6 +94,7 @@ describe('Environment defaults', () => {
       INTEGRATIONS_ENCRYPTION_KEY_PREVIOUS_KEYS: '["bad-key"]',
     },
     { TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS_KEYS: JSON.stringify(['a'.repeat(64)]) },
+    { REQUIRE_QUEUE_WORKERS: 'tru' },
     { ALTCHA_HMAC_KEY: '' },
     {
       NODE_ENV: 'production',

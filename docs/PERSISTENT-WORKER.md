@@ -1,6 +1,6 @@
 # Persistent worker operation
 
-Operator decision, 2026-11-16: hosting and activation are on hold. The implementation and zero-instance deployment example remain available for a later rollout. The instructions below are preparation for that rollout; they do not authorize starting consumers now. Review existing queued work and complete hosted verification when rollout resumes. Do not deploy the branch's worker-required readiness gate unchanged while consumers are deferred.
+Operator decision, 2026-11-16: hosting and activation are on hold. The implementation and zero-instance deployment example remain available for a later rollout. API readiness defaults to `REQUIRE_QUEUE_WORKERS=false`; absent workers remain visible without blocking API readiness. Root Git deployments stay enabled and gated promotion remains opt-in. The instructions below prepare a later rollout and do not authorize starting consumers now. Review existing queued work and complete hosted verification when rollout resumes.
 
 The Vercel API produces jobs. It does not run persistent BullMQ consumers. Supabase supplies database/Auth/storage services and is not the deployed consumer for these queues. As of 2026-11-16 the operator confirmed that no persistent worker is deployed.
 
@@ -23,7 +23,7 @@ Start with one replica. Nightly dispatch uses stable church/date job IDs; compan
 ## Readiness and monitoring
 
 - `/api/v1/health/live`: HTTP 200 while the HTTP process responds, without dependency calls. Use this for container/process liveness to avoid restart loops during a database or worker outage.
-- `/api/v1/health/ready` and the existing `/api/v1/health`: HTTP 200 only when database/cache/queue checks and all required worker capabilities are ready; otherwise HTTP 503. The original response fields remain, with worker status and sanitized check latency/reasons added. Consumers must accept the corrected non-200 failure status.
+- `/api/v1/health/ready` and the existing `/api/v1/health`: HTTP 200 when database/cache/queue transport checks pass; otherwise HTTP 503. Worker state is always reported, with `workersRequired: false` by default while rollout is deferred. Set `REQUIRE_QUEUE_WORKERS=true` only after verified deployment to additionally require all worker capabilities. This setting does not enable consumers. The original response fields remain, with sanitized check latency/reasons added.
 - Worker leases renew every 20 seconds and expire after 90 seconds. Renewal requires an enabled, running, unpaused consumer and a successful read on its actual queue connection. An API producer cannot satisfy this check. Shutdown stops renewals; expiry avoids deleting a lease recently written by another worker.
 - Dependency probes run concurrently under three-second deadlines. Requests share outstanding probes so a hung operation cannot create unlimited pending checks. A probe stays unavailable until its underlying operation settles; restart an instance if a broken transport never settles.
 
@@ -31,9 +31,9 @@ Configure external monitoring for readiness failures, worker lease expiry and gr
 
 ## Staging rollout and controlled verification
 
-1. Complete migrations and deploy compatible worker/API code together; do not promote this API readiness change to production while no worker exists.
+1. Complete migrations and deploy compatible worker/API code. Keep `REQUIRE_QUEUE_WORKERS=false` during deferred operation and initial worker bring-up.
 2. Supply staging-only runtime values and start the supervised worker.
-3. Verify all eight queue capabilities become ready and that wrong-environment workers cannot satisfy readiness.
+3. Verify all eight queue capabilities become ready and that wrong-environment workers cannot satisfy readiness, then explicitly set `REQUIRE_QUEUE_WORKERS=true` on that environment's API and redeploy it.
 4. Exercise an explicitly chosen sandbox job without real customer messages, charges or production data. Verify persisted completion, not just queue acceptance.
 5. Pause/stop the worker and verify capability expiry and HTTP 503; confirm liveness remains HTTP 200. Restart and verify recovery.
 6. Validate crash recovery, safe retries and alerts before scheduling a production cutover. Review already waiting jobs before connecting a production consumer: starting it can immediately execute historical work.

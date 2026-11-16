@@ -135,6 +135,18 @@ async function main() {
   });
   queue.on('error', () => {});
   try {
+    const deferredApi = launch('main.js', 'api-deferred');
+    await waitFor(async () => {
+      const response = await request(origin, '/api/v1/health/ready');
+      return (
+        response.status === 200 &&
+        response.body.data?.status === 'healthy' &&
+        response.body.data?.workersRequired === false &&
+        queues.every((name) => response.body.data?.workers?.[name] === 'down')
+      );
+    });
+    await stop(deferredApi);
+    env.REQUIRE_QUEUE_WORKERS = 'true';
     launch('main.js', 'api');
     let worker = launch('worker.js', 'worker');
     const ready = async () => {
@@ -182,6 +194,7 @@ async function main() {
     console.log(
       JSON.stringify({
         readiness: 'healthy',
+        deferredWorkerStatus: 200,
         controlledJob: 'completed',
         absentWorkerStatus: 503,
         livenessDuringOutage: 200,

@@ -5,7 +5,7 @@ Branch: `fix/backend-production-readiness`
 Baseline: `525bb51`
 Status: Implementation in progress; local source changes prepared, hosted rollout pending.
 
-Worker rollout decision, 2026-11-16: the operator has put worker hosting and activation on hold. Retain the implemented worker code and disabled template; do not provision or activate consumers until the operator resumes rollout. This deferral does not establish hosted readiness or close the remaining coverage, container, recovery and release checks. The branch remains unmerged. Its worker-required readiness behavior and release gate cannot be rolled out unchanged while workers are deferred.
+Worker rollout decision, 2026-11-16: hosting and activation are on hold. Retain the implemented worker code and disabled template; do not activate consumers until the operator resumes rollout. API worker enforcement is now opt-in through `REQUIRE_QUEUE_WORKERS=true`, with explicit worker diagnostics in deferred mode. Git deployments remain enabled; candidate promotion is opt-in and refuses concurrent Git deployment mode. This deferral does not close the remaining coverage, container, schema migration, recovery and hosted release checks. The branch remains unmerged.
 
 ## Current implementation evidence
 
@@ -13,7 +13,7 @@ Worker rollout decision, 2026-11-16: the operator has put worker hosting and act
 - Private Docker-context exclusions and a real-engine regression are implemented. Docker is unavailable locally; CI must verify the context and worker image.
 - Worker capability leases, privacy-filtered telemetry, shutdown limits, optional process liveness and bounded HTTP readiness are implemented. A compiled API/worker smoke against isolated PostgreSQL/Redis verified processing, worker-loss HTTP 503, independent HTTP 200 liveness and restart recovery.
 - Transactional webhook intent, dispatch leases/crash recovery, terminal failure retention and audited generation-aware webhook retry are implemented and covered by unit/database regressions. Migrations have only been applied to disposable databases.
-- A candidate-before-promotion release gate and simulated refusal tests are prepared; see `BACKEND-RELEASE.md`. Tokens/environment policies and a hosted rehearsal are outstanding. Root Git-auto-deployment disabling must not be merged until the replacement gate is configured and passing.
+- A candidate-before-promotion release gate and simulated refusal tests are prepared; see `BACKEND-RELEASE.md`. Tokens/environment policies and a hosted rehearsal are outstanding. Git auto-deployment stays enabled while gated promotion is deferred; a later explicit switch must disable Git deployment before enabling candidate promotion.
 - Backup tooling now preserves privileges and refuses automatic restoration of legacy ACL-less archives. Supabase recovery inventory/drill and representative staging capacity work are documented in `RECOVERY-AND-CAPACITY.md`; hosted backup coverage and recovery targets are unverified.
 - The operator confirmed no persistent worker exists and uses Supabase. A disabled Vercel daemon template is prepared; no worker host or paid resource has been activated. Separately, the legacy test backend's Redis configuration was repaired and its existing source redeployed; that incident did not activate consumers or deploy this branch.
 

@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
-const { settings, assertCurrentHead, publish, ReleaseError } = require('./lib/release-gate.cjs');
+const {
+  settings,
+  assertCurrentHead,
+  assertReleaseMode,
+  publish,
+  ReleaseError,
+} = require('./lib/release-gate.cjs');
 
 async function main() {
   settings(process.env);
+  assertReleaseMode(JSON.parse(fs.readFileSync('vercel.json', 'utf8')));
   if (process.argv[2] === 'preflight') {
     assertCurrentHead(process.env);
     console.log('Release configuration and checked branch head verified.');
