@@ -25,7 +25,7 @@ Start with one replica. Nightly dispatch uses stable church/date job IDs; compan
 - Worker leases renew every 20 seconds and expire after 90 seconds. Renewal requires an enabled, running, unpaused consumer and a successful read on its actual queue connection. An API producer cannot satisfy this check. Shutdown stops renewals; expiry avoids deleting a lease recently written by another worker.
 - Dependency probes run concurrently under three-second deadlines. Requests share outstanding probes so a hung operation cannot create unlimited pending checks. A probe stays unavailable until its underlying operation settles; restart an instance if a broken transport never settles.
 
-Configure external monitoring for readiness failures, worker lease expiry and growing waiting/failed/backlog age. Alert destination and ownership are still required. A live process, Redis PING or empty queue is not evidence that a real job completed. Worker containers have no HTTP listener; their supervisor monitors process exit and the API exposes fleet readiness.
+Configure external monitoring for readiness failures, worker lease expiry and growing waiting/failed/backlog age. Alert destination and ownership are still required. A live process, Redis PING or empty queue is not evidence that a real job completed. Workers have no application API listener. A host may opt into a separate process-only HTTP probe with WORKER_HEALTH_PORT; the daemon example binds port 8081 at /health/live. It exposes no tenant or dependency details. The API exposes fleet readiness.
 
 ## Staging rollout and controlled verification
 

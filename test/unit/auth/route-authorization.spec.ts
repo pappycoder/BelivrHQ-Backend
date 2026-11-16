@@ -44,7 +44,8 @@ const exceptions: Record<string, string[]> = {
     'handlePaystackWebhook',
     'handleFlutterwaveWebhook',
   ],
-  'health/health.controller.ts': ['check'],
+  // Public operational probes expose sanitized readiness and process liveness only.
+  'health/health.controller.ts': ['check', 'live'],
   // Upload services enforce folder-specific grants, branch/plan scope and signed completion tickets.
   'media/media.controller.ts': [
     'file',
@@ -122,6 +123,7 @@ const publicRoutes = new Set([
   'forms/forms-public.controller.ts:getPublicFormMeta',
   'forms/forms-public.controller.ts:submitPublicForm',
   'health/health.controller.ts:check',
+  'health/health.controller.ts:live',
   'giving/giving.controller.ts:handlePaystackWebhook',
   'giving/giving.controller.ts:handleFlutterwaveWebhook',
   // Church-specific callbacks authenticate with provider signatures/subscription tokens.

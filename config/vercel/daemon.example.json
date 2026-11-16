@@ -4,10 +4,14 @@
     "queue-worker": {
       "root": ".",
       "entrypoint": "Dockerfile",
-      "command": ["node", "dist/worker.js"],
+      "command": ["env", "WORKER_HEALTH_PORT=8081", "node", "dist/worker.js"],
       "instances": { "iad1": 0 },
       "resources": { "requests": { "memory": "1Gi" } },
-      "terminationGracePeriodSeconds": 30
+      "terminationGracePeriodSeconds": 30,
+      "livenessProbe": {
+        "httpGet": { "port": 8081, "path": "/health/live" },
+        "initialDelaySeconds": 30
+      }
     }
   }
 }

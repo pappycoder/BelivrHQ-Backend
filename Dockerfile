@@ -1,5 +1,5 @@
 # ─── Stage 1: Install dependencies ─────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -17,7 +17,7 @@ COPY . .
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build npm run build
 
 # ─── Stage 4: Production image ────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 belivrhq
