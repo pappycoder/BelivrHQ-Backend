@@ -162,16 +162,29 @@ if (supabaseUrl && supabaseServiceKey) {
   });
 }
 
-function prismaModel(
-  name: string,
-): Record<string, (args: Record<string, unknown>) => Promise<unknown>> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-  const model = (prisma as Record<string, unknown>)[name[0].toLowerCase() + name.slice(1)] as
-    Record<string, (args: Record<string, unknown>) => Promise<unknown>> | undefined;
-  if (!model) {
+interface MaintenanceModel {
+  count(args?: Record<string, unknown>): Promise<number>;
+  findMany(args: Record<string, unknown>): Promise<Record<string, unknown>[]>;
+  findUnique(args: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+  deleteMany(args: Record<string, unknown>): Promise<{ count: number }>;
+  updateMany(args: Record<string, unknown>): Promise<{ count: number }>;
+}
+
+function prismaModel(name: string): MaintenanceModel {
+  if (!Prisma.dmmf.datamodel.models.some((model) => model.name === name)) {
     throw new Error(`Model ${name} not found on PrismaClient`);
   }
-  return model;
+  const model: unknown = Reflect.get(prisma, name[0].toLowerCase() + name.slice(1));
+  const methods = ['count', 'findMany', 'findUnique', 'deleteMany', 'updateMany'];
+  if (
+    !model ||
+    typeof model !== 'object' ||
+    methods.some((method) => typeof Reflect.get(model, method) !== 'function')
+  ) {
+    throw new Error(`Model ${name} does not expose the required maintenance operations`);
+  }
+  // The allowlisted Prisma model delegate supplies these non-generic operations.
+  return model as MaintenanceModel;
 }
 
 // ─────────────────────────────────────────────────────────────

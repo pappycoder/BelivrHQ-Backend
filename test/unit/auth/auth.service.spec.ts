@@ -107,11 +107,14 @@ describe('AuthService', () => {
     };
     resend = { sendEmail: jest.fn().mockResolvedValue(undefined) };
     config = {
-      get: jest
-        .fn()
-        .mockImplementation((key: string) =>
-          key === 'ALTCHA_HMAC_KEY' ? 'a'.repeat(64) : 'https://church-os-web.vercel.app',
-        ),
+      get: jest.fn().mockImplementation((key: string) => {
+        const settings: Record<string, string> = {
+          ALTCHA_HMAC_KEY: 'a'.repeat(64),
+          ALTCHA_HMAC_KEY_PREVIOUS_KEYS: '[]',
+          WEB_URL: 'https://church-os-web.vercel.app',
+        };
+        return settings[key];
+      }),
       getOrThrow: jest.fn().mockReturnValue('https://church-os-web.vercel.app'),
     };
     accountEmails = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
