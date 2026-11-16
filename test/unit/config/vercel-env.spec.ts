@@ -792,12 +792,40 @@ describe('Single-file and export failure boundaries', () => {
 
 describe('Environment-specific Redis credentials', () => {
   beforeEach(linked);
-  it.each(['REDIS_URL', 'UPSTASH_REDIS_TOKEN'])('rejects %s in shared before pushing', (name) => {
+  it.each(['REDIS_URL', 'UPSTASH_REDIS_TOKEN', 'QUEUE_REDIS_URL'])(
+    'rejects %s in shared before pushing',
+    (name) => {
+      write(
+        '.env.vercel.shared',
+        readFileSync(join(root, '.env.vercel.shared'), 'utf8') + `${name}=private-test-value\n`,
+      );
+      expect(() => preparePlans(root, ['preview'])).toThrow(`${name} belongs in each environment`);
+    },
+  );
+  it('classifies the dedicated queue connection as Secret and rejects REST/local queue endpoints', () => {
+    const original = readFileSync(join(root, '.env.vercel.production'), 'utf8');
     write(
-      '.env.vercel.shared',
-      readFileSync(join(root, '.env.vercel.shared'), 'utf8') + `${name}=private-test-value\n`,
+      '.env.vercel.production',
+      original + 'QUEUE_REDIS_URL=rediss://default:private@queue.example:6379\n',
     );
-    expect(() => preparePlans(root, ['preview'])).toThrow(`${name} belongs in each environment`);
+    expect(preparePlans(root, ['production'])[0].entries.QUEUE_REDIS_URL.type).toBe('secret');
+    for (const url of ['https://queue.example', 'redis://localhost:6379']) {
+      write('.env.vercel.production', original + `QUEUE_REDIS_URL=${url}\n`);
+      expect(() => preparePlans(root, ['production'])).toThrow(
+        'QUEUE_REDIS_URL must be a hosted Redis TCP/TLS URL',
+      );
+    }
+  });
+  it('warns when the REST cache connection lacks a BullMQ TCP connection', () => {
+    const original = readFileSync(join(root, '.env.vercel.production'), 'utf8');
+    write(
+      '.env.vercel.production',
+      original.replace(/REDIS_URL=.*\n/, 'REDIS_URL=https://cache.example\n') +
+        'UPSTASH_REDIS_TOKEN=private\n',
+    );
+    expect(preparePlans(root, ['production'])[0].warnings?.join(' ')).toContain(
+      'QUEUE_REDIS_URL is missing',
+    );
   });
   it('keeps equal readable Redis URLs and tokens target-specific when pulling both environments', () => {
     migrateSingleFile(root);

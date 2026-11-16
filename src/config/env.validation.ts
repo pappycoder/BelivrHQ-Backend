@@ -98,6 +98,19 @@ const envSchema = z
         },
       ),
     UPSTASH_REDIS_TOKEN: z.string().optional(),
+    QUEUE_REDIS_URL: optionalSetting(
+      z.string().refine(
+        (value) => {
+          try {
+            const url = new URL(value);
+            return ['redis:', 'rediss:'].includes(url.protocol) && !!url.hostname;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'QUEUE_REDIS_URL must be a Redis TCP/TLS connection string' },
+      ),
+    ),
     REDIS_NAMESPACE: optionalSetting(
       z
         .string()

@@ -19,6 +19,7 @@ import {
   secretKeys,
 } from '../../src/config/secret-keys';
 import { redisNamespace } from '../../src/redis/redis-namespace';
+import { queueRedisUrl } from '../../src/queues/redis-connection';
 
 export class EnvSyncError extends Error {}
 type Target = 'preview' | 'production';
@@ -40,6 +41,7 @@ const scopedOnly = new Set([
   'PUBLIC_API_URL',
   'REDIS_URL',
   'UPSTASH_REDIS_TOKEN',
+  'QUEUE_REDIS_URL',
 ]);
 type Section = 'shared' | Target;
 interface ConfigState {
@@ -407,6 +409,18 @@ function validate(plan: EnvPlan): void {
   }
   if (values.REDIS_URL?.startsWith('https://') && !values.UPSTASH_REDIS_TOKEN)
     throw new EnvSyncError(`${plan.target}: HTTPS Redis requires UPSTASH_REDIS_TOKEN.`);
+  if (values.QUEUE_REDIS_URL) {
+    try {
+      const url = new URL(queueRedisUrl((name) => values[name]));
+      if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error();
+    } catch {
+      throw new EnvSyncError(`${plan.target}: QUEUE_REDIS_URL must be a hosted Redis TCP/TLS URL.`);
+    }
+  } else if (values.REDIS_URL?.startsWith('https://')) {
+    plan.warnings!.push(
+      'QUEUE_REDIS_URL is missing: BullMQ requires the Redis TCP/TLS connection, not the HTTPS REST endpoint.',
+    );
+  }
   try {
     redisNamespace((name) => (name === 'VERCEL_ENV' ? plan.target : values[name]));
   } catch {

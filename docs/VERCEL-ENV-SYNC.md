@@ -115,3 +115,7 @@ References: [Vercel env commands](https://vercel.com/docs/cli/env), [Vercel Secr
 ## Validation
 
 56 focused checks passed: 42 env-sync regressions and 14 disposable-repository Git guard checks. Scoped script TypeScript/lint, single-file migration, actual file permissions/ignore checks and diff checks passed. A real Preview/Production pull succeeded and all four URL fields were verified as plaintext HTTPS URLs; hidden Secrets were represented as empty. No hosted settings, deployment or database records were modified.
+
+### Queue transport
+
+`QUEUE_REDIS_URL` is a target-specific Secret. When cache `REDIS_URL` uses an HTTPS Upstash REST endpoint, provide the separate Redis TCP/TLS URI from the dashboard for BullMQ. The REST token is not the TCP password. Plans warn when this connection is absent and reject HTTPS or local queue URLs. Queue initialization rejects REST URLs with a descriptive error rather than attempting a Unix socket connection. Existing TCP Redis deployments keep using `REDIS_URL` as the fallback.

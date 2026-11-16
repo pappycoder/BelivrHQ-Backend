@@ -1,4 +1,5 @@
 import { queuePrefix } from '../redis/redis-namespace';
+import { queueRedisUrl } from './redis-connection';
 /**
  * @file queues.module.ts
  * @description BullMQ background job queue infrastructure.
@@ -57,7 +58,7 @@ const DEFAULT_JOB_OPTIONS = {
       useFactory: (config: ConfigService) => ({
         prefix: queuePrefix((name) => config.get(name)),
         connection: {
-          url: config.get<string>('REDIS_URL', 'redis://localhost:6379'),
+          url: queueRedisUrl((name) => config.get<string>(name)),
           maxRetriesPerRequest: null,
         },
       }),
