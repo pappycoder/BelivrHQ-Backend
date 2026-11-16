@@ -9,6 +9,9 @@ export function redactTelemetry<T extends Event>(event: T): T {
       url: event.request.url ? observationText(event.request.url) : undefined,
     };
   }
+  // The SDK places this separately in the envelope header after event hooks run.
+  const sampling = event.sdkProcessingMetadata?.dynamicSamplingContext;
+  if (sampling?.transaction) sampling.transaction = observationText(sampling.transaction);
   if (event.user) event.user = { id: event.user.id };
   delete event.extra;
   if (event.contexts) delete event.contexts.request;

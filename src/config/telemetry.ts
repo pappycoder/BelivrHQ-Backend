@@ -13,6 +13,8 @@ export function initializeTelemetry(env: Pick<Env, 'SENTRY_DSN' | 'NODE_ENV'>) {
       tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
       profilesSampleRate: env.NODE_ENV === 'production' ? 0.05 : 1.0,
       sendDefaultPii: false,
+      // Transaction privacy hooks require static lifecycle in the installed SDK.
+      traceLifecycle: 'static',
       beforeSendTransaction: redactTelemetry,
       beforeSend: redactTelemetry,
     });

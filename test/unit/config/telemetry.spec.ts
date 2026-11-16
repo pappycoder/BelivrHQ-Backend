@@ -22,6 +22,7 @@ describe('Shared HTTP and worker telemetry privacy', () => {
         const options = jest.mocked(Sentry.init).mock.calls[0][0]!;
         expect(options.environment).toBe('preview');
         expect(options.sendDefaultPii).toBe(false);
+        expect(options.traceLifecycle).toBe('static');
         const event = {
           request: {
             headers: { Authorization: 'private' },
