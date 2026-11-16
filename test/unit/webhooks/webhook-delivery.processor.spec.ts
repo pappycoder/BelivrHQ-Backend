@@ -126,7 +126,7 @@ describe('WebhookDeliveryProcessor', () => {
       await processor.process(baseJob as never);
 
       expect(prisma.webhookDelivery.updateMany).toHaveBeenNthCalledWith(1, {
-        where: { id: deliveryId, status: 'pending' },
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: { attempts: { increment: 1 } },
       });
 
@@ -139,7 +139,7 @@ describe('WebhookDeliveryProcessor', () => {
       expect(captured!.body).toContain('"payload":{"memberId":"m-1"}');
 
       expect(prisma.webhookDelivery.updateMany).toHaveBeenNthCalledWith(2, {
-        where: { id: deliveryId, status: 'pending' },
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: {
           status: 'success',
           next_retry_at: null,
@@ -178,7 +178,7 @@ describe('WebhookDeliveryProcessor', () => {
       );
 
       expect(prisma.webhookDelivery.updateMany).toHaveBeenCalledWith({
-        where: { id: deliveryId, status: 'pending' },
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: {
           status: 'failed',
           response_body: 'Delivery attempts exhausted; operator review required.',

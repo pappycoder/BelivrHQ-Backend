@@ -37,3 +37,13 @@ Configure external monitoring for readiness failures, worker lease expiry and gr
 6. Validate crash recovery, safe retries and alerts before scheduling a production cutover. Review already waiting jobs before connecting a production consumer: starting it can immediately execute historical work.
 
 Do not auto-replay payment jobs or clear Redis as part of bring-up. Provider-issued credentials and lost encryption keys require their existing recovery processes. A database restore, provider sandbox test or worker launch must use an explicit target and cannot be inferred from a successful API build.
+
+## Current Vercel hosting option
+
+Vercel now documents Daemons in public beta on all plans, including BullMQ consumers. During beta they run only in production deployments; Preview deployments are unsupported. The main API functions still do not consume queues themselves. See [Background workers](https://vercel.com/docs/background-workers), [Daemons](https://vercel.com/docs/daemons) and the [configuration reference](https://vercel.com/docs/daemons/config-reference).
+
+A reviewable example is in `config/vercel/daemon.example.json`. It uses the existing Docker image, overrides the command to `node dist/worker.js` and sets the instance count to **zero**. It is not active project configuration and creates no worker. Review the region and compute quota/cost, then merge its daemon block into the actual project-root configuration only for an approved worker deployment. The root path in the example is relative to that project-root file, not the template directory.
+
+For this application's separate Preview and Production data, a dedicated worker project/service per environment avoids treating a production-only daemon as a Preview deployment. A staging worker project would use staging credentials and an explicit staging Redis namespace even if its hosting platform calls its deployment production. Verify telemetry labels in that setup. Do not copy production database/Redis values into the staging worker.
+
+Daemon instances start when their deployment is promoted, so a first daemon attached to the API cannot satisfy a pre-promotion worker-readiness gate by itself. Bootstrap and verify a separate worker service/project first, or agree an explicit maintenance/bootstrap procedure before enabling an attached daemon. After initial setup, review API/worker schema compatibility on every release. No daemon instance, service, account or paid resource was provisioned by adding this example.

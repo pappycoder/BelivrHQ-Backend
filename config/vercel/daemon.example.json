@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "daemons": {
+    "queue-worker": {
+      "root": ".",
+      "entrypoint": "Dockerfile",
+      "command": ["node", "dist/worker.js"],
+      "instances": { "iad1": 0 },
+      "resources": { "requests": { "memory": "1Gi" } },
+      "terminationGracePeriodSeconds": 30
+    }
+  }
+}

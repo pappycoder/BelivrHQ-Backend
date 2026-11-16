@@ -71,7 +71,8 @@
     "lint:fix": "eslint \"{src,test,scripts,prisma}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
-    "ops:test:docker-context": "node --test test/ops/docker-context.test.cjs"
+    "ops:test:docker-context": "node --test test/ops/docker-context.test.cjs",
+    "queues:failures": "node scripts/queue-failures.cjs"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

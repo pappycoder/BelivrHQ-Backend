@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { WebhookDispatchService } from '../../src/webhooks/webhook-dispatch.service';
+import { WebhooksService } from '../../src/webhooks/webhooks.service';
 
 describe('Transactional webhook intent and dispatch recovery', () => {
   const prisma = new PrismaService();
@@ -43,6 +44,7 @@ describe('Transactional webhook intent and dispatch recovery', () => {
     await prisma.webhookSubscription.deleteMany({ where });
     await prisma.member.deleteMany({ where });
     await prisma.transaction.deleteMany({ where });
+    await prisma.profile.deleteMany({ where });
     await prisma.auditLog.deleteMany({ where });
     await prisma.church.deleteMany({ where: { id: { in: churches } } });
     await prisma.$disconnect();
@@ -175,5 +177,70 @@ describe('Transactional webhook intent and dispatch recovery', () => {
       `webhook-${row.id}`,
     ]);
     expect(await prisma.webhookDelivery.count({ where: { id: row.id } })).toBe(1);
+  });
+
+  it('serializes competing operator retries and commits one audited generation', async () => {
+    const actor = randomUUID();
+    await prisma.profile.create({
+      data: {
+        church_id: churchId,
+        user_id: actor,
+        first_name: 'Operator',
+        last_name: 'Fixture',
+        role: ['super_admin'],
+        is_admin_hq: true,
+      },
+    });
+    const row = await prisma.webhookDelivery.create({
+      data: { subscription_id: subscriptionId, event: 'test.ping', payload: {}, status: 'failed' },
+    });
+    const dispatcher = new WebhookDispatchService(prisma, queue as never);
+    const service = new WebhooksService(prisma, {} as never, dispatcher);
+    const results = await Promise.allSettled(
+      [1, 2].map(() =>
+        service.retryDelivery(row.id, churchId, actor, 'Reviewed isolated fixture failure'),
+      ),
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(
+      (await prisma.webhookDelivery.findUniqueOrThrow({ where: { id: row.id } }))
+        .dispatch_generation,
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({
+        where: { entity: 'webhook_delivery', entity_id: row.id, user_id: actor },
+      }),
+    ).toBe(1);
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add.mock.calls[0][2].jobId).toBe(`webhook-${row.id}-1`);
+  });
+  it('rejects ordinary administrators before changing failed deliveries', async () => {
+    const actor = randomUUID();
+    await prisma.profile.create({
+      data: {
+        church_id: churchId,
+        user_id: actor,
+        first_name: 'Admin',
+        last_name: 'Fixture',
+        role: ['church_admin'],
+        is_admin_hq: true,
+      },
+    });
+    const row = await prisma.webhookDelivery.create({
+      data: { subscription_id: subscriptionId, event: 'test.ping', payload: {}, status: 'failed' },
+    });
+    const service = new WebhooksService(
+      prisma,
+      {} as never,
+      new WebhookDispatchService(prisma, queue as never),
+    );
+    await expect(
+      service.retryDelivery(row.id, churchId, actor, 'Reviewed isolated fixture failure'),
+    ).rejects.toThrow('Only super administrators');
+    expect((await prisma.webhookDelivery.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+      'failed',
+    );
+    expect(queue.add).not.toHaveBeenCalled();
   });
 });

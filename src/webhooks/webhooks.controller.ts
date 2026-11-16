@@ -13,6 +13,8 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { AuthenticatedRequest } from '../common/decorators/current-user.decorator';
 import { WebhooksService } from './webhooks.service';
 import { CreateWebhookSubscriptionDto } from './dto/create-webhook-subscription.dto';
+import { RetryWebhookDeliveryDto } from './dto/retry-webhook-delivery.dto';
+import { RateLimit, RATE_LIMITS } from '../common/guards/rate-limit.guard';
 import {
   WebhookSubscriptionResponseDto,
   WebhookDeliveryResponseDto,
@@ -24,6 +26,23 @@ import {
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
+
+  @Post('deliveries/:deliveryId/retry')
+  @RequirePermissions('webhooks:update')
+  @RateLimit(RATE_LIMITS.sensitive)
+  @ApiOperation({ summary: 'Super-admin reviewed retry of a failed webhook delivery' })
+  retryDelivery(
+    @Param('deliveryId') id: string,
+    @Body() dto: RetryWebhookDeliveryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.webhooksService.retryDelivery(
+      id,
+      req.profile?.church_id || '',
+      req.user?.sub || '',
+      dto.reason,
+    );
+  }
 
   /**
    * Create a webhook subscription.

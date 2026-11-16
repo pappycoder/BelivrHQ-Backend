@@ -1858,6 +1858,7 @@ model WebhookDelivery {
   response_body   String?
   attempts        Int       @default(0)
   next_retry_at   DateTime?
+  dispatch_generation Int @default(0)
 
   created_at DateTime @default(now())
 

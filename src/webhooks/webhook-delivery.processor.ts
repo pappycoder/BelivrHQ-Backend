@@ -20,6 +20,7 @@ import { createHmac } from 'crypto';
 interface WebhookDeliveryJob {
   deliveryId: string;
   subscriptionId?: string;
+  generation?: number;
 }
 
 @Processor('webhook-delivery', { concurrency: 2 })
@@ -34,6 +35,8 @@ export class WebhookDeliveryProcessor extends WorkerHost {
     const { deliveryId } = job.data;
     const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
     if (!delivery || delivery.status !== 'pending') return;
+    const generation = delivery.dispatch_generation ?? 0;
+    if ((job.data.generation ?? 0) !== generation) return;
     if (job.data.subscriptionId && delivery.subscription_id !== job.data.subscriptionId) return;
     const { event, payload } = delivery;
 
@@ -51,7 +54,7 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       !entitlement.features.includes('webhooks')
     ) {
       await this.prisma.webhookDelivery.updateMany({
-        where: { id: deliveryId, status: 'pending' },
+        where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
         data: {
           status: 'failed',
           response_body: 'Webhook subscription is unavailable on the current plan.',
@@ -60,7 +63,7 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       return;
     }
     const claim = await this.prisma.webhookDelivery.updateMany({
-      where: { id: deliveryId, status: 'pending' },
+      where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
       data: { attempts: { increment: 1 } },
     });
     if (!claim.count) return;
@@ -78,7 +81,7 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       throw new Error(`Webhook delivery failed: HTTP ${response.status}`);
     }
     await this.prisma.webhookDelivery.updateMany({
-      where: { id: deliveryId, status: 'pending' },
+      where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
       data: {
         status: 'success',
         next_retry_at: null,
@@ -94,7 +97,11 @@ export class WebhookDeliveryProcessor extends WorkerHost {
     this.logger.warn(`Webhook delivery attempt failed: ${job.data.deliveryId}`);
     await this.prisma.webhookDelivery
       .updateMany({
-        where: { id: job.data.deliveryId, status: 'pending' },
+        where: {
+          id: job.data.deliveryId,
+          status: 'pending',
+          dispatch_generation: job.data.generation ?? 0,
+        },
         data: {
           status: exhausted ? 'failed' : 'pending',
           response_body: exhausted

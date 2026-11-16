@@ -1,6 +1,7 @@
 import { queuePrefix } from '../redis/redis-namespace';
 import { queueRedisUrl } from './redis-connection';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
+import { TerminalFailureService } from './terminal-failure.service';
 import { DiscoveryModule } from '@nestjs/core';
 /**
  * @file queues.module.ts
@@ -90,6 +91,7 @@ const DEFAULT_JOB_OPTIONS = {
   providers: workersEnabled()
     ? [
         WorkerHeartbeatService,
+        TerminalFailureService,
         WhatsAppOutboundProcessor,
         EmailOutboundProcessor,
         SmsOutboundProcessor,

@@ -39,7 +39,7 @@ describe('Durable webhook dispatch', () => {
     expect(await service.dispatch('delivery')).toBe(true);
     expect(queue.add).toHaveBeenCalledWith(
       'deliver',
-      { deliveryId: 'delivery', subscriptionId: 'subscription' },
+      { deliveryId: 'delivery', subscriptionId: 'subscription', generation: 0 },
       expect.objectContaining({ jobId: 'webhook-delivery', attempts: 3 }),
     );
     expect(prisma.webhookDelivery.updateMany).toHaveBeenLastCalledWith(

@@ -16,6 +16,15 @@ export class WebhookDispatchService {
     @InjectQueue('webhook-delivery') private readonly queue: Queue,
   ) {}
 
+  async jobState(id: string, generation = 0) {
+    const job = await this.queue.getJob(this.jobId(id, generation));
+    return job ? job.getState() : undefined;
+  }
+
+  private jobId(id: string, generation: number) {
+    return generation ? `webhook-${id}-${generation}` : `webhook-${id}`;
+  }
+
   async dispatch(id: string): Promise<boolean> {
     const now = new Date();
     const lease = new Date(now.getTime() + 120000);
@@ -54,7 +63,8 @@ export class WebhookDispatchService {
         });
         return false;
       }
-      const jobId = `webhook-${id}`;
+      const generation = delivery.dispatch_generation ?? 0;
+      const jobId = this.jobId(id, generation);
       const existing = await this.queue.getJob(jobId);
       if (existing && (await existing.getState()) === 'failed') {
         await this.prisma.webhookDelivery.updateMany({
@@ -69,7 +79,7 @@ export class WebhookDispatchService {
       }
       await this.queue.add(
         'deliver',
-        { deliveryId: id, subscriptionId: subscription.id },
+        { deliveryId: id, subscriptionId: subscription.id, generation },
         {
           jobId,
           attempts: 3,
