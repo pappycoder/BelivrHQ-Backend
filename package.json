@@ -10,7 +10,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,test,scripts,prisma}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,test,scripts,prisma}/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -67,7 +67,11 @@
     "load:local": "node test/load/local-server.cjs",
     "load:check": "node --test test/load/config.test.mjs",
     "docker:status": "node scripts/docker-compose.cjs status",
-    "brand:audit": "node scripts/audit-brand.mjs"
+    "brand:audit": "node scripts/audit-brand.mjs",
+    "lint:fix": "eslint \"{src,test,scripts,prisma}/**/*.ts\" --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
+    "ops:test:docker-context": "node --test test/ops/docker-context.test.cjs"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
