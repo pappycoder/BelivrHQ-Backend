@@ -156,7 +156,7 @@ process.exit(result.status??1);
           'prisma/seed-permissions.ts',
         ]);
         assert.equal(result.code, 0, result.stderr);
-        assert.equal(await db.role.count(), 10);
+        assert.equal(await db.role.count(), 9);
         await db.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS auth');
         await db.$executeRawUnsafe(
           'CREATE TABLE IF NOT EXISTS auth.console_sentinel (id text PRIMARY KEY)',
@@ -185,6 +185,12 @@ process.exit(result.status??1);
           assert.ok(churchAdmin.branch_id);
           assert.ok(users.has(churchAdmin.user_id));
           assert.equal(createdCount, 1);
+          const subscription = await db.platformSubscription.findUnique({
+            where: { church_id: churchAdmin.church_id },
+          });
+          assert.equal(subscription.plan, 'essentials');
+          assert.equal(subscription.paid_until, null);
+          assert.equal(subscription.access_grants, null);
         },
       );
       await t.test(
@@ -217,6 +223,7 @@ process.exit(result.status??1);
                 (tx) =>
                   fn({
                     church: tx.church,
+                    platformSubscription: tx.platformSubscription,
                     branch: tx.branch,
                     auditLog: tx.auditLog,
                     profile: {
@@ -247,6 +254,11 @@ process.exit(result.status??1);
       await t.test(
         'orphan auth UUID can be linked explicitly without changing its password',
         async () => {
+          // This fixture needs three staff seats; default unpaid Essentials has two.
+          await db.platformSubscription.update({
+            where: { church_id: churchAdmin.church_id },
+            data: { plan: 'community' },
+          });
           const orphan = await auth.createUser({
             email: 'orphan@example.test',
             password: base.password,
@@ -295,9 +307,19 @@ process.exit(result.status??1);
         }
       });
       await t.test('backup uses restrictive permissions and rejects corruption', async () => {
+        await db.$executeRawUnsafe(
+          'CREATE FUNCTION public.console_acl_probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$',
+        );
+        await db.$executeRawUnsafe('REVOKE ALL ON FUNCTION public.console_acl_probe() FROM PUBLIC');
+        const denied = await db.$queryRawUnsafe(
+          "SELECT has_function_privilege('anon', 'public.console_acl_probe()', 'EXECUTE') AS allowed",
+        );
+        assert.equal(denied[0].allowed, false);
         snapshot = await backend.backupDatabase(context);
         assert.equal(fs.statSync(snapshot).mode & 0o777, 0o600);
-        await backend.verifyBackup(snapshot);
+        const manifest = await backend.verifyBackup(snapshot);
+        assert.equal(manifest.version, 2);
+        assert.equal(manifest.privileges, 'preserved');
         assert.equal(fs.statSync(path.dirname(snapshot)).mode & 0o777, 0o700);
         const badRoot = path.join(directory, 'unsafe-backup-root');
         const outside = path.join(directory, 'outside-backups');
@@ -353,7 +375,15 @@ process.exit(result.status??1);
             snapshot,
           ]);
           assert.equal(await db.profile.count(), 3);
-          assert.equal(await db.role.count(), 10);
+          assert.equal(await db.role.count(), 9);
+          const denied = await db.$queryRawUnsafe(
+            "SELECT has_function_privilege('anon', 'public.console_acl_probe()', 'EXECUTE') AS allowed",
+          );
+          assert.equal(
+            denied[0].allowed,
+            false,
+            'Restoring data must not reopen private definer functions',
+          );
           assert.equal(
             (await db.profile.findUnique({ where: { id: churchAdmin.id } })).branch_id,
             churchAdmin.branch_id,
@@ -370,7 +400,7 @@ process.exit(result.status??1);
         'demo retirement bans only demo identities and revokes their backend approval',
         async () => {
           const demo = await auth.createUser({
-            email: 'temporary@churchos.dev',
+            email: 'temporary@belivrhq.dev',
             password: base.password,
             email_confirm: true,
           });
@@ -379,6 +409,7 @@ process.exit(result.status??1);
               church_id: churchAdmin.church_id,
               branch_id: churchAdmin.branch_id,
               user_id: demo.data.user.id,
+              email: 'temporary@belivrhq.dev',
               first_name: 'Demo',
               last_name: 'Only',
             },

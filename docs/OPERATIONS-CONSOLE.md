@@ -33,9 +33,13 @@ npm run create:church-admin
 
 Migrations show the database target and require the displayed confirmation. A verified public-schema backup is mandatory before `prisma migrate deploy`; backup failure stops the migration. Configure matching PostgreSQL tools (`pg_dump`/`pg_restore`) and stop application writers as appropriate. The backup contains application records and needs private storage.
 
+New backups preserve database grants/revocations and use manifest version 2. Automatic restore refuses legacy ACL-less archives; retain them for isolated recovery with reviewed security policies. These public-schema archives exclude Supabase Auth and stored object bytes. See `RECOVERY-AND-CAPACITY.md` for the complete recovery inventory and drill.
+
 Admin creation needs `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, installed dependencies, generated Prisma client and existing reference roles/permissions. Choose a new login or explicitly link an orphan auth UUID with no application profile. Enter the password twice (hidden), names, optional phone, and an existing church UUID or new church name. Passwords require 12+ characters including upper/lowercase, number and symbol. Review the church/database/auth target and confirm.
 
 The account receives exactly the selected role with a branch-linked HQ profile. Existing profiled users are never silently promoted or reassigned. A failed profile transaction compensates only newly created auth identities. Provider/network failures can require manual reconciliation. Configure authenticator security in the application after provisioning.
+
+A new church receives an unpaid Essentials/monthly subscription record before branch/staff creation, matching signup onboarding and database capacity constraints. This does not grant a paid interval or alter an existing church's subscription.
 
 `--action` accepts only `dev`, `build`, `test`, `migration-deploy`, `admin-super` and `admin-church`. The old `seed-super-admin` command delegates to this flow.
 
