@@ -1,6 +1,6 @@
 # Persistent worker operation
 
-Operator decision, 2026-11-16: hosting and activation are on hold. The implementation and zero-instance deployment example remain available for a later rollout. API readiness defaults to `REQUIRE_QUEUE_WORKERS=false`; absent workers remain visible without blocking API readiness. Root Git deployments stay enabled and gated promotion remains opt-in. The instructions below prepare a later rollout and do not authorize starting consumers now. Review existing queued work and complete hosted verification when rollout resumes.
+Operator decision, 2026-11-16: hosting and activation are on hold. The implementation and zero-instance deployment example remain available for a later rollout. API readiness defaults to `REQUIRE_QUEUE_WORKERS=false`; absent workers remain visible without blocking API readiness. Primary Git deployments are disabled in favor of checked CI releases; worker hosting remains independently deferred. The instructions below prepare a later rollout and do not authorize starting consumers now. Review existing queued work and complete hosted verification when rollout resumes.
 
 The Vercel API produces jobs. It does not run persistent BullMQ consumers. Supabase supplies database/Auth/storage services and is not the deployed consumer for these queues. As of 2026-11-16 the operator confirmed that no persistent worker is deployed.
 

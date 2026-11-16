@@ -1,10 +1,9 @@
 const { spawnSync } = require('node:child_process');
 class ReleaseError extends Error {}
 
-const TARGETS = {
-  main: { environment: 'production', domain: 'api.belivrhq.com' },
-  staging: { environment: 'preview', domain: 'staging-api.belivrhq.com' },
-};
+const PROFILES = require('../../config/releases.json');
+const TARGETS = { main: PROFILES.primary.main, staging: PROFILES.primary.staging };
+
 const QUEUES = [
   'whatsapp-outbound',
   'email-outbound',
@@ -17,7 +16,8 @@ const QUEUES = [
 ];
 
 function settings(env) {
-  const target = TARGETS[env.GITHUB_REF_NAME];
+  const profile = PROFILES[env.RELEASE_PROFILE || 'primary'];
+  const target = profile?.[env.GITHUB_REF_NAME];
   if (!target || env.GITHUB_EVENT_NAME !== 'push' || env.BACKEND_RELEASE_ENABLED !== 'true')
     throw new ReleaseError('Automatic release is not enabled for this checked branch.');
   if (!/^[a-f0-9]{40}$/.test(env.GITHUB_SHA || ''))
@@ -28,6 +28,8 @@ function settings(env) {
     !/^team_[a-zA-Z0-9]+$/.test(env.VERCEL_ORG_ID || '')
   )
     throw new ReleaseError('Configure the scoped Vercel CI token and project/team IDs.');
+  if (env.VERCEL_PROJECT_ID !== profile.projectId || env.VERCEL_ORG_ID !== profile.orgId)
+    throw new ReleaseError('Project/team does not match the reviewed release profile.');
   return target;
 }
 
@@ -55,6 +57,8 @@ function assertCurrentHead(env, runner = spawnSync) {
       'A newer commit exists or checkout differs from the checked commit; release stopped.',
     );
   execute('git', ['diff', '--quiet', 'HEAD'], runner);
+  if (execute('git', ['ls-files', '--others', '--exclude-standard'], runner).trim())
+    throw new ReleaseError('Untracked source exists; refusing to deploy code outside the checked commit.');
 }
 
 function assertReleaseMode(config) {
@@ -76,77 +80,67 @@ function healthy(body) {
   );
 }
 
-async function publish(
-  env,
-  runner = spawnSync,
-  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-) {
+function command(env, runner) {
+  return (args) => execute('vercel', [...args, '--scope', env.VERCEL_ORG_ID, '--token', env.VERCEL_TOKEN], runner);
+}
+function assertHostedReleaseMode(env, runner = spawnSync) {
+  settings(env);
+  const project = JSON.parse(command(env, runner)(['api', `/v9/projects/${env.VERCEL_PROJECT_ID}`]));
+  if (project.id !== env.VERCEL_PROJECT_ID || project.accountId !== env.VERCEL_ORG_ID || project.gitProviderOptions?.createDeployments !== 'disabled')
+    throw new ReleaseError('Verify project/team access and disable hosted Git auto-deployments before releasing.');
+}
+function inspectCandidate(env, candidate, vc) {
+  if (!/^dpl_[a-zA-Z0-9]+$/.test(candidate || '')) throw new ReleaseError('Invalid candidate identity.');
+  const target = settings(env);
+  const info = JSON.parse(vc(['api', `/v13/deployments/${candidate}`]));
+  if (info.id !== candidate || info.readyState !== 'READY' || info.projectId !== env.VERCEL_PROJECT_ID ||
+      info.meta?.readinessReleaseSha !== env.GITHUB_SHA ||
+      (target.environment === 'production' ? info.target !== 'production' : ![null, undefined, 'preview'].includes(info.target) || !!info.customEnvironment))
+    throw new ReleaseError('Candidate identity, target or checked commit could not be verified.');
+}
+async function checkReadiness(env, deployment, vc, wait) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const body = JSON.parse(vc(['curl', '/api/v1/health/ready', '--deployment', deployment, '--', '--fail', '--silent', '--show-error', '--max-time', '10']));
+      if (healthy(body, settings(env))) return;
+    } catch { /* Bounded retries; never expose CLI output or credentials. */ }
+    if (attempt < 2) await wait(2000);
+  }
+  throw new ReleaseError('Candidate readiness did not pass; promotion refused.');
+}
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function prepare(env, runner = spawnSync, wait = delay) {
   const target = settings(env);
   assertCurrentHead(env, runner);
-  const vc = (args) =>
-    execute('vercel', [...args, '--scope', env.VERCEL_ORG_ID, '--token', env.VERCEL_TOKEN], runner);
-  const deployed = JSON.parse(
-    vc([
-      'deploy',
-      '--project',
-      env.VERCEL_PROJECT_ID,
-      '--environment',
-      target.environment,
-      '--skip-domain',
-      '--no-wait',
-      '--yes',
-      '--json',
-      '--meta',
-      `readinessReleaseSha=${env.GITHUB_SHA}`,
-    ]),
-  );
+  assertHostedReleaseMode(env, runner);
+  const vc = command(env, runner);
+  const deployed = JSON.parse(vc(['deploy', '--project', env.VERCEL_PROJECT_ID, '--environment', target.environment, '--skip-domain', '--no-wait', '--yes', '--json', '--meta', `readinessReleaseSha=${env.GITHUB_SHA}`]));
   const candidate = deployed.deployment;
-  if (deployed.status !== 'ok' || !/^dpl_[a-zA-Z0-9]+$/.test(candidate?.id || ''))
-    throw new ReleaseError('Vercel did not return a valid candidate deployment.');
+  if (deployed.status !== 'ok' || !/^dpl_[a-zA-Z0-9]+$/.test(candidate?.id || '')) throw new ReleaseError('Vercel did not return a valid candidate.');
   vc(['inspect', candidate.id, '--wait', '--timeout', '10m']);
-  const info = JSON.parse(vc(['api', `/v13/deployments/${candidate.id}`]));
-  if (
-    info.readyState !== 'READY' ||
-    info.projectId !== env.VERCEL_PROJECT_ID ||
-    info.meta?.readinessReleaseSha !== env.GITHUB_SHA ||
-    (target.environment === 'production'
-      ? info.target !== 'production'
-      : ![null, undefined, 'preview'].includes(info.target) || !!info.customEnvironment)
-  )
-    throw new ReleaseError('Candidate identity, target or checked commit could not be verified.');
-  const check = async (deployment) => {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const body = JSON.parse(
-          vc([
-            'curl',
-            '/api/v1/health/ready',
-            '--deployment',
-            deployment,
-            '--',
-            '--fail',
-            '--silent',
-            '--show-error',
-            '--max-time',
-            '10',
-          ]),
-        );
-        if (healthy(body)) return;
-      } catch {
-        /* A cold instance or transient failure gets bounded retries. */
-      }
-      if (attempt < 2) await wait(2000);
-    }
-    throw new ReleaseError(
-      'Readiness did not confirm database, Redis, queues and workers; release stopped.',
-    );
-  };
-  await check(candidate.id);
+  inspectCandidate(env, candidate.id, vc);
+  await checkReadiness(env, candidate.id, vc, wait);
+  return { commit: env.GITHUB_SHA, profile: env.RELEASE_PROFILE || 'primary', projectId: env.VERCEL_PROJECT_ID, orgId: env.VERCEL_ORG_ID, deployment: candidate.id, domain: target.domain };
+}
+async function promote(env, manifest, runner = spawnSync, wait = delay) {
+  const target = settings(env);
+  if (!manifest || manifest.commit !== env.GITHUB_SHA || manifest.profile !== (env.RELEASE_PROFILE || 'primary') ||
+      manifest.projectId !== env.VERCEL_PROJECT_ID || manifest.orgId !== env.VERCEL_ORG_ID || manifest.domain !== target.domain)
+    throw new ReleaseError('Candidate manifest does not match this checked release.');
   assertCurrentHead(env, runner);
-  if (target.environment === 'production') vc(['promote', candidate.id, '--yes']);
-  else vc(['alias', 'set', candidate.id, target.domain]);
-  await check(`https://${target.domain}`);
-  return { commit: env.GITHUB_SHA, deployment: candidate.id, domain: target.domain };
+  assertHostedReleaseMode(env, runner);
+  const vc = command(env, runner);
+  inspectCandidate(env, manifest.deployment, vc);
+  await checkReadiness(env, manifest.deployment, vc, wait);
+  assertCurrentHead(env, runner);
+  if (target.environment === 'production') vc(['promote', manifest.deployment, '--yes']);
+  else vc(['alias', 'set', manifest.deployment, target.domain]);
+  await checkReadiness(env, `https://${target.domain}`, vc, wait);
+  return { commit: env.GITHUB_SHA, deployment: manifest.deployment, domain: target.domain };
+}
+// Retained for isolated regression simulations; CI invokes separate prepare/promote phases.
+async function publish(env, runner = spawnSync, wait = delay) {
+  return promote(env, await prepare(env, runner, wait), runner, wait);
 }
 
 module.exports = {
@@ -154,7 +148,10 @@ module.exports = {
   settings,
   assertCurrentHead,
   assertReleaseMode,
+  assertHostedReleaseMode,
   healthy,
   publish,
+  prepare,
+  promote,
   TARGETS,
 };

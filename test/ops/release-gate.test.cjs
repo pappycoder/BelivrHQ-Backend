@@ -4,9 +4,12 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const {
   publish,
+  prepare,
+  promote,
   settings,
   healthy,
   assertReleaseMode,
+  assertHostedReleaseMode,
 } = require('../../scripts/lib/release-gate.cjs');
 
 const sha = 'a'.repeat(40);
@@ -16,8 +19,8 @@ const env = {
   GITHUB_SHA: sha,
   BACKEND_RELEASE_ENABLED: 'true',
   VERCEL_TOKEN: 'synthetic-token',
-  VERCEL_PROJECT_ID: 'prj_fixture',
-  VERCEL_ORG_ID: 'team_fixture',
+  VERCEL_PROJECT_ID: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU',
+  VERCEL_ORG_ID: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y',
 };
 const queues = [
   'whatsapp-outbound',
@@ -47,12 +50,16 @@ function fake(options = {}) {
     if (command === 'git' && args[0] === 'ls-remote')
       output = `${options.stale && ++heads > 1 ? 'b'.repeat(40) : sha}\trefs/heads/main`;
     else if (command === 'git' && args[0] === 'rev-parse') output = sha;
+    else if (command === 'git' && args[0] === 'ls-files') output = options.untracked ? 'src/unreviewed.ts' : '';
     else if (args[0] === 'deploy')
       output = JSON.stringify({ status: 'ok', deployment: { id: 'dpl_candidate' } });
+    else if (args[0] === 'api' && args[1].startsWith('/v9/projects/'))
+      output = JSON.stringify({ id: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU', accountId: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y', gitProviderOptions: { createDeployments: options.gitEnabled ? 'enabled' : 'disabled' } });
     else if (args[0] === 'api')
       output = JSON.stringify({
+        id: options.wrongCandidate ? 'dpl_other' : 'dpl_candidate',
         readyState: 'READY',
-        projectId: options.wrongProject ? 'prj_other' : 'prj_fixture',
+        projectId: options.wrongProject ? 'prj_other' : 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU',
         target: options.preview ? null : 'production',
         meta: { readinessReleaseSha: options.wrongCommit ? 'b'.repeat(40) : sha },
       });
@@ -66,12 +73,12 @@ function fake(options = {}) {
 }
 const promotions = (calls) => calls.filter(([, args]) => ['promote', 'alias'].includes(args[0]));
 
-test('deferred deployment configuration keeps Git deployments enabled and all worker instances off', () => {
+test('gated deployment configuration disables Git deployments while worker instances stay off', () => {
   const root = JSON.parse(readFileSync(join(__dirname, '../../vercel.json'), 'utf8'));
   const example = JSON.parse(
     readFileSync(join(__dirname, '../../config/vercel/daemon.example.json'), 'utf8'),
   );
-  assert.equal(root.git.deploymentEnabled, true);
+  assert.equal(root.git.deploymentEnabled, false);
   for (const config of [root, example])
     for (const daemon of Object.values(config.daemons || {}))
       for (const instances of Object.values(daemon.instances || {})) assert.equal(instances, 0);
@@ -153,4 +160,43 @@ test('staging can only update the staging domain and never promotes production',
     'dpl_candidate',
     'staging-api.belivrhq.com',
   ]);
+});
+
+test('refuses crossing a reviewed project/team boundary or unknown profile', () => {
+  for (const override of [{ RELEASE_PROFILE: 'legacy' }, { RELEASE_PROFILE: 'unknown' }, { VERCEL_PROJECT_ID: 'prj_other' }, { VERCEL_ORG_ID: 'team_other' }])
+    assert.throws(() => settings({ ...env, ...override }));
+});
+test('legacy configuration targets the legacy project independently', () => {
+  const profile = require('../../config/releases.json').legacy;
+  const actual = settings({ ...env, RELEASE_PROFILE: 'legacy', VERCEL_PROJECT_ID: profile.projectId, VERCEL_ORG_ID: profile.orgId });
+  assert.equal(actual.domain, profile.main.domain);
+  assert.notEqual(actual.domain, settings(env).domain);
+});
+
+test('candidate preparation never promotes and mismatched manifests are refused', async () => {
+  const { run, calls } = fake();
+  const manifest = await prepare(env, run, async () => {});
+  assert.equal(promotions(calls).length, 0);
+  for (const field of ['commit', 'profile', 'projectId', 'orgId', 'domain']) {
+    await assert.rejects(promote(env, { ...manifest, [field]: 'wrong' }, run, async () => {}));
+    assert.equal(promotions(calls).length, 0);
+  }
+  await promote(env, manifest, run, async () => {});
+  assert.equal(promotions(calls).length, 1);
+});
+
+test('hosted Git deployment bypasses are refused before a candidate is uploaded', async () => {
+  const { run, calls } = fake({ gitEnabled: true });
+  assert.throws(() => assertHostedReleaseMode(env, run));
+  await assert.rejects(prepare(env, run, async () => {}));
+  assert.equal(calls.filter(([, args]) => args[0] === 'deploy').length, 0);
+});
+
+test('untracked source and mismatched candidate IDs cannot be released', async () => {
+  for (const options of [{ untracked: true }, { wrongCandidate: true }]) {
+    const { run, calls } = fake(options);
+    await assert.rejects(publish(env, run, async () => {}));
+    assert.equal(promotions(calls).length, 0);
+    if (options.untracked) assert.equal(calls.filter(([, args]) => args[0] === 'deploy').length, 0);
+  }
 });

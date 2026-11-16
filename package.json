@@ -73,9 +73,11 @@
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "ops:test:docker-context": "node --test test/ops/docker-context.test.cjs",
     "queues:failures": "node scripts/queue-failures.cjs",
-    "release:test": "node --test test/ops/release-gate.test.cjs",
+    "release:test": "node --test test/ops/release-gate.test.cjs test/ops/workflow-policy.test.cjs",
     "readiness:smoke": "node scripts/readiness-smoke.cjs",
-    "readiness:smoke:check": "node --test test/ops/readiness-smoke.test.cjs"
+    "readiness:smoke:check": "node --test test/ops/readiness-smoke.test.cjs",
+    "security:audit": "node scripts/security-audit.cjs",
+    "security:test": "node --test test/ops/audit-policy.test.cjs"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
@@ -150,7 +152,8 @@
     "ts-loader": "^9.5.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "js-yaml": "^4.3.2"
   },
   "overrides": {
     "proxy-addr": "^2.0.8",
@@ -182,6 +185,8 @@
     "picomatch@>=4": "^4.0.7",
     "@angular-devkit/core": "^19.2.24",
     "@angular-devkit/schematics": "^19.2.24",
-    "zod": "$zod"
+    "zod": "$zod",
+    "glob@>=9 <14.0.2": "^14.0.6",
+    "minimatch@>=7 <11.0.1": "^11.0.8"
   }
 }
