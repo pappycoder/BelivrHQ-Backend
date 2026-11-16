@@ -1,5 +1,7 @@
 # Persistent worker operation
 
+Operator decision, 2026-11-16: hosting and activation are on hold. The implementation and zero-instance deployment example remain available for a later rollout. The instructions below are preparation for that rollout; they do not authorize starting consumers now. Review existing queued work and complete hosted verification when rollout resumes. Do not deploy the branch's worker-required readiness gate unchanged while consumers are deferred.
+
 The Vercel API produces jobs. It does not run persistent BullMQ consumers. Supabase supplies database/Auth/storage services and is not the deployed consumer for these queues. As of 2026-11-16 the operator confirmed that no persistent worker is deployed.
 
 ## Run one worker per environment first

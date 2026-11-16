@@ -5,6 +5,8 @@ Branch: `fix/backend-production-readiness`
 Baseline: `525bb51`
 Status: Implementation in progress; local source changes prepared, hosted rollout pending.
 
+Worker rollout decision, 2026-11-16: the operator has put worker hosting and activation on hold. Retain the implemented worker code and disabled template; do not provision or activate consumers until the operator resumes rollout. This deferral does not establish hosted readiness or close the remaining coverage, container, recovery and release checks. The branch remains unmerged. Its worker-required readiness behavior and release gate cannot be rolled out unchanged while workers are deferred.
+
 ## Current implementation evidence
 
 - Baseline registration fixtures and maintenance-script types are repaired. Non-mutating lint/typecheck and unchanged 80% coverage gates are wired into CI. Coverage remains below target; this phase is incomplete and release must remain blocked.
@@ -13,7 +15,7 @@ Status: Implementation in progress; local source changes prepared, hosted rollou
 - Transactional webhook intent, dispatch leases/crash recovery, terminal failure retention and audited generation-aware webhook retry are implemented and covered by unit/database regressions. Migrations have only been applied to disposable databases.
 - A candidate-before-promotion release gate and simulated refusal tests are prepared; see `BACKEND-RELEASE.md`. Tokens/environment policies and a hosted rehearsal are outstanding. Root Git-auto-deployment disabling must not be merged until the replacement gate is configured and passing.
 - Backup tooling now preserves privileges and refuses automatic restoration of legacy ACL-less archives. Supabase recovery inventory/drill and representative staging capacity work are documented in `RECOVERY-AND-CAPACITY.md`; hosted backup coverage and recovery targets are unverified.
-- The operator confirmed no persistent worker exists and uses Supabase. A disabled Vercel daemon template is prepared; no worker host, paid resource, hosted secret, database migration or deployment has been activated during this implementation.
+- The operator confirmed no persistent worker exists and uses Supabase. A disabled Vercel daemon template is prepared; no worker host or paid resource has been activated. Separately, the legacy test backend's Redis configuration was repaired and its existing source redeployed; that incident did not activate consumers or deploy this branch.
 
 ## Objective and evidence
 
