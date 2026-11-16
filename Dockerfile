@@ -7,7 +7,8 @@ RUN npm ci --ignore-scripts
 # ─── Stage 2: Generate Prisma client ──────────────────────
 FROM deps AS prisma
 COPY prisma ./prisma
-RUN npx prisma generate
+COPY .config ./.config
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build npx prisma generate
 
 # ─── Stage 3: Build the application ───────────────────────
 FROM deps AS builder

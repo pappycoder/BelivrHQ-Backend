@@ -3,7 +3,17 @@
 Date: 2026-11-16 (Africa/Lagos)
 Branch: `fix/backend-production-readiness`
 Baseline: `525bb51`
-Status: Planned; implementation has not started.
+Status: Implementation in progress; local source changes prepared, hosted rollout pending.
+
+## Current implementation evidence
+
+- Baseline registration fixtures and maintenance-script types are repaired. Non-mutating lint/typecheck and unchanged 80% coverage gates are wired into CI. Coverage remains below target; this phase is incomplete and release must remain blocked.
+- Private Docker-context exclusions and a real-engine regression are implemented. Docker is unavailable locally; CI must verify the context and worker image.
+- Worker capability leases, privacy-filtered telemetry, shutdown limits, optional process liveness and bounded HTTP readiness are implemented. A compiled API/worker smoke against isolated PostgreSQL/Redis verified processing, worker-loss HTTP 503, independent HTTP 200 liveness and restart recovery.
+- Transactional webhook intent, dispatch leases/crash recovery, terminal failure retention and audited generation-aware webhook retry are implemented and covered by unit/database regressions. Migrations have only been applied to disposable databases.
+- A candidate-before-promotion release gate and simulated refusal tests are prepared; see `BACKEND-RELEASE.md`. Tokens/environment policies and a hosted rehearsal are outstanding. Root Git-auto-deployment disabling must not be merged until the replacement gate is configured and passing.
+- Backup tooling now preserves privileges and refuses automatic restoration of legacy ACL-less archives. Supabase recovery inventory/drill and representative staging capacity work are documented in `RECOVERY-AND-CAPACITY.md`; hosted backup coverage and recovery targets are unverified.
+- The operator confirmed no persistent worker exists and uses Supabase. A disabled Vercel daemon template is prepared; no worker host, paid resource, hosted secret, database migration or deployment has been activated during this implementation.
 
 ## Objective and evidence
 
