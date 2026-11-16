@@ -19,6 +19,8 @@ test('fails on changed versions, expired review, no review or an additional advi
 });
 test('fails closed for malformed registry responses and unresolved advisory chains', () => {
   for (const input of [null, {}, { error: {} }, { auditReportVersion: 2, vulnerabilities: {} }]) assert.throws(() => evaluate(input, {}, []));
+  const inconsistent = report();inconsistent.vulnerabilities = {};assert.throws(() => evaluate(inconsistent, {}, []));
+  const array = report();array.vulnerabilities = [];array.metadata.vulnerabilities.total = 0;assert.throws(() => evaluate(array, {}, []));
   const input = report();input.vulnerabilities.prisma.via = ['unknown'];
   assert.ok(evaluate(input, { [node]: '1.19.19' }, policy, '2026-11-16').blocked.includes('prisma'));
 });

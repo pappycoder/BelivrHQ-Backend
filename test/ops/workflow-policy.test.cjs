@@ -11,6 +11,11 @@ test('every validation is required and failures, cancellation or skips block dep
   const validations = Object.keys(workflow.jobs).filter((name) => !['checks', 'prepare', 'promote'].includes(name));
   assert.deepEqual([...checks.needs].sort(), validations.sort());
   assert.equal(release.needs, 'checks');
+  require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS' } });
+  const config = require('../../jest.config.ts').default;
+  assert.deepEqual(config.coverageThreshold.global, { branches: 80, functions: 80, lines: 80, statements: 80 });
+  assert.ok(workflow.jobs.test.steps.some((step) => step.run?.includes('npm run test:cov')));
+
   const command = checks.steps[0].run;
   const script = command.slice(command.indexOf("'") + 1, command.lastIndexOf("'"));
   const run = (results) => spawnSync(process.execPath, ['-e', script], { env: { ...process.env, RESULTS: JSON.stringify(results) }, encoding: 'utf8' }).status;

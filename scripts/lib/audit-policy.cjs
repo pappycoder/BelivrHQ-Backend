@@ -2,6 +2,9 @@ const PATCHED_ADAPTER = 'https://github.com/advisories/GHSA-rmxm-3fg6-px4f';
 function evaluate(report, versions, exceptions, today = new Date().toISOString().slice(0, 10)) {
   if (!report || report.error || report.auditReportVersion !== 2 || !report.vulnerabilities || typeof report.metadata?.vulnerabilities?.total !== 'number')
     throw new Error('Audit response unavailable or invalid');
+  if (typeof report.vulnerabilities !== 'object' || Array.isArray(report.vulnerabilities) ||
+      Object.keys(report.vulnerabilities).length !== report.metadata.vulnerabilities.total)
+    throw new Error('Audit finding count is inconsistent');
   const findings = report.vulnerabilities;
   const patched = [];
   const memo = new Map();
