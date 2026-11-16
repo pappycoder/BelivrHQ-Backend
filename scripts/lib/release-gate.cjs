@@ -115,8 +115,12 @@ async function prepare(env, runner = spawnSync, wait = delay) {
   assertHostedReleaseMode(env, runner);
   const vc = command(env, runner);
   const deployed = JSON.parse(vc(['deploy', '--project', env.VERCEL_PROJECT_ID, '--environment', target.environment, '--skip-domain', '--no-wait', '--yes', '--json', '--meta', `readinessReleaseSha=${env.GITHUB_SHA}`]));
-  const candidate = deployed.deployment;
-  if (deployed.status !== 'ok' || !/^dpl_[a-zA-Z0-9]+$/.test(candidate?.id || '')) throw new ReleaseError('Vercel did not return a valid candidate.');
+  // CLI 65.9 emits raw JSON normally and an envelope in agent mode.
+  const wrapped = Object.hasOwn(deployed, 'deployment');
+  const candidate = wrapped ? deployed.deployment : deployed;
+  if ((wrapped ? deployed.status !== 'ok' : Object.hasOwn(deployed, 'status')) ||
+      deployed.error || candidate?.error || candidate?.aliasError || !/^dpl_[a-zA-Z0-9]+$/.test(candidate?.id || ''))
+    throw new ReleaseError('Vercel did not return a valid candidate.');
   vc(['inspect', candidate.id, '--wait', '--timeout', '10m']);
   inspectCandidate(env, candidate.id, vc);
   await checkReadiness(env, candidate.id, vc, wait);

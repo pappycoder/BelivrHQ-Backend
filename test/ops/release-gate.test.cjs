@@ -52,7 +52,7 @@ function fake(options = {}) {
     else if (command === 'git' && args[0] === 'rev-parse') output = sha;
     else if (command === 'git' && args[0] === 'ls-files') output = options.untracked ? 'src/unreviewed.ts' : '';
     else if (args[0] === 'deploy')
-      output = JSON.stringify({ status: 'ok', deployment: { id: 'dpl_candidate' } });
+      output = JSON.stringify(options.rawOutput ? { id: 'dpl_candidate', readyState: 'BUILDING' } : options.errorOutput ? { status: 'error', deployment: { id: 'dpl_candidate' } } : { status: 'ok', deployment: { id: 'dpl_candidate' } });
     else if (args[0] === 'api' && args[1].startsWith('/v9/projects/'))
       output = JSON.stringify({ id: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU', accountId: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y', gitProviderOptions: { createDeployments: options.gitEnabled ? 'enabled' : 'disabled' } });
     else if (args[0] === 'api')
@@ -199,4 +199,15 @@ test('untracked source and mismatched candidate IDs cannot be released', async (
     assert.equal(promotions(calls).length, 0);
     if (options.untracked) assert.equal(calls.filter(([, args]) => args[0] === 'deploy').length, 0);
   }
+});
+
+test('accepts the pinned CLI standard raw deployment JSON as well as its agent envelope', async () => {
+  const { run, calls } = fake({ rawOutput: true });
+  await publish(env, run, async () => {});
+  assert.equal(promotions(calls).length, 1);
+});
+test('rejects a CLI error envelope even when it includes a deployment identifier', async () => {
+  const { run, calls } = fake({ errorOutput: true });
+  await assert.rejects(publish(env, run, async () => {}));
+  assert.equal(promotions(calls).length, 0);
 });

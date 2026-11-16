@@ -32,7 +32,7 @@ The workflow sets its release-enabled flag explicitly; a missing secret/configur
 
 ## Verification and remaining release blockers
 
-Local validation passed: 146 backend unit suites / 2,613 tests; 33 PostgreSQL 16 suites / 225 tests; compiled API/worker smoke; 14 operations integration checks; actual Docker context export, worker-image build and packaged Prisma/sharp/runtime import checks. Twenty-one release/profile/workflow refusal tests plus three audit-policy regressions pass in each repository. The browser suite passes all 18 checks; the web unit suite passes 687 tests. No worker host was activated.
+Local validation passed: 146 backend unit suites / 2,613 tests; 33 PostgreSQL 16 suites / 225 tests; compiled API/worker smoke; 14 operations integration checks; actual Docker context export, worker-image build and packaged Prisma/sharp/runtime import checks. Twenty-three release/profile/workflow refusal tests plus three audit-policy regressions pass in each repository. The browser suite passes all 18 checks; the web unit suite passes 687 tests. No worker host was activated.
 
 Backend coverage still fails the unchanged 80% thresholds (last measured lines 64.76%). The required check must stay red until meaningful tests close the gap. Do not lower thresholds, bypass protection or claim all production-readiness work is complete. Supabase backup/PITR, offsite object/key recovery, restore ownership, provider acceptance, alert recipients and representative hosted capacity still require actual evidence and operator configuration. See `RECOVERY-AND-CAPACITY.md`.
 
