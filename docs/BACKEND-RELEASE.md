@@ -63,3 +63,12 @@ Vercel CLI 65.9.0 accepts `--skip-domain` only for Production. Preparation retai
 Before any migration or upload, Preview preflight verifies the detached checkout, the canonical staging domain's branch binding, absence of a domain bound to `HEAD`, and standard Preview variables without branch overrides. Both primary projects were checked read-only and satisfy this configuration. The checks run again immediately before upload. Explicit aliases or branch-metadata overrides in `vercel.json` are refused. Standard Preview variables supply the candidate; branch-specific overrides require a separate reviewed release design.
 
 Candidate identity, target, checked SHA, readiness and the separate domain-promotion phase remain required. Error output identifies the command phase and exit status without printing CLI output, tokens or environment values. Actual pinned-CLI dry runs from a disposable detached checkout reproduced the old flag failure and accepted the corrected Preview arguments without creating a deployment.
+
+
+Vercel installation is explicitly `npm ci`, using the same `package-lock.json` as CI. Do not rely on package-manager auto-detection when old lockfiles exist. If `inspect --wait` fails, the release reports the deployment ID and allowlisted API build state, without printing raw build logs. A READY state must still pass the project/commit/target and application readiness gates before promotion.
+
+Staging web readiness requires server-to-server access to `https://staging-api.belivrhq.com/api/v1/health`. A Vercel login redirect is not application health. The approved remediation is a protection exception for that API domain only; retain protection on generated deployment URLs and retain application authentication/authorization.
+
+Verified the approved domain exception on 2026-11-17: staging API health and the existing staging web candidate return healthy JSON, unauthenticated `/api/v1/profiles/me` returns 401, and the generated backend deployment URL still redirects to Vercel login.
+
+The Vercel wrapper inserts `--scope` and `--token` before any `--` passthrough delimiter. Everything after that delimiter is passed to curl; forwarding Vercel options there makes curl reject the probe before HTTP health can be checked. A retry of the old workflow still uses the old wrapper, so merge the corrected source before retrying releases.

@@ -50,20 +50,60 @@ function fake(options = {}) {
     if (command === 'git' && args[0] === 'ls-remote')
       output = `${options.stale && ++heads > 1 ? 'b'.repeat(40) : sha}\trefs/heads/main`;
     else if (command === 'git' && args[0] === 'rev-parse') output = sha;
-    else if (command === 'git' && args[0] === 'ls-files') output = options.untracked ? 'src/unreviewed.ts' : '';
-    else if (command === 'git' && args[0] === 'branch') output = options.namedCheckout ? 'staging' : '';
+    else if (command === 'git' && args[0] === 'ls-files')
+      output = options.untracked ? 'src/unreviewed.ts' : '';
+    else if (command === 'git' && args[0] === 'branch')
+      output = options.namedCheckout ? 'staging' : '';
     else if (args[0] === 'deploy')
-      output = JSON.stringify(options.rawOutput ? { id: 'dpl_candidate', readyState: 'BUILDING' } : options.errorOutput ? { status: 'error', deployment: { id: 'dpl_candidate' } } : { status: 'ok', deployment: { id: 'dpl_candidate' } });
+      output = JSON.stringify(
+        options.rawOutput
+          ? { id: 'dpl_candidate', readyState: 'BUILDING' }
+          : options.errorOutput
+            ? { status: 'error', deployment: { id: 'dpl_candidate' } }
+            : { status: 'ok', deployment: { id: 'dpl_candidate' } },
+      );
     else if (args[0] === 'api' && args[1].includes('/domains?'))
-      output = JSON.stringify(options.malformedDomains ? {} : { domains: [{ name: 'staging-api.belivrhq.com', gitBranch: options.unboundDomain ? null : 'staging' }, ...(options.headDomain ? [{ name: 'unsafe.example', gitBranch: 'HEAD' }] : [])], pagination: options.moreDomains ? { next: 1 } : {} });
+      output = JSON.stringify(
+        options.malformedDomains
+          ? {}
+          : {
+              domains: [
+                {
+                  name: 'staging-api.belivrhq.com',
+                  gitBranch: options.unboundDomain ? null : 'staging',
+                },
+                ...(options.headDomain ? [{ name: 'unsafe.example', gitBranch: 'HEAD' }] : []),
+              ],
+              pagination: options.moreDomains ? { next: 1 } : {},
+            },
+      );
     else if (args[0] === 'api' && args[1].endsWith('/env'))
-      output = JSON.stringify(options.malformedEnvs ? {} : { envs: options.branchVariables ? [{ key: 'SYNTHETIC_SECRET', target: ['preview'], gitBranch: 'staging', value: 'must-never-leak' }] : [] });
+      output = JSON.stringify(
+        options.malformedEnvs
+          ? {}
+          : {
+              envs: options.branchVariables
+                ? [
+                    {
+                      key: 'SYNTHETIC_SECRET',
+                      target: ['preview'],
+                      gitBranch: 'staging',
+                      value: 'must-never-leak',
+                    },
+                  ]
+                : [],
+            },
+      );
     else if (args[0] === 'api' && args[1].startsWith('/v9/projects/'))
-      output = JSON.stringify({ id: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU', accountId: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y', gitProviderOptions: { createDeployments: options.gitEnabled ? 'enabled' : 'disabled' } });
+      output = JSON.stringify({
+        id: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU',
+        accountId: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y',
+        gitProviderOptions: { createDeployments: options.gitEnabled ? 'enabled' : 'disabled' },
+      });
     else if (args[0] === 'api')
       output = JSON.stringify({
         id: options.wrongCandidate ? 'dpl_other' : 'dpl_candidate',
-        readyState: 'READY',
+        readyState: options.buildFailure ? 'ERROR' : 'READY',
         projectId: options.wrongProject ? 'prj_other' : 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU',
         target: options.preview ? null : 'production',
         meta: { readinessReleaseSha: options.wrongCommit ? 'b'.repeat(40) : sha },
@@ -72,8 +112,18 @@ function fake(options = {}) {
       output = JSON.stringify(
         options.unhealthy ? { success: true, data: { status: 'healthy' } } : body(),
       );
-    const unsupportedPreviewFlag = args[0] === 'deploy' && args[args.indexOf('--environment') + 1] === 'preview' && args.includes('--skip-domain');
-    return { status: unsupportedPreviewFlag || (options.buildFailure && args[0] === 'inspect') ? 1 : 0, stdout: output };
+    const unsupportedPreviewFlag =
+      args[0] === 'deploy' &&
+      args[args.indexOf('--environment') + 1] === 'preview' &&
+      args.includes('--skip-domain');
+    return {
+      status:
+        unsupportedPreviewFlag ||
+        ((options.buildFailure || options.inspectFailure) && args[0] === 'inspect')
+          ? 1
+          : 0,
+      stdout: output,
+    };
   };
   return { run, calls };
 }
@@ -169,12 +219,22 @@ test('staging can only update the staging domain and never promotes production',
 });
 
 test('refuses crossing a reviewed project/team boundary or unknown profile', () => {
-  for (const override of [{ RELEASE_PROFILE: 'legacy' }, { RELEASE_PROFILE: 'unknown' }, { VERCEL_PROJECT_ID: 'prj_other' }, { VERCEL_ORG_ID: 'team_other' }])
+  for (const override of [
+    { RELEASE_PROFILE: 'legacy' },
+    { RELEASE_PROFILE: 'unknown' },
+    { VERCEL_PROJECT_ID: 'prj_other' },
+    { VERCEL_ORG_ID: 'team_other' },
+  ])
     assert.throws(() => settings({ ...env, ...override }));
 });
 test('legacy configuration targets the legacy project independently', () => {
   const profile = require('../../config/releases.json').legacy;
-  const actual = settings({ ...env, RELEASE_PROFILE: 'legacy', VERCEL_PROJECT_ID: profile.projectId, VERCEL_ORG_ID: profile.orgId });
+  const actual = settings({
+    ...env,
+    RELEASE_PROFILE: 'legacy',
+    VERCEL_PROJECT_ID: profile.projectId,
+    VERCEL_ORG_ID: profile.orgId,
+  });
   assert.equal(actual.domain, profile.main.domain);
   assert.notEqual(actual.domain, settings(env).domain);
 });
@@ -240,29 +300,74 @@ test('Preview uses a detached snapshot and supported flags before explicit promo
   const deploy = calls.find(([, args]) => args[0] === 'deploy')[1];
   assert.equal(deploy.includes('--skip-domain'), false);
   assert.equal(deploy[deploy.indexOf('--environment') + 1], 'preview');
-  assert.ok(calls.some(([cmd, args]) => cmd === 'git' && args[0] === 'branch' && args[1] === '--show-current'));
+  assert.ok(
+    calls.some(
+      ([cmd, args]) => cmd === 'git' && args[0] === 'branch' && args[1] === '--show-current',
+    ),
+  );
   assert.equal(promotions(calls).length, 0);
   await promote({ ...env, GITHUB_REF_NAME: 'staging' }, manifest, run, async () => {});
   assert.equal(promotions(calls).length, 1);
 });
 test('branch metadata overrides cannot bypass detached Preview isolation', () => {
   for (const key of ['githubCommitRef', 'gitlabCommitRef', 'bitbucketCommitRef'])
-    assert.throws(() => assertReleaseMode({ git: { deploymentEnabled: false }, meta: { [key]: 'staging' } }));
+    assert.throws(() =>
+      assertReleaseMode({ git: { deploymentEnabled: false }, meta: { [key]: 'staging' } }),
+    );
 });
 test('command failures identify only a safe operation and status while withholding credentials', async () => {
   const { run } = fake();
-  const failed = (cmd, args, opts) => args[0] === 'deploy'
-    ? { status: 1, stdout: 'synthetic-private-token', stderr: 'DATABASE_URL=private' }
-    : run(cmd, args, opts);
-  await assert.rejects(prepare(env, failed, async () => {}), (error) => {
-    assert.match(error.message, /vercel deploy; exit 1/);
-    assert.equal(error.message.includes('synthetic-private-token'), false);
-    assert.equal(error.message.includes('DATABASE_URL'), false);
-    return true;
-  });
+  const failed = (cmd, args, opts) =>
+    args[0] === 'deploy'
+      ? { status: 1, stdout: 'synthetic-private-token', stderr: 'DATABASE_URL=private' }
+      : run(cmd, args, opts);
+  await assert.rejects(
+    prepare(env, failed, async () => {}),
+    (error) => {
+      assert.match(error.message, /vercel deploy; exit 1/);
+      assert.equal(error.message.includes('synthetic-private-token'), false);
+      assert.equal(error.message.includes('DATABASE_URL'), false);
+      return true;
+    },
+  );
 });
 
 test('explicit deployment aliases cannot bypass the checked promotion phase', () => {
   for (const alias of ['staging.example.org', ['staging.example.org'], []])
     assert.throws(() => assertReleaseMode({ git: { deploymentEnabled: false }, alias }));
+});
+
+test('Vercel installs the same frozen npm dependency tree as CI', () => {
+  const config = JSON.parse(readFileSync(join(__dirname, '../../vercel.json'), 'utf8'));
+  assert.equal(config.installCommand, 'npm ci');
+  assert.ok(readFileSync(join(__dirname, '../../package-lock.json'), 'utf8'));
+});
+
+test('a failed CLI wait can continue only for a verified READY candidate', async () => {
+  const { run, calls } = fake({ inspectFailure: true });
+  await publish(env, run, async () => {});
+  assert.equal(promotions(calls).length, 1);
+});
+
+test('failed build diagnostics identify the deployment and state without raw logs', async () => {
+  const { run, calls } = fake({ buildFailure: true });
+  await assert.rejects(
+    prepare(env, run, async () => {}),
+    /ERROR; dpl_candidate/,
+  );
+  assert.equal(promotions(calls).length, 0);
+});
+
+test('Vercel credentials stay before the curl passthrough delimiter', async () => {
+  const { run, calls } = fake();
+  await publish(env, run, async () => {});
+  const probes = calls.filter(([, args]) => args[0] === 'curl');
+  assert.ok(probes.length > 0);
+  for (const [, args] of probes) {
+    const delimiter = args.indexOf('--');
+    assert.ok(delimiter > args.indexOf('--scope'));
+    assert.ok(delimiter > args.indexOf('--token'));
+    assert.ok(!args.slice(delimiter + 1).includes(env.VERCEL_TOKEN));
+    assert.ok(args.slice(delimiter + 1).includes('--fail'));
+  }
 });
