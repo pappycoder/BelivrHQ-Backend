@@ -357,3 +357,17 @@ test('failed build diagnostics identify the deployment and state without raw log
   );
   assert.equal(promotions(calls).length, 0);
 });
+
+test('Vercel credentials stay before the curl passthrough delimiter', async () => {
+  const { run, calls } = fake();
+  await publish(env, run, async () => {});
+  const probes = calls.filter(([, args]) => args[0] === 'curl');
+  assert.ok(probes.length > 0);
+  for (const [, args] of probes) {
+    const delimiter = args.indexOf('--');
+    assert.ok(delimiter > args.indexOf('--scope'));
+    assert.ok(delimiter > args.indexOf('--token'));
+    assert.ok(!args.slice(delimiter + 1).includes(env.VERCEL_TOKEN));
+    assert.ok(args.slice(delimiter + 1).includes('--fail'));
+  }
+});

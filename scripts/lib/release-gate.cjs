@@ -100,8 +100,23 @@ function healthy(body) {
 }
 
 function command(env, runner) {
-  return (args) =>
-    execute('vercel', [...args, '--scope', env.VERCEL_ORG_ID, '--token', env.VERCEL_TOKEN], runner);
+  return (args) => {
+    // Everything after -- belongs to curl, including flags that look global.
+    const delimiter = args.indexOf('--');
+    const split = delimiter < 0 ? args.length : delimiter;
+    return execute(
+      'vercel',
+      [
+        ...args.slice(0, split),
+        '--scope',
+        env.VERCEL_ORG_ID,
+        '--token',
+        env.VERCEL_TOKEN,
+        ...args.slice(split),
+      ],
+      runner,
+    );
+  };
 }
 function assertHostedReleaseMode(env, runner = spawnSync) {
   settings(env);

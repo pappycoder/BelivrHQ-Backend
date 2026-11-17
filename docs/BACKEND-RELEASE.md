@@ -70,3 +70,5 @@ Vercel installation is explicitly `npm ci`, using the same `package-lock.json` a
 Staging web readiness requires server-to-server access to `https://staging-api.belivrhq.com/api/v1/health`. A Vercel login redirect is not application health. The approved remediation is a protection exception for that API domain only; retain protection on generated deployment URLs and retain application authentication/authorization.
 
 Verified the approved domain exception on 2026-11-17: staging API health and the existing staging web candidate return healthy JSON, unauthenticated `/api/v1/profiles/me` returns 401, and the generated backend deployment URL still redirects to Vercel login.
+
+The Vercel wrapper inserts `--scope` and `--token` before any `--` passthrough delimiter. Everything after that delimiter is passed to curl; forwarding Vercel options there makes curl reject the probe before HTTP health can be checked. A retry of the old workflow still uses the old wrapper, so merge the corrected source before retrying releases.
