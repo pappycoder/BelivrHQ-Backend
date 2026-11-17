@@ -339,7 +339,8 @@ test('explicit deployment aliases cannot bypass the checked promotion phase', ()
 
 test('Vercel installs the same frozen npm dependency tree as CI', () => {
   const config = JSON.parse(readFileSync(join(__dirname, '../../vercel.json'), 'utf8'));
-  assert.equal(config.installCommand, 'npm ci');
+  assert.equal(config.installCommand, 'npm ci --include=dev');
+  assert.equal(config.buildCommand, 'npm run build');
   assert.ok(readFileSync(join(__dirname, '../../package-lock.json'), 'utf8'));
 });
 
