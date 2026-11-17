@@ -54,3 +54,12 @@ References: [Vercel Git controls](https://vercel.com/docs/project-configuration/
 Database integration suites share one schema and run with one Jest worker; deliberate transaction/concurrency checks inside each suite remain concurrent. The RLS migration skips redundant ENABLE operations on already-protected tables. Tables that still need RLS enabled require the normal exclusive DDL lock, so review migration timing for active workloads.
 
 The unit job always retains `backend-unit-coverage` for seven days when a coverage report was generated, including threshold failures. All 5,126 unit assertions and the global coverage gate now pass. Keep the thresholds and artifact retention unchanged. Automatic main/staging PR creation is prepared separately and remains inactive pending the explicit repository-setting approval described in `AUTOMATIC-PULL-REQUESTS.md`.
+
+
+## Preview CLI compatibility — 2026-11-17
+
+Vercel CLI 65.9.0 accepts `--skip-domain` only for Production. Preparation retains that flag for Production and uses the exact checked SHA in a detached checkout for Preview. The pinned CLI reports that snapshot's Git branch as `HEAD`, so it cannot claim the canonical domain bound to `staging`.
+
+Before any migration or upload, Preview preflight verifies the detached checkout, the canonical staging domain's branch binding, absence of a domain bound to `HEAD`, and standard Preview variables without branch overrides. Both primary projects were checked read-only and satisfy this configuration. The checks run again immediately before upload. Explicit aliases or branch-metadata overrides in `vercel.json` are refused. Standard Preview variables supply the candidate; branch-specific overrides require a separate reviewed release design.
+
+Candidate identity, target, checked SHA, readiness and the separate domain-promotion phase remain required. Error output identifies the command phase and exit status without printing CLI output, tokens or environment values. Actual pinned-CLI dry runs from a disposable detached checkout reproduced the old flag failure and accepted the corrected Preview arguments without creating a deployment.

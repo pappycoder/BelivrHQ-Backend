@@ -91,6 +91,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Start Docker for mandatory context and runtime checks
+        run: sudo systemctl start docker
       - run: npm run ops:test:docker-context
         env:
           REQUIRE_DOCKER_TESTS: '1'
@@ -227,6 +229,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.sha }}
           persist-credentials: true
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

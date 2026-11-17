@@ -5,6 +5,18 @@ const yaml = require('js-yaml');
 const { spawnSync } = require('node:child_process');
 const workflow = yaml.load(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 const release = workflow.jobs.prepare;
+test('Docker checks start the daemon and remain mandatory before building the runtime', () => {
+  const steps = workflow.jobs['docker-context'].steps;
+  const start = steps.findIndex((step) => step.run === 'sudo systemctl start docker');
+  const check = steps.findIndex((step) => step.run === 'npm run ops:test:docker-context');
+  const build = steps.findIndex((step) => step.run?.startsWith('docker build '));
+  assert.ok(start >= 0 && start < check && check < build);
+  assert.equal(steps[check].env.REQUIRE_DOCKER_TESTS, '1');
+  for (const index of [start, check, build]) {
+    assert.equal(steps[index]['continue-on-error'], undefined);
+    assert.equal(steps[index].if, undefined);
+  }
+});
 test('every validation is required and failures, cancellation or skips block deployment', () => {
   const checks = workflow.jobs.checks;
   assert.equal(checks.if, 'always()');
@@ -79,4 +91,12 @@ test('deployment credentials are limited to the release commands', () => {
   assert.ok(preflight.env.VERCEL_TOKEN);
   for (const step of release.steps)
     if (step.run?.includes('npm ')) assert.equal(step.env?.VERCEL_TOKEN, undefined);
+});
+
+test('release preparation checks out the immutable commit for detached Preview candidates', () => {
+  const workflow = yaml.load(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+  const checkout = workflow.jobs.prepare.steps.find((step) =>
+    step.uses?.startsWith('actions/checkout@'),
+  );
+  assert.equal(checkout.with.ref, '${{ github.sha }}');
 });
