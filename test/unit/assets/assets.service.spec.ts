@@ -1,3 +1,6 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateAssetDto } from '../../../src/assets/dto/update-asset.dto';
+import { CreateMaintenanceDto } from '../../../src/assets/dto/create-maintenance.dto';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
  * @file assets.service.spec.ts
@@ -800,5 +803,202 @@ describe('AssetsService', () => {
         ),
       ).rejects.toThrow(NotFoundException);
     });
+  });
+  describe('asset register optional data contracts', () => {
+    it('keeps the session branch authoritative when every list filter is supplied', async () => {
+      const context = new RequestContextService();
+      jest.spyOn(context, 'branchWhere').mockReturnValue({ branch_id: 'own' });
+      const scoped = new AssetsService(
+        prisma as unknown as PrismaService,
+        context,
+        audit as unknown as AuditLoggingService,
+      );
+      prisma.asset.findMany.mockResolvedValue([
+        {
+          ...mockAsset,
+          image_url: 'https://example.invalid/image.png',
+          department_id: 'd',
+          department: { name: 'Media' },
+          branch_id: 'own',
+          branch: { name: 'Own' },
+          custodian_id: mockMemberId,
+          custodian: { first_name: 'Ada', last_name: 'Guest' },
+          notes: 'Keep dry',
+          archived_at: new Date('2026-01-02'),
+        },
+      ]);
+      prisma.asset.count.mockResolvedValue(1);
+      const result = await scoped.listAssets(mockChurchId, {
+        page: 2,
+        limit: 3,
+        archived: true,
+        status: AssetStatus.active,
+        condition: AssetCondition.good,
+        categoryId: mockCategoryId,
+        departmentId: 'd',
+        branchId: 'foreign',
+        search: 'Mixer',
+      });
+      const args = prisma.asset.findMany.mock.calls[0][0];
+      expect(args).toMatchObject({
+        skip: 3,
+        take: 3,
+        where: {
+          church_id: mockChurchId,
+          archived_at: { not: null },
+          branch_id: 'own',
+          category_id: mockCategoryId,
+          department_id: 'd',
+          status: 'active',
+          condition: 'good',
+        },
+      });
+      expect(args.where.OR).toHaveLength(4);
+      expect(result.items[0]).toMatchObject({
+        imageUrl: 'https://example.invalid/image.png',
+        departmentName: 'Media',
+        branchName: 'Own',
+        custodianName: 'Ada Guest',
+        notes: 'Keep dry',
+        archivedAt: '2026-01-02T00:00:00.000Z',
+      });
+      expect(prisma.asset.count).toHaveBeenCalledWith({ where: args.where });
+    });
+    it('maps a legacy asset with no optional purchasing or relation fields', async () => {
+      prisma.asset.findMany.mockResolvedValue([
+        {
+          ...mockAsset,
+          category_id: null,
+          category: null,
+          image_url: null,
+          description: null,
+          serial_number: null,
+          brand: null,
+          model: null,
+          purchase_date: null,
+          purchase_price: null,
+          useful_life_years: null,
+          current_value: null,
+          location: null,
+          qr_code: null,
+        },
+      ]);
+      prisma.asset.count.mockResolvedValue(1);
+      const result = await service.listAssets(mockChurchId, {});
+      expect(result).toMatchObject({ total: 1, page: 1, limit: 20 });
+      for (const key of [
+        'categoryId',
+        'categoryName',
+        'purchaseDate',
+        'purchasePrice',
+        'serialNumber',
+        'brand',
+        'model',
+        'description',
+        'currentValue',
+        'location',
+        'qrCode',
+      ])
+        expect(result.items[0]).toHaveProperty(key, undefined);
+    });
+    it.each(['categoryId', 'departmentId', 'branchId', 'custodianId'] as const)(
+      'refuses a foreign %s before updating the asset',
+      async (field) => {
+        prisma.asset.findFirst.mockResolvedValue(mockAsset);
+        await expect(
+          service.updateAsset(mockChurchId, mockAssetId, { [field]: 'foreign' }, mockUserId),
+        ).rejects.toThrow(NotFoundException);
+        expect(prisma.asset.update).not.toHaveBeenCalled();
+      },
+    );
+    it('accepts all tenant-owned asset relationships and preserves zero money', async () => {
+      prisma.asset.findFirst.mockResolvedValue(mockAsset);
+      prisma.assetCategory.findFirst.mockResolvedValue(mockCategory);
+      prisma.department.findFirst.mockResolvedValue({ id: 'd' });
+      prisma.branch.findFirst.mockResolvedValue({ id: 'b' });
+      prisma.member.findFirst.mockResolvedValue({ id: mockMemberId });
+      prisma.asset.findUnique.mockResolvedValue(null);
+      prisma.asset.update.mockResolvedValue(mockAsset);
+      await service.updateAsset(
+        mockChurchId,
+        mockAssetId,
+        {
+          assetTag: 'NEW',
+          categoryId: mockCategoryId,
+          departmentId: 'd',
+          branchId: 'b',
+          custodianId: mockMemberId,
+          purchaseDate: '2026-01-02',
+          purchasePrice: 0,
+        },
+        mockUserId,
+      );
+      expect(prisma.asset.update.mock.calls[0][0].data).toMatchObject({
+        asset_tag: 'NEW',
+        category_id: mockCategoryId,
+        department_id: 'd',
+        branch_id: 'b',
+        custodian_id: mockMemberId,
+        purchase_date: new Date('2026-01-02'),
+        purchase_price: 0,
+      });
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ entityId: mockAssetId, action: 'UPDATE' }),
+      );
+    });
+    it('supports explicitly clearing the purchase date without replacing an unchanged tag', async () => {
+      prisma.asset.findFirst.mockResolvedValue(mockAsset);
+      prisma.asset.update.mockResolvedValue(mockAsset);
+      await service.updateAsset(
+        mockChurchId,
+        mockAssetId,
+        plainToInstance(UpdateAssetDto, { assetTag: mockAsset.asset_tag, purchaseDate: null }),
+        mockUserId,
+      );
+      expect(prisma.asset.update.mock.calls[0][0].data.purchase_date).toBeNull();
+      expect(prisma.asset.findUnique).not.toHaveBeenCalled();
+    });
+    it.each([null, '2026-02-03', undefined])(
+      'preserves clearing, setting and omission of maintenance completion (%s)',
+      async (completedDate) => {
+        prisma.asset.findFirst.mockResolvedValue(mockAsset);
+        const maintenance = {
+          id: 'maintenance',
+          asset_id: mockAssetId,
+          type: 'repair',
+          status: MaintenanceStatus.completed,
+          scheduled_date: new Date('2026-02-01'),
+          completed_date: completedDate ? new Date(completedDate) : null,
+          description: null,
+          cost: null,
+          performed_by: null,
+          notes: null,
+          created_at: new Date('2026-02-01'),
+          updated_at: new Date('2026-02-01'),
+        };
+        prisma.assetMaintenance.findFirst.mockResolvedValue(maintenance);
+        prisma.assetMaintenance.update.mockResolvedValue(maintenance);
+        const result = await service.updateMaintenance(
+          mockChurchId,
+          mockAssetId,
+          'maintenance',
+          plainToInstance(CreateMaintenanceDto, { completedDate, scheduledDate: '2026-02-01' }),
+          mockUserId,
+        );
+        expect(prisma.assetMaintenance.update.mock.calls[0][0].data).toMatchObject({
+          scheduled_date: new Date('2026-02-01'),
+          completed_date:
+            completedDate === undefined
+              ? undefined
+              : completedDate
+                ? new Date(completedDate)
+                : null,
+        });
+        expect(result.completedDate).toBe(
+          completedDate ? new Date(completedDate).toISOString() : undefined,
+        );
+        expect(result.cost).toBeUndefined();
+      },
+    );
   });
 });

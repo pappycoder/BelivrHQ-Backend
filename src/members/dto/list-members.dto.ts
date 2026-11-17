@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-members.dto.ts
  * @description DTO for listing members with pagination, search, and filters.
@@ -85,7 +86,7 @@ export class ListMembersDto {
     description: 'List archived records only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

@@ -111,8 +111,7 @@ export class JwtAuthGuard {
         if (error instanceof HttpException) {
           throw error;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`JWT verification failed: ${message}`);
+        this.logger.warn('JWT verification failed');
         if (error instanceof errors.JOSEError) {
           throw new UnauthorizedException('Invalid or expired token');
         }

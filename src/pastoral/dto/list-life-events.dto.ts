@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-life-events.dto.ts
  * @description DTO for listing life events with filters.
@@ -8,7 +9,6 @@
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, Min, Max, IsIn, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class ListLifeEventsDto {
   // Default page number starting at 1
@@ -74,7 +74,7 @@ export class ListLifeEventsDto {
     description: 'List archived records only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

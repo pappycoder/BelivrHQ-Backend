@@ -159,10 +159,10 @@ export class AuditLoggingService {
           user_agent: params.userAgent,
         },
       });
-    } catch (error) {
+    } catch {
       this.logger.error(
         `Failed to write audit log: ${params.action} on ${params.entity}`,
-        error instanceof Error ? error.stack : String(error),
+        'Audit persistence unavailable',
       );
     }
 
@@ -213,12 +213,8 @@ export class AuditLoggingService {
         entityId: params.entityId,
         action: params.action,
       });
-    } catch (error) {
-      this.logger.warn(
-        `Failed to create CRUD notification for ${params.action} on ${params.entity}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+    } catch {
+      this.logger.warn(`CRUD notification unavailable for ${params.action} on ${params.entity}`);
     }
   }
 

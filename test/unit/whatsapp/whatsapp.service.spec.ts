@@ -534,4 +534,141 @@ describe('WhatsAppService', () => {
       expect(prisma.message.create).toHaveBeenCalledTimes(2);
     });
   });
+  describe('command edge cases and provider normalization', () => {
+    async function command(text: string, registered = true) {
+      prisma.profile.findFirst.mockResolvedValue(registered ? mockProfile : null);
+      prisma.visitor.findFirst.mockResolvedValue({ id: 'visitor' });
+      prisma.message.create.mockImplementation(async ({ data }) => ({ ...mockMessage, ...data }));
+      await service.processWebhook(
+        {
+          messages: [
+            { id: 'inbound', from: mockPhone, timestamp: '1700000000', text: { body: text } },
+          ],
+        },
+        mockChurchId,
+      );
+      const writes = prisma.message.create.mock.calls.map(([arg]) => arg.data);
+      return String(writes.find((data) => data.direction === 'outbound')?.content ?? '');
+    }
+    it.each(['CHECKIN', 'STATUS', 'SERMON', 'BIRTHDAY'])(
+      'does not query member-only data for an unlinked sender (%s)',
+      async (text) => {
+        expect(await command(text, false)).toContain('not registered');
+        expect(prisma.member.findUnique).not.toHaveBeenCalled();
+        expect(prisma.attendance.create).not.toHaveBeenCalled();
+      },
+    );
+    it('reports a missing service without attempting a check-in', async () => {
+      prisma.service.findFirst.mockResolvedValue(null);
+      expect(await command('CHECKIN')).toContain('No service scheduled');
+      expect(prisma.attendance.create).not.toHaveBeenCalled();
+    });
+    it.each([true, false])(
+      'uses safe fallback service text for an unnamed schedule (already checked in=%s)',
+      async (existing) => {
+        prisma.service.findFirst.mockResolvedValue({ ...mockService, name: '' });
+        prisma.attendance.findFirst.mockResolvedValue(existing ? { id: 'existing' } : null);
+        expect(await command('CHECKIN')).toContain("today's service");
+        expect(prisma.attendance.create).toHaveBeenCalledTimes(existing ? 0 : 1);
+      },
+    );
+    it.each(['SERMON', 'SERMON faith'])(
+      'returns explicit empty search results (%s)',
+      async (text) => {
+        prisma.sermon.findMany.mockResolvedValue([]);
+        expect(await command(text)).toContain(
+          text.includes('faith') ? 'No sermons found matching' : 'No sermons available',
+        );
+        expect(prisma.sermon.findMany.mock.calls[0][0].where.church_id).toBe(mockChurchId);
+      },
+    );
+    it('formats dated and historical undated sermons and bounds descriptions', async () => {
+      prisma.sermon.findMany.mockResolvedValue([
+        { title: 'Legacy', speaker: null, sermon_date: null, description: null },
+        {
+          title: 'Faith',
+          speaker: 'Ada',
+          sermon_date: new Date('2026-01-01'),
+          description: 'x'.repeat(100),
+        },
+      ]);
+      const reply = await command('SERMON faith hope');
+      expect(reply).toContain('Unknown speaker');
+      expect(reply).toContain('Faith');
+      expect(reply).toContain('x'.repeat(80));
+      expect(reply).not.toContain('x'.repeat(81));
+      expect(prisma.sermon.findMany.mock.calls[0][0].where.OR).toHaveLength(2);
+    });
+    it.each([
+      null,
+      { first_name: 'Ada', member_id: null },
+      { first_name: 'Ada', member_id: mockMemberId },
+    ])('handles missing birthday links and dates (%j)', async (profile) => {
+      prisma.profile.findUnique.mockResolvedValue(profile);
+      prisma.member.findUnique.mockResolvedValue(null);
+      expect(await command('BIRTHDAY')).toContain(
+        profile ? "don't have your birthday" : 'Profile not found',
+      );
+    });
+    it.each(['2026-01-01', '2026-06-01', '2026-12-01'])(
+      'calculates birthday replies around the current day (%s)',
+      async (birthday) => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-06-01T00:00:00Z'));
+        try {
+          prisma.profile.findUnique.mockResolvedValue({ first_name: '', member_id: mockMemberId });
+          prisma.member.findUnique.mockResolvedValue({ date_of_birth: new Date(birthday) });
+          const reply = await command('BIRTHDAY');
+          expect(reply).toContain('Birthday Info for Member');
+          expect(reply).toContain(
+            birthday === '2026-06-01' ? 'Today is your birthday' : 'until your next birthday',
+          );
+        } finally {
+          jest.useRealTimers();
+        }
+      },
+    );
+    it('asks for testimony content without writing a testimony audit', async () => {
+      expect(await command('TESTIMONY')).toContain('Type TESTIMONY');
+      expect(audit.log).not.toHaveBeenCalled();
+    });
+    it('accepts an anonymous testimony with bounded content', async () => {
+      expect(await command('TESTIMONY ' + 'x'.repeat(700), false)).toContain('Thank you');
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'anonymous',
+          churchId: mockChurchId,
+          entity: 'testimony',
+          newValues: expect.objectContaining({ content: 'x'.repeat(500) }),
+        }),
+      );
+    });
+    it.each([0, -1, 1.5, Number.NaN])(
+      'normalizes invalid message pagination (%s)',
+      async (value) => {
+        prisma.message.findMany.mockResolvedValue([
+          { ...mockMessage, member_id: null, content: null },
+        ]);
+        prisma.message.count.mockResolvedValue(1);
+        const result = await service.listMessages(mockChurchId, value, value);
+        expect(prisma.message.findMany.mock.calls[0][0]).toMatchObject({ skip: 0, take: 20 });
+        expect(result.data[0]).toMatchObject({ memberId: undefined, content: undefined });
+      },
+    );
+    it.each([
+      { sender: mockPhone, message: 'HELP' },
+      { channel: 'whatsapp', id: 'event', type: 'outbound', status: 'delivered' },
+      { channel: 'whatsapp', message_id: 'event', type: 'outbound', status: 'failed' },
+      { channel: 'whatsapp', id: 'event', message: '' },
+    ])('normalizes Termii inbound and delivery payloads %j', async (body) => {
+      prisma.profile.findFirst.mockResolvedValue(mockProfile);
+      prisma.message.create.mockResolvedValue(mockMessage);
+      const result = await service.processWebhook(body, mockChurchId);
+      expect(result.processed).toBe(body.message === '' ? 0 : 1);
+      if (body.status)
+        expect(prisma.message.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ church_id: mockChurchId }) }),
+        );
+    });
+  });
 });

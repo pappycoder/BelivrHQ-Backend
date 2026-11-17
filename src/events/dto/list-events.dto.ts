@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file DTO for listing events with filters and pagination.
  * @module events/dto/list-events.dto
@@ -83,7 +84,7 @@ export class ListEventsDto {
     description: 'List archived events only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   archived?: boolean;

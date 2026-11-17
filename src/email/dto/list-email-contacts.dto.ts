@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-email-contacts.dto.ts
  * @description DTO for listing email recipient contacts with filters.
@@ -59,7 +60,7 @@ export class ListEmailContactsDto {
     description: 'Include the requesting user in results (defaults to false)',
     example: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   includeSelf?: boolean;

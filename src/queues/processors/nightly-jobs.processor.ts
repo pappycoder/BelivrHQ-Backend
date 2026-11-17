@@ -328,7 +328,7 @@ export class NightlyJobsProcessor extends WorkerHost {
 
           const recipientPhone = member.whatsapp_number || member.phone;
           if (!recipientPhone) {
-            this.logger.warn(`Life event ${event.id}: member ${member.first_name} has no phone`);
+            this.logger.warn(`Life event ${event.id}: recipient has no phone`);
             await this.pastoralService.markLifeEventNotified(event.id);
             continue;
           }
@@ -379,9 +379,9 @@ export class NightlyJobsProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error): void {
+  onFailed(job: Job, _error: Error): void {
     this.logger.error(
-      `Nightly jobs job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `Nightly jobs job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
   }
 }

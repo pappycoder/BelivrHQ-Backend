@@ -40,3 +40,6 @@ lerna-debug.log*
 .env.vercel.shared*
 .env.vercel.preview*
 .env.vercel.production*
+
+# Generated test coverage artifacts
+/coverage/

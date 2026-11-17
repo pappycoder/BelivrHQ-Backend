@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateServiceDto } from '../../../src/attendance/dto/update-service.dto';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
  * @file attendance.service.spec.ts
@@ -995,5 +997,554 @@ describe('AttendanceService — categories & visitors', () => {
         }),
       );
     });
+  });
+  describe('filtered history and schedule edits', () => {
+    const hq = {
+      church_id: churchId,
+      role: 'church_admin',
+      is_admin_hq: true,
+      permissions: ['events:checkin:read'],
+    };
+    it('retains false/zero filters, archived mode and explicit pagination for services', async () => {
+      model('service').findMany.mockResolvedValue([
+        {
+          ...adultServiceRow,
+          recurrence: 'one_time',
+          starts_on: new Date('2026-01-02'),
+          ends_on: new Date('2026-01-03'),
+          start_time: new Date('1970-01-01T09:00:00Z'),
+          end_time: new Date('1970-01-01T10:00:00Z'),
+          archived_at: new Date('2026-01-04'),
+          _count: { attendance: 8 },
+        },
+      ]);
+      model('service').count.mockResolvedValue(1);
+      const result = await service.listServices(
+        churchId,
+        {
+          page: 2,
+          limit: 5,
+          branchId: 'b',
+          archived: true,
+          search: ' Sunday ',
+          category: 'adult',
+          isActive: false,
+          dayOfWeek: 0,
+          sortBy: 'name',
+          sortOrder: 'desc',
+        },
+        hq,
+      );
+      expect(model('service').findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            church_id: churchId,
+            branch_id: 'b',
+            archived_at: { not: null },
+            name: { contains: 'Sunday', mode: 'insensitive' },
+            category: 'adult',
+            is_active: false,
+            day_of_week: 0,
+          },
+          skip: 5,
+          take: 5,
+          orderBy: [{ name: 'desc' }],
+        }),
+      );
+      expect(result.data[0]).toMatchObject({
+        recurrence: 'one_time',
+        startsOn: '2026-01-02',
+        endsOn: '2026-01-03',
+        startTime: '09:00',
+        endTime: '10:00',
+        attendanceCount: 8,
+      });
+      expect(model('service').count).toHaveBeenCalledWith({
+        where: model('service').findMany.mock.calls[0][0].where,
+      });
+    });
+    it.each([undefined, '2026-01-01'])(
+      'pins attendance history to the session branch with search and optional start %s',
+      async (startDate) => {
+        model('attendance').findMany.mockResolvedValue([
+          {
+            ...attendanceRow,
+            visitor_name: null,
+            event_id: 'e',
+            service_id: null,
+            visitor_id: visitorId,
+            visitor: { first_name: 'Ada', last_name: null },
+            category: '',
+          },
+        ]);
+        model('attendance').count.mockResolvedValue(1);
+        const result = await service.listAttendance(
+          churchId,
+          {
+            branchId: 'foreign',
+            eventId: 'e',
+            memberId,
+            visitorId,
+            category: 'adult',
+            source: 'qr',
+            startDate,
+            endDate: '2026-02-01',
+            search: ' Ada Guest ',
+            sortBy: 'createdAt',
+            sortOrder: 'asc',
+            page: 3,
+            limit: 4,
+          },
+          {
+            church_id: churchId,
+            role: 'branch_pastor',
+            branch_id: 'own',
+            permissions: ['events:checkin:read'],
+          },
+        );
+        const args = model('attendance').findMany.mock.calls[0][0];
+        expect(args).toMatchObject({
+          skip: 8,
+          take: 4,
+          orderBy: { created_at: 'asc' },
+          where: {
+            church_id: churchId,
+            event_id: 'e',
+            member_id: memberId,
+            visitor_id: visitorId,
+            category: 'adult',
+            source: 'qr',
+            checkin_at: { lte: new Date('2026-02-01') },
+          },
+        });
+        expect(args.where.AND).toHaveLength(3);
+        expect(args.where.AND[0]).toEqual({
+          OR: [{ service: { branch_id: 'own' } }, { event: { branch_id: 'own' } }],
+        });
+        expect(args.where.checkin_at.gte).toEqual(startDate ? new Date(startDate) : undefined);
+        expect(result.total).toBe(1);
+        expect(result.data[0]).toMatchObject({ visitorId, visitorName: 'Ada', eventId: 'e' });
+      },
+    );
+    it('filters HQ history to the requested branch without inventing a search condition', async () => {
+      model('attendance').findMany.mockResolvedValue([]);
+      model('attendance').count.mockResolvedValue(0);
+      await service.listAttendance(
+        churchId,
+        { branchId: 'b', search: '  ', startDate: '2026-01-01' },
+        hq,
+      );
+      expect(model('attendance').findMany.mock.calls[0][0].where).toEqual({
+        church_id: churchId,
+        AND: [{ OR: [{ service: { branch_id: 'b' } }, { event: { branch_id: 'b' } }] }],
+        checkin_at: { gte: new Date('2026-01-01') },
+      });
+    });
+    it('updates all schedule fields and validates an active tenant-owned branch', async () => {
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      model('branch').findFirst.mockResolvedValue({ id: 'b' });
+      model('service').update.mockResolvedValue({
+        ...adultServiceRow,
+        branch_id: 'b',
+        is_active: false,
+      });
+      await service.updateService(
+        serviceId,
+        {
+          name: 'Retreat',
+          category: 'mixed',
+          branchId: 'b',
+          dayOfWeek: 2,
+          startTime: '09:00',
+          endTime: '12:00',
+          isActive: false,
+          recurrence: 'multi_day',
+          startsOn: '2026-01-01',
+          endsOn: '2026-01-03',
+        },
+        churchId,
+        userId,
+      );
+      const data = model('service').update.mock.calls[0][0].data;
+      expect(data).toMatchObject({
+        name: 'Retreat',
+        category: 'mixed',
+        branch: { connect: { id: 'b' } },
+        day_of_week: 2,
+        is_active: false,
+        recurrence: 'multi_day',
+        starts_on: new Date('2026-01-01'),
+        ends_on: new Date('2026-01-03'),
+      });
+      expect(data.start_time).toBeInstanceOf(Date);
+      expect(data.end_time).toBeInstanceOf(Date);
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityId: serviceId,
+          oldValues: expect.objectContaining({ name: adultServiceRow.name }),
+          newValues: data,
+        }),
+      );
+    });
+    it('retains the existing start and removes the multi-day end when changing to one-time', async () => {
+      model('service').findUnique.mockResolvedValue({
+        ...adultServiceRow,
+        recurrence: 'multi_day',
+        starts_on: new Date('2026-01-01'),
+        ends_on: new Date('2026-01-03'),
+      });
+      model('service').update.mockResolvedValue(adultServiceRow);
+      await service.updateService(serviceId, { recurrence: 'one_time' }, churchId, userId);
+      expect(model('service').update.mock.calls[0][0].data).toMatchObject({
+        recurrence: 'one_time',
+        starts_on: new Date('2026-01-01'),
+        ends_on: null,
+      });
+    });
+    it('clears bounded schedule dates when returning to an unbounded weekly schedule', async () => {
+      model('service').findUnique.mockResolvedValue({
+        ...adultServiceRow,
+        recurrence: 'multi_day',
+        starts_on: new Date('2026-01-01'),
+        ends_on: new Date('2026-01-03'),
+      });
+      model('service').update.mockResolvedValue(adultServiceRow);
+      await service.updateService(
+        serviceId,
+        plainToInstance(UpdateServiceDto, {
+          recurrence: 'weekly',
+          startsOn: null,
+          endsOn: null,
+          branchId: null,
+          startTime: null,
+          endTime: null,
+        }),
+        churchId,
+        userId,
+      );
+      expect(model('service').update.mock.calls[0][0].data).toEqual({
+        recurrence: 'weekly',
+        starts_on: null,
+        ends_on: null,
+        branch: { disconnect: true },
+        start_time: null,
+        end_time: null,
+      });
+    });
+    it('rejects inactive or foreign branch selection before mutation', async () => {
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      model('branch').findFirst.mockResolvedValue(null);
+      await expect(
+        service.updateService(serviceId, { branchId: 'foreign' }, churchId, userId),
+      ).rejects.toThrow(BadRequestException);
+      expect(model('service').update).not.toHaveBeenCalled();
+    });
+    it.each([undefined, '2026-01-01'])(
+      'uses explicit trend bounds and permission-aware branch selection (%s)',
+      async (startDate) => {
+        model('attendance').findMany.mockResolvedValue([
+          { checkin_at: new Date('2026-01-02'), member_id: memberId },
+          { checkin_at: new Date('2026-01-02'), member_id: null },
+          { checkin_at: new Date('2026-01-03'), member_id: null },
+        ]);
+        const result = await service.getAttendanceTrends(
+          churchId,
+          999,
+          'foreign',
+          startDate,
+          '2026-02-01',
+          { church_id: churchId, role: 'branch_pastor', branch_id: 'own', permissions: [] },
+        );
+        expect(model('attendance').findMany.mock.calls[0][0].where).toEqual({
+          church_id: churchId,
+          event_id: null,
+          OR: [{ service: { branch_id: 'own' } }, { event: { branch_id: 'own' } }],
+          checkin_at: {
+            ...(startDate ? { gte: new Date(startDate) } : {}),
+            lte: new Date('2026-02-01'),
+          },
+        });
+        expect(result).toEqual([
+          { date: '2026-01-02', total: 2, members: 1, visitors: 1 },
+          { date: '2026-01-03', total: 1, members: 0, visitors: 1 },
+        ]);
+      },
+    );
+  });
+
+  describe('event attendance and mixed-batch recovery', () => {
+    const eventId = '11111111-1111-4111-8111-111111111111';
+    const event = {
+      id: eventId,
+      church_id: churchId,
+      branch_id: 'own',
+      title: 'Retreat',
+      recurrence: 'one_time',
+      start_date: new Date('2026-08-24T09:00:00Z'),
+      end_date: null,
+    };
+    beforeEach(() => {
+      model('event').findFirst.mockResolvedValue(event);
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      model('attendanceSession').findFirst.mockResolvedValue({ id: 'session' });
+      model('attendance').findUnique.mockResolvedValue(null);
+      model('attendance').findFirst.mockResolvedValue(null);
+      model('attendance').create.mockImplementation(async ({ data }) => ({
+        ...attendanceRow,
+        ...data,
+        service: null,
+        event: { title: event.title },
+      }));
+      model('member').findUnique.mockResolvedValue({ id: memberId, church_id: churchId });
+      model('member').findFirst.mockResolvedValue({ id: memberId });
+      model('visitor').findFirst.mockResolvedValue({
+        id: visitorId,
+        first_name: 'Ada',
+        last_name: null,
+      });
+    });
+    it('links an event visitor check-in to the existing attendance session and business date', async () => {
+      const result = await service.recordVisitorAttendance(
+        {
+          eventId,
+          visitorId,
+          visitorName: 'Ada Guest',
+          attendanceDate: '2026-08-24',
+          source: 'qr',
+        },
+        churchId,
+        userId,
+      );
+      expect(model('attendance').create.mock.calls[0][0].data).toMatchObject({
+        event_id: eventId,
+        service_id: null,
+        visitor_id: visitorId,
+        visitor_name: 'Ada Guest',
+        session_id: 'session',
+        attendance_date: new Date('2026-08-24'),
+        source: 'qr',
+      });
+      expect(result.eventName).toBe('Retreat');
+      expect(result.serviceName).toBeUndefined();
+    });
+    it.each(['missing-event', 'missing-visitor', 'duplicate-visitor'])(
+      'refuses invalid event visitor check-ins (%s)',
+      async (scenario) => {
+        if (scenario === 'missing-event') model('event').findFirst.mockResolvedValue(null);
+        if (scenario === 'missing-visitor') model('visitor').findFirst.mockResolvedValue(null);
+        if (scenario === 'duplicate-visitor')
+          model('attendance').findFirst.mockResolvedValue({ id: 'existing' });
+        await expect(
+          service.recordVisitorAttendance(
+            { eventId, visitorId, visitorName: 'Ada', attendanceDate: '2026-08-24' },
+            churchId,
+            userId,
+          ),
+        ).rejects.toThrow();
+        expect(model('attendance').create).not.toHaveBeenCalled();
+      },
+    );
+    it.each(['single', 'bulk', 'visitor'])(
+      'requires exactly one attendance context for %s check-in',
+      async (kind) => {
+        const result =
+          kind === 'single'
+            ? service.recordAttendance({ serviceId, eventId, memberId }, churchId, userId)
+            : kind === 'bulk'
+              ? service.recordBulkAttendance(
+                  plainToInstance(RecordBulkAttendanceDto, { serviceId, eventId, records: [] }),
+                  churchId,
+                  userId,
+                )
+              : service.recordVisitorAttendance(
+                  { serviceId, eventId, visitorName: 'Ada' },
+                  churchId,
+                  userId,
+                );
+        await expect(result).rejects.toThrow('exactly one');
+        expect(model('attendance').create).not.toHaveBeenCalled();
+      },
+    );
+    it.each(['single', 'visitor'])(
+      'refuses missing attendance subjects in a %s check-in',
+      async (kind) => {
+        await expect(
+          kind === 'single'
+            ? service.recordAttendance({ serviceId }, churchId, userId)
+            : service.recordVisitorAttendance({ serviceId, visitorName: '  ' }, churchId, userId),
+        ).rejects.toThrow();
+        expect(model('attendance').create).not.toHaveBeenCalled();
+      },
+    );
+    it('records event members and linked visitors while reporting invalid batch rows separately', async () => {
+      model('member').findFirst.mockResolvedValueOnce(null).mockResolvedValue({ id: memberId });
+      model('visitor')
+        .findFirst.mockResolvedValueOnce(null)
+        .mockResolvedValue({ first_name: 'Ada', last_name: null });
+      const result = await service.recordBulkAttendance(
+        plainToInstance(RecordBulkAttendanceDto, {
+          eventId,
+          attendanceDate: '2026-08-24',
+          records: [
+            {},
+            { memberId: 'missing' },
+            { visitorId: 'missing' },
+            { memberId },
+            { visitorId },
+          ],
+        }),
+        churchId,
+        userId,
+      );
+      expect(result).toMatchObject({
+        recorded: 2,
+        skipped: 0,
+        errors: [
+          { index: 0, message: expect.any(String) },
+          { index: 1, message: 'Member not found in this church' },
+          { index: 2, message: 'Visitor not found in this church' },
+        ],
+      });
+      expect(model('attendance').create.mock.calls[1][0].data).toMatchObject({
+        event_id: eventId,
+        service_id: null,
+        member_id: null,
+        visitor_id: visitorId,
+        visitor_name: 'Ada',
+        session_id: 'session',
+      });
+    });
+    it.each([{ code: 'P2002' }, new Error('Write unavailable'), 'untyped failure'])(
+      'handles per-row database errors without losing batch progress (%j)',
+      async (error) => {
+        model('attendance')
+          .create.mockRejectedValueOnce(error)
+          .mockImplementation(async ({ data }) => ({ ...attendanceRow, ...data }));
+        const result = await service.recordBulkAttendance(
+          plainToInstance(RecordBulkAttendanceDto, {
+            eventId,
+            attendanceDate: '2026-08-24',
+            records: [{ memberId }, { visitorName: 'Guest' }],
+          }),
+          churchId,
+          userId,
+        );
+        expect(result.recorded).toBe(1);
+        if (typeof error === 'object' && 'code' in error) {
+          expect(result.skipped).toBe(1);
+          expect(result.errors).toEqual([]);
+        } else
+          expect(result.errors).toEqual([
+            { index: 0, message: error instanceof Error ? error.message : 'Unknown error' },
+          ]);
+      },
+    );
+    it('skips existing event members and visitors while recording only new attendees', async () => {
+      model('attendance').findUnique.mockResolvedValueOnce({ id: 'existing' });
+      model('attendance')
+        .findFirst.mockResolvedValueOnce({ id: 'existing-visitor' })
+        .mockResolvedValue(null);
+      const result = await service.recordBulkAttendance(
+        plainToInstance(RecordBulkAttendanceDto, {
+          eventId,
+          attendanceDate: '2026-08-24',
+          records: [{ memberId }, { visitorName: 'Existing' }, { visitorName: 'New' }],
+        }),
+        churchId,
+        userId,
+      );
+      expect(result).toEqual({ recorded: 1, skipped: 2, errors: [] });
+      expect(model('attendance').create).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('attendance report scope and retained service history', () => {
+    it.each([
+      { church_id: churchId, role: 'branch_pastor', branch_id: 'own', permissions: [] as string[] },
+      {
+        church_id: churchId,
+        role: 'church_admin',
+        is_admin_hq: true,
+        permissions: ['events:checkin:read'],
+      },
+      { church_id: churchId, role: 'member', permissions: [] as string[] },
+    ])(
+      'keeps named and reported attendance scoped independently of requested branch %j',
+      async (viewer) => {
+        model('attendance').count.mockResolvedValue(2);
+        model('attendance').groupBy.mockResolvedValue([]);
+        model('attendance').findMany.mockResolvedValue([]);
+        model('attendanceSession').aggregate.mockResolvedValue({
+          _count: { _all: 1 },
+          _sum: { total: 10, adult_count: 6, children_count: 2, male_count: 5, female_count: 4 },
+        });
+        const result = await service.getAttendanceSummary(
+          churchId,
+          undefined,
+          '2026-02-01',
+          'requested',
+          viewer,
+        );
+        const where = model('attendance').count.mock.calls[0][0].where;
+        expect(where).toMatchObject({
+          church_id: churchId,
+          checkin_at: { lte: new Date('2026-02-01') },
+        });
+        expect(where.OR).toEqual([
+          {
+            service: {
+              branch_id: viewer.is_admin_hq
+                ? 'requested'
+                : (viewer.branch_id ?? '00000000-0000-0000-0000-000000000000'),
+            },
+          },
+          {
+            event: {
+              branch_id: viewer.is_admin_hq
+                ? 'requested'
+                : (viewer.branch_id ?? '00000000-0000-0000-0000-000000000000'),
+            },
+          },
+        ]);
+        expect(where.event_id).toBe(viewer.is_admin_hq ? undefined : null);
+        expect(result.generalAttendance).toMatchObject({
+          reportCount: 1,
+          total: 10,
+          unspecifiedAgeCount: 2,
+          unspecifiedGenderCount: 1,
+        });
+        expect(model('attendanceSession').aggregate.mock.calls[0][0].where.church_id).toBe(
+          churchId,
+        );
+      },
+    );
+    it('refuses deleting a service that still owns a reported attendance session', async () => {
+      model('service').findUnique.mockResolvedValue(adultServiceRow);
+      model('attendance').count.mockResolvedValue(0);
+      model('transaction').count.mockResolvedValue(0);
+      model('attendanceSession').count.mockResolvedValue(1);
+      await expect(service.deleteService(serviceId, churchId, userId)).rejects.toThrow(
+        'general attendance history',
+      );
+      expect(model('service').delete).not.toHaveBeenCalled();
+    });
+    it('returns an unchanged service without writes or audit when its update is empty', async () => {
+      model('service').findUnique.mockResolvedValue({ ...adultServiceRow, category: '' });
+      expect((await service.updateService(serviceId, {}, churchId, userId)).category).toBe('adult');
+      expect(model('service').update).not.toHaveBeenCalled();
+      expect(audit.log).not.toHaveBeenCalled();
+    });
+    it.each([null, { ...adultServiceRow, church_id: 'foreign' }])(
+      'hides missing and foreign services in detail and linked attendance queries (%j)',
+      async (row) => {
+        model('service').findUnique.mockResolvedValue(row);
+        await expect(service.getServiceById(serviceId, churchId)).rejects.toThrow(
+          NotFoundException,
+        );
+        await expect(service.getAttendanceByService(serviceId, churchId)).rejects.toThrow(
+          NotFoundException,
+        );
+        expect(model('attendance').findMany).not.toHaveBeenCalled();
+      },
+    );
   });
 });

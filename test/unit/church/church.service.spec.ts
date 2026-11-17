@@ -1,3 +1,6 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateChurchDto } from '../../../src/church/dto/update-church.dto';
+import { ForbiddenException } from '@nestjs/common';
 import {
   StaffInvitationService,
   StaffInvitationInput,
@@ -422,5 +425,154 @@ describe('ChurchService', () => {
         NotFoundException,
       );
     });
+  });
+  describe('optional church data and staff administration boundaries', () => {
+    it.each(['  Updated  ', '  ', null])(
+      'normalizes all supplied contact fields without retaining stale values (%j)',
+      async (value) => {
+        prisma.church.findUnique.mockResolvedValue(mockChurch);
+        prisma.church.update.mockResolvedValue(mockChurch);
+        const fields = [
+          'name',
+          'denomination',
+          'address',
+          'city',
+          'state',
+          'country',
+          'phone',
+          'email',
+          'website',
+        ];
+        await service.updateChurch(
+          'church-1',
+          plainToInstance(UpdateChurchDto, {
+            ...Object.fromEntries(fields.map((field) => [field, value])),
+            logoUrl: null,
+          }),
+          'actor',
+        );
+        expect(prisma.church.update.mock.calls[0][0].data).toEqual({
+          ...Object.fromEntries(fields.map((field) => [field, value?.trim() || ''])),
+          logo_url: '',
+        });
+        expect(auditLog).toHaveBeenCalledWith(
+          expect.objectContaining({
+            churchId: 'church-1',
+            newValues: prisma.church.update.mock.calls[0][0].data,
+          }),
+        );
+      },
+    );
+    it('preserves legacy empty optional fields and absent count relations', async () => {
+      prisma.church.findUnique.mockResolvedValue({
+        ...mockChurch,
+        denomination: null,
+        address: null,
+        city: null,
+        state: null,
+        phone: null,
+        email: null,
+        website: null,
+        _count: null,
+      });
+      const result = await service.getChurch('church-1');
+      expect(result).toMatchObject({ branchCount: 0, memberCount: 0 });
+      for (const field of ['denomination', 'address', 'city', 'state', 'phone', 'email', 'website'])
+        expect(result).toHaveProperty(field, undefined);
+    });
+    it.each(['update', 'email', 'archive', 'restore'])(
+      'refuses a missing church before %s changes',
+      async (operation) => {
+        prisma.church.findUnique.mockResolvedValue(null);
+        const result =
+          operation === 'update'
+            ? service.updateChurch('church-1', { name: 'New' }, 'actor')
+            : operation === 'email'
+              ? service.updateChurchEmail('church-1', 'actor', { email: 'a@example.invalid' })
+              : operation === 'archive'
+                ? service.archiveChurch('church-1', 'actor')
+                : service.restoreChurch('church-1', 'actor');
+        await expect(result).rejects.toThrow(NotFoundException);
+        expect(prisma.church.update).not.toHaveBeenCalled();
+        expect(auditLog).not.toHaveBeenCalled();
+      },
+    );
+    it.each([true, false])(
+      'rejects duplicate archive/restore transitions (archived=%s)',
+      async (archived) => {
+        prisma.church.findUnique.mockResolvedValue({
+          ...mockChurch,
+          archived_at: archived ? new Date() : null,
+        });
+        await expect(
+          archived
+            ? service.archiveChurch('church-1', 'actor')
+            : service.restoreChurch('church-1', 'actor'),
+        ).rejects.toThrow(ConflictException);
+        expect(auditLog).not.toHaveBeenCalled();
+      },
+    );
+    it('returns an empty staff page without querying Auth', async () => {
+      prisma.profile.findMany.mockResolvedValue([]);
+      prisma.profile.count.mockResolvedValue(0);
+      expect(
+        await service.listStaff('church-1', { role: 'treasurer', page: 2, limit: 999 }),
+      ).toEqual({ data: [], total: 0 });
+      expect(prisma.profile.findMany.mock.calls[0][0]).toMatchObject({
+        skip: 100,
+        take: 100,
+        where: { church_id: 'church-1', role: { has: 'treasurer' } },
+      });
+      expect(supabaseClient.auth.admin.getUserById).not.toHaveBeenCalled();
+    });
+    it.each([null, { id: 'staff', church_id: 'foreign', role: ['member'] }])(
+      'refuses staff role changes and removal outside the tenant (%j)',
+      async (profile) => {
+        prisma.profile.findUnique.mockResolvedValue(profile);
+        await expect(
+          service.updateStaffRole('church-1', 'staff', { role: 'treasurer' }, 'actor'),
+        ).rejects.toThrow(NotFoundException);
+        await expect(service.removeStaff('church-1', 'staff', 'actor')).rejects.toThrow(
+          NotFoundException,
+        );
+        expect(prisma.profile.update).not.toHaveBeenCalled();
+      },
+    );
+    it.each([['super_admin'], ['member']])(
+      'refuses protected and self role edits (%j)',
+      async (roles) => {
+        prisma.profile.findUnique.mockResolvedValue({
+          id: 'staff',
+          user_id: 'actor',
+          church_id: 'church-1',
+          role: roles,
+        });
+        await expect(
+          service.updateStaffRole('church-1', 'staff', { role: 'treasurer' }, 'actor'),
+        ).rejects.toThrow(ForbiddenException);
+        expect(prisma.profile.update).not.toHaveBeenCalled();
+      },
+    );
+    it.each([null, { name: 'super_admin' }])(
+      'rejects unknown or system-only requested staff roles (%j)',
+      async (role) => {
+        prisma.profile.findUnique.mockResolvedValue({
+          id: 'staff',
+          user_id: 'other',
+          church_id: 'church-1',
+          role: ['member'],
+        });
+        prisma.role.findFirst.mockResolvedValue(role);
+        await expect(
+          service.updateStaffRole(
+            'church-1',
+            'staff',
+            { role: role ? 'super_admin' : 'unknown' },
+            'actor',
+          ),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.profile.update).not.toHaveBeenCalled();
+      },
+    );
   });
 });

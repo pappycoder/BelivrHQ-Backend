@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ZodError } from 'zod';
+import { requestLogPath, errorDiagnostic } from '../privacy';
 
 /**
  * Standardized error response format.
@@ -88,8 +89,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     // Log the error with context
     this.logger.error(
-      `${request.method} ${request.url.split('?')[0]} ${status} queries=${metrics?.queries ?? 0} stages=${JSON.stringify(metrics?.stages ?? {})} pool=${JSON.stringify(metrics?.pool ?? {})}`,
-      exception instanceof Error ? exception.stack : String(exception),
+      `${request.method} ${requestLogPath(request)} ${status} queries=${metrics?.queries ?? 0} stages=${JSON.stringify(metrics?.stages ?? {})} pool=${JSON.stringify(metrics?.pool ?? {})}`,
+      errorDiagnostic(exception),
     );
 
     response.status(status).json(errorResponse);

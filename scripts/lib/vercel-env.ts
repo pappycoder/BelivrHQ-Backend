@@ -64,6 +64,8 @@ const required = [
 const publicSettings = new Set([
   'NODE_ENV',
   'PORT',
+  'WORKER_HEALTH_PORT',
+  'REQUIRE_QUEUE_WORKERS',
   'WEB_URL',
   'PUBLIC_API_URL',
   'SUPABASE_URL',

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-forms.dto.ts
  * @description DTO for listing and filtering forms.
@@ -24,7 +25,7 @@ export class ListFormsDto {
 
   @ApiPropertyOptional({ description: 'Filter by template flag' })
   @IsBoolean()
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   isTemplate?: boolean;
 
@@ -48,7 +49,7 @@ export class ListFormsDto {
     description: 'List archived forms only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

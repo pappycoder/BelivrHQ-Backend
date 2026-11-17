@@ -1,5 +1,9 @@
 import { queuePrefix } from '../redis/redis-namespace';
 import { queueRedisUrl } from './redis-connection';
+import { WorkerHeartbeatService } from './worker-heartbeat.service';
+import { TerminalFailureService } from './terminal-failure.service';
+import { WorkerLivenessService } from './worker-liveness.service';
+import { DiscoveryModule } from '@nestjs/core';
 /**
  * @file queues.module.ts
  * @description BullMQ background job queue infrastructure.
@@ -52,6 +56,7 @@ const DEFAULT_JOB_OPTIONS = {
 
 @Module({
   imports: [
+    DiscoveryModule,
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -59,7 +64,8 @@ const DEFAULT_JOB_OPTIONS = {
         prefix: queuePrefix((name) => config.get(name)),
         connection: {
           url: queueRedisUrl((name) => config.get<string>(name)),
-          maxRetriesPerRequest: null,
+          maxRetriesPerRequest: workersEnabled() ? null : 1,
+          ...(!workersEnabled() ? { commandTimeout: 3000, enableOfflineQueue: false } : {}),
         },
       }),
     }),
@@ -85,6 +91,9 @@ const DEFAULT_JOB_OPTIONS = {
   ],
   providers: workersEnabled()
     ? [
+        WorkerHeartbeatService,
+        TerminalFailureService,
+        WorkerLivenessService,
         WhatsAppOutboundProcessor,
         EmailOutboundProcessor,
         SmsOutboundProcessor,

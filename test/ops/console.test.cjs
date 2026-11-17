@@ -49,7 +49,15 @@ test('help, exact action inventory and EOF work from another directory', () => {
       .map((line) => line.split('\t')[0]),
     web
       ? ['dev', 'build', 'test']
-      : ['dev', 'build', 'test', 'migration-deploy', 'admin-super', 'admin-church', 'subscription-switch'],
+      : [
+          'dev',
+          'build',
+          'test',
+          'migration-deploy',
+          'admin-super',
+          'admin-church',
+          'subscription-switch',
+        ],
   );
   assert.equal(consoleRun([]).status, 0);
 });
@@ -247,6 +255,12 @@ if (!web) {
     const calls = [];
     const tx = {
       church: { create: async () => ({ id: 'church-a' }) },
+      platformSubscription: {
+        create: async (arg) => {
+          calls.push(['subscription', arg]);
+          return {};
+        },
+      },
       branch: {
         findFirst: async () => null,
         create: async (arg) => {
@@ -372,5 +386,20 @@ if (!web) {
       backend.destructive({ env: local }, {}, 'db-clear', ['wrong']),
       /Nothing was changed/,
     );
+  });
+  test('legacy snapshots without privilege preservation cannot silently reopen access on restore', async () => {
+    const crypto = require('node:crypto');
+    const file = path.join(directory, 'legacy.dump');
+    fs.writeFileSync(file, 'synthetic-archive');
+    fs.writeFileSync(
+      file + '.json',
+      JSON.stringify({
+        version: 1,
+        schema: 'public',
+        sha256: crypto.createHash('sha256').update('synthetic-archive').digest('hex'),
+      }),
+    );
+    await assert.rejects(backend.verifyBackup(file), /Legacy backup.*privilege preservation/);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'synthetic-archive');
   });
 }

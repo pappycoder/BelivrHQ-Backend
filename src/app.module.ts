@@ -27,6 +27,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { BillingModule } from './billing/billing.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HTTP_LOG_REDACTIONS } from './common/privacy';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
@@ -105,6 +106,7 @@ import { PermissionsModule } from './auth/permissions.module';
             : undefined,
         level: process.env.LOG_LEVEL || 'info',
         autoLogging: false,
+        redact: { paths: HTTP_LOG_REDACTIONS, censor: '[redacted]' },
       },
     }),
 

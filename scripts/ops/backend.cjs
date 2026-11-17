@@ -175,15 +175,16 @@ async function backupDatabase(context) {
   try {
     pgCommand(
       'pg_dump',
-      ['--format=custom', '--schema=public', '--no-owner', '--no-acl', '--file', partial],
+      ['--format=custom', '--schema=public', '--no-owner', '--file', partial],
       context,
     );
     pgCommand('pg_restore', ['--list', partial], context);
     if (!fs.statSync(partial).size) throw new ConsoleError('Backup is empty; refusing to proceed.');
     fs.renameSync(partial, file);
     const metadata = {
-      version: 1,
+      version: 2,
       schema: 'public',
+      privileges: 'preserved',
       postgresqlMajor,
       target: target.label,
       targetId: target.id,
@@ -212,11 +213,15 @@ async function verifyBackup(file) {
     );
   }
   if (
-    metadata.version !== 1 ||
+    ![1, 2].includes(metadata.version) ||
     metadata.schema !== 'public' ||
     metadata.sha256 !== (await sha256(file))
   )
     throw new ConsoleError('Backup metadata/hash verification failed. Restore was refused.');
+  if (metadata.version !== 2 || metadata.privileges !== 'preserved')
+    throw new ConsoleError(
+      'Legacy backup does not attest privilege preservation. Keep it for isolated recovery and reapply reviewed security policies before use; automatic restore was refused.',
+    );
   return metadata;
 }
 function validateAdmin(input) {
@@ -311,6 +316,12 @@ async function provisionAdmin(db, auth, input) {
             ? await tx.church.create({ data: { name: input.churchName, email: input.email } })
             : await tx.church.findFirst({ where: { id: input.churchId, archived_at: null } });
         if (!church) throw new ConsoleError('The selected church is no longer active.');
+        // Match signup onboarding before database-enforced branch/staff limits.
+        // This selects the base plan without granting any paid access interval.
+        if (input.churchMode === 'new')
+          await tx.platformSubscription.create({
+            data: { church_id: church.id, plan: 'essentials', cycle: 'monthly' },
+          });
         const branch =
           (await tx.branch.findFirst({
             where: { church_id: church.id, is_headquarters: true, archived_at: null },
@@ -470,7 +481,6 @@ async function destructive(context, db, action, fields) {
         '--single-transaction',
         '--exit-on-error',
         '--no-owner',
-        '--no-acl',
         '--schema=public',
         path.resolve(fields[1]),
       ],
@@ -568,7 +578,9 @@ async function switchSubscriptionByEmail(db, input) {
     const before = church.subscription
       ? `${church.subscription.plan}/${church.subscription.cycle} until ${new Date(
           church.subscription.paid_until || 0,
-        ).toISOString().slice(0, 10)}`
+        )
+          .toISOString()
+          .slice(0, 10)}`
       : 'no subscription';
     const limits =
       input.plan === 'enterprise'
@@ -578,9 +590,7 @@ async function switchSubscriptionByEmail(db, input) {
       `Switched ${church.name}: ${before} -> ${input.plan}/${input.cycle}, ` +
       `active until ${data.paid_until.toISOString().slice(0, 10)}${limits}. ` +
       'Scheduled changes cleared; people, roles and payment history untouched.' +
-      (pendingPayments
-        ? ' Pending checkouts remain and may override this when verified.'
-        : '')
+      (pendingPayments ? ' Pending checkouts remain and may override this when verified.' : '')
     );
   });
 }

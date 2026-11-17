@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 import { ConfigService } from '@nestjs/config';
 import { givingReceiptEmail } from '../company-email/company-email.templates';
 import { applyAdjustment, record } from './services/payment-lifecycle';
@@ -561,7 +562,7 @@ export class GivingService {
   }
 
   private msg(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return errorDiagnostic(err);
   }
 
   /**
@@ -1270,7 +1271,7 @@ export class GivingService {
       const branchScope = this.branchScope.resolve(viewer);
       this.logger.error(
         `Failed to list giving transactions (church=${churchId}, branch=${branchScope.branchId ?? 'all'}, hq=${branchScope.churchOnly})`,
-        error instanceof Error ? error.stack : String(error),
+        errorDiagnostic(error),
       );
       throw error;
     };
@@ -1951,7 +1952,7 @@ export class GivingService {
       return result.success;
     } catch (error) {
       this.logger.error(
-        `Recurring charge error for ${recurringGivingId}: ${error instanceof Error ? error.message : String(error)}`,
+        `Recurring charge error for ${recurringGivingId}: ${errorDiagnostic(error)}`,
       );
 
       // Increment failed attempt count
@@ -2250,9 +2251,7 @@ export class GivingService {
         this.logger.log(`Authorization code captured for recurring giving ${existing.id}`);
       }
     } catch (error) {
-      this.logger.warn(
-        `Failed to capture authorization code: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.logger.warn(`Failed to capture authorization code: ${errorDiagnostic(error)}`);
     }
   }
 

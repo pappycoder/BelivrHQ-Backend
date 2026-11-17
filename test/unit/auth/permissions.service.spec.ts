@@ -412,19 +412,25 @@ describe('PermissionsService', () => {
       },
     );
 
-    it('strips cached integration grants across multiple non-admin roles', async () => {
-      redis.get.mockResolvedValue([
-        'members:read',
-        'integrations:read',
-        'integrations:update',
-        'billing:read',
-        'billing:update',
-      ]);
+    it('strips persisted integration grants across multiple non-admin roles', async () => {
+      prisma.role.findMany
+        .mockResolvedValueOnce([{ ...globalTemplate, name: 'senior_pastor' }])
+        .mockResolvedValueOnce([{ ...ownedRole, name: 'custom_admin' }]);
+      prisma.churchRolePermission.findMany.mockResolvedValue([]);
+      prisma.rolePermission.findMany.mockResolvedValue(
+        [
+          'members:read',
+          'integrations:read',
+          'integrations:update',
+          'billing:read',
+          'billing:update',
+        ].map((name) => ({ permission: { name } })),
+      );
 
       expect(await service.getUserPermissions(churchId, ['senior_pastor', 'custom_admin'])).toEqual(
         ['members:read'],
       );
-      expect(prisma.role.findMany).not.toHaveBeenCalled();
+      expect(redis.get).not.toHaveBeenCalled();
     });
 
     it.each(['church_admin', 'super_admin'])(
@@ -539,11 +545,29 @@ describe('PermissionsService', () => {
       );
     });
 
-    it('serves cached resolutions when present', async () => {
-      redis.get.mockResolvedValue(['members:read']);
-      const perms = await service.getPermissionsForRole(churchId, 'secretary');
-      expect(perms).toEqual(['members:read']);
-      expect(prisma.role.findMany).not.toHaveBeenCalled();
+    it('ignores stale grants and observes a committed revocation on the next resolution', async () => {
+      redis.get.mockResolvedValue(['members:read', 'members:delete']);
+      redis.del.mockRejectedValue(new Error('cache deletion unavailable'));
+      prisma.role.findMany.mockResolvedValue([ownedRole]);
+      prisma.rolePermission.findMany
+        .mockResolvedValueOnce([{ permission: { name: 'members:delete' } }])
+        .mockResolvedValueOnce([{ permission: { name: 'members:read' } }]);
+      expect(await service.getPermissionsForRole(churchId, ownedRole.name)).toEqual([
+        'members:delete',
+      ]);
+      expect(await service.getPermissionsForRole(churchId, ownedRole.name)).toEqual([
+        'members:read',
+      ]);
+      expect(redis.get).not.toHaveBeenCalled();
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+    it('fails closed when current grants cannot be read instead of using stale Redis permissions', async () => {
+      redis.get.mockResolvedValue(['members:delete']);
+      prisma.role.findMany.mockRejectedValue(new Error('database unavailable'));
+      await expect(service.getPermissionsForRole(churchId, ownedRole.name)).rejects.toThrow(
+        'database unavailable',
+      );
+      expect(redis.get).not.toHaveBeenCalled();
     });
   });
 });

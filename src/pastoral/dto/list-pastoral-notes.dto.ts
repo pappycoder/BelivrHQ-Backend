@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-pastoral-notes.dto.ts
  * @description DTO for listing pastoral notes with pagination and filters.
@@ -11,7 +12,6 @@
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsInt, Min, Max, IsEnum, IsArray, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class ListPastoralNotesDto {
   // Default page number starting at 1
@@ -86,7 +86,7 @@ export class ListPastoralNotesDto {
     description: 'List archived records only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

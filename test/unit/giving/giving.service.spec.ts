@@ -1,3 +1,4 @@
+import type { PaymentAdjustment } from '../../../src/giving/services/payment-lifecycle';
 import { ConfigService } from '@nestjs/config';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
@@ -1821,5 +1822,348 @@ describe('GivingService', () => {
         include: { category: true, church: { select: { name: true } } },
       }),
     );
+  });
+  describe('refund and dispute effects on giving and tickets', () => {
+    let current: Record<string, unknown>;
+    beforeEach(() => {
+      current = {
+        ...mockTransaction,
+        status: 'success',
+        payment_gateway: 'paystack',
+        payment_reference: 'ref',
+        provider_transaction_id: 'provider-id',
+        provider_reference: 'provider-ref',
+        lifecycle: { chargeStatus: 'success', adjustments: [] },
+      };
+      model('transaction').findFirst.mockResolvedValue(current);
+      model('transaction').findFirstOrThrow.mockResolvedValue(current);
+      prisma.$transaction.mockImplementation((fn) => fn(prisma));
+      model('transaction').updateMany.mockResolvedValue({ count: 1 });
+      model('ticket').findMany.mockResolvedValue([{ id: 'ticket' }]);
+      paystack.listAdjustments = jest.fn().mockResolvedValue([]);
+    });
+    it.each([
+      [
+        { id: 'a', kind: 'refund', state: 'completed', amount: 100, currency: 'NGN' },
+        'review',
+        'pending',
+        'reserved',
+        'pending',
+      ],
+      [
+        { id: 'a', kind: 'refund', state: 'completed', amount: 10000, currency: 'NGN' },
+        'revoked',
+        'reversed',
+        'refunded',
+        'refunded',
+      ],
+      [{ id: 'a', kind: 'dispute', state: 'open' }, 'review', 'pending', 'reserved', 'pending'],
+      [{ id: 'a', kind: 'dispute', state: 'lost' }, 'revoked', 'reversed', 'refunded', 'refunded'],
+    ] as [PaymentAdjustment, string, string, string, string][])(
+      'places the matching tickets and giving transaction on hold for %j',
+      async (adjustment, access, status, ticketStatus, registrationStatus) => {
+        paystack.listAdjustments.mockResolvedValue([adjustment]);
+        await service.reconcileAdjustments(mockChurchId, 'ref');
+        expect(model('transaction').updateMany).toHaveBeenCalledWith({
+          where: { id: mockTransactionId, church_id: mockChurchId },
+          data: {
+            status,
+            lifecycle: expect.objectContaining({ access, heldTicketIds: ['ticket'] }),
+          },
+        });
+        expect(model('ticket').updateMany).toHaveBeenCalledWith({
+          where: {
+            transaction_id: mockTransactionId,
+            event: { church_id: mockChurchId },
+            status: { in: ['paid', 'reserved'] },
+          },
+          data: { status: ticketStatus },
+        });
+        expect(model('eventRegistration').updateMany).toHaveBeenCalledWith({
+          where: { church_id: mockChurchId, transaction_id: mockTransactionId },
+          data: { payment_status: registrationStatus },
+        });
+        expect(model('transaction').updateMany.mock.calls[0][0].data).not.toHaveProperty('amount');
+      },
+    );
+    it.each(['pending', 'failed', 'unknown'])(
+      'does not turn an uncleared charge state into a paid gift (%s)',
+      async (chargeStatus) => {
+        current.lifecycle = { chargeStatus, adjustments: [] };
+        paystack.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+        await service.reconcileAdjustments(mockChurchId, 'ref');
+        expect(model('transaction').updateMany.mock.calls[0][0].data.status).toBe(
+          chargeStatus === 'unknown' ? 'success' : chargeStatus,
+        );
+        expect(model('ticket').updateMany).not.toHaveBeenCalled();
+      },
+    );
+    it('restores only recorded held ticket IDs when a dispute is won', async () => {
+      current.lifecycle = {
+        chargeStatus: 'success',
+        adjustments: [],
+        heldTicketIds: ['held', 7, 'held'],
+      };
+      paystack.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+      model('eventRegistration').findFirst.mockResolvedValue(null);
+      await service.reconcileAdjustments(mockChurchId, 'ref');
+      expect(model('transaction').updateMany.mock.calls[0][0].data.lifecycle.heldTicketIds).toEqual(
+        ['held'],
+      );
+      expect(model('ticket').updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['held', 'held'] },
+          transaction_id: mockTransactionId,
+          event: { church_id: mockChurchId },
+          status: { in: ['reserved', 'refunded'] },
+        },
+        data: { status: 'paid' },
+      });
+      expect(model('eventRegistration').updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            church_id: mockChurchId,
+            transaction_id: mockTransactionId,
+            ticket_id: { in: ['held', 'held'] },
+          },
+          data: { payment_status: 'paid' },
+        }),
+      );
+    });
+    it('settles a newly payable registration when no previous tickets were held', async () => {
+      paystack.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+      model('eventRegistration').findFirst.mockResolvedValue(null);
+      await service.reconcileAdjustments(mockChurchId, 'ref');
+      expect(model('eventRegistration').findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { church_id: mockChurchId, payment_reference: 'ref' } }),
+      );
+      expect(model('ticket').updateMany).not.toHaveBeenCalled();
+    });
+    it.each([null, { ...mockTransaction, provider_transaction_id: null }])(
+      'skips unknown provider transactions (%j)',
+      async (row) => {
+        model('transaction').findFirst.mockResolvedValue(row);
+        await service.reconcileAdjustments(mockChurchId, 'ref');
+        expect(paystack.listAdjustments).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+    it('handles providers with no adjustment lookup without writing', async () => {
+      delete paystack.listAdjustments;
+      await service.reconcileAdjustments(mockChurchId, 'ref');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('historical receipt and filtered giving contracts', () => {
+    it.each([undefined, 'asc'] as const)(
+      'uses giving dates and stable pagination with every supported transaction filter (%s)',
+      async (sortOrder) => {
+        model('transaction').findMany.mockResolvedValue([
+          {
+            ...mockTransaction,
+            member_id: null,
+            branch_id: null,
+            category_id: null,
+            category: null,
+            payment_reference: null,
+            payment_method: null,
+            receipt_number: null,
+            metadata: { cellGroupName: 'Care', cellGroupId: 'group' },
+          },
+        ]);
+        model('transaction').count.mockResolvedValue(1);
+        const result = await service.listTransactions(
+          mockChurchId,
+          {
+            memberId: mockMemberId,
+            eventId: 'event',
+            cellGroupId: 'group',
+            type: 'digital',
+            startDate: '2026-01-01',
+            endDate: '2026-02-01',
+            sortBy: 'amount',
+            sortOrder,
+          },
+          { church_id: mockChurchId, role: 'church_admin', is_admin_hq: true },
+        );
+        const args = model('transaction').findMany.mock.calls[0][0];
+        expect(args.where).toMatchObject({
+          church_id: mockChurchId,
+          member_id: mockMemberId,
+          event_id: 'event',
+          type: 'digital',
+          metadata: { path: ['cellGroupId'], equals: 'group' },
+          giving_date: { gte: new Date('2026-01-01'), lte: new Date('2026-02-01T23:59:59.999Z') },
+        });
+        expect(args.orderBy).toEqual([
+          { amount: sortOrder ?? 'desc' },
+          { created_at: 'desc' },
+          { id: 'desc' },
+        ]);
+        expect(result.data[0]).toMatchObject({
+          givingType: 'cell_group',
+          description: 'Combined giving from Care.',
+          categoryId: '',
+          categoryName: '',
+          paymentReference: undefined,
+          paymentMethod: undefined,
+          receiptNumber: undefined,
+        });
+      },
+    );
+    it.each(['general', 'member', 'event', 'group'])(
+      'generates an honest receipt with incomplete historical metadata (%s)',
+      async (source) => {
+        const row = {
+          ...mockTransaction,
+          type: source === 'event' ? 'cash' : 'digital',
+          member_id: source === 'member' ? mockMemberId : null,
+          payment_method: null,
+          receipt_number: null,
+          payment_reference: null,
+          category: null,
+          event: source === 'event' ? { title: 'Retreat' } : null,
+          metadata: source === 'group' ? { cellGroupName: 'Care' } : null,
+        };
+        model('transaction').findUnique.mockResolvedValue(row);
+        model('church').findUnique.mockResolvedValue(null);
+        model('member').findUnique.mockResolvedValue({
+          first_name: 'Ada',
+          last_name: 'Guest',
+          email: null,
+        });
+        const result = await service.generateReceipt(mockTransactionId, mockChurchId);
+        expect(receipt.generateReceipt).toHaveBeenCalledWith(
+          expect.objectContaining({
+            churchName: 'Church',
+            categoryName: '',
+            receiptNumber: 'Not assigned',
+            paymentReference: undefined,
+            paymentMethod: source === 'event' ? 'cash' : 'Not recorded',
+            memberEmail: undefined,
+            source:
+              source === 'general'
+                ? 'General giving'
+                : source === 'member'
+                  ? 'Member giving'
+                  : source === 'event'
+                    ? 'Event: Retreat'
+                    : 'Cell group: Care',
+          }),
+        );
+        expect(result.filename).toBe(`receipt-${mockTransactionId}.pdf`);
+      },
+    );
+    it.each(['missing', 'foreign', 'failed', 'anonymous', 'missing-member', 'missing-email'])(
+      'refuses undeliverable email receipts (%s)',
+      async (scenario) => {
+        model('transaction').findUnique.mockResolvedValue(
+          scenario === 'missing'
+            ? null
+            : {
+                ...mockTransaction,
+                church_id: scenario === 'foreign' ? 'foreign' : mockChurchId,
+                status: scenario === 'failed' ? 'failed' : 'success',
+                member_id: scenario === 'anonymous' ? null : mockMemberId,
+              },
+        );
+        model('member').findUnique.mockResolvedValue(
+          scenario === 'missing-member'
+            ? null
+            : { first_name: 'Ada', last_name: 'Guest', email: '' },
+        );
+        model('church').findUnique.mockResolvedValue({ name: 'Church' });
+        await expect(
+          service.sendReceipt(mockTransactionId, mockChurchId, 'email'),
+        ).rejects.toThrow();
+        expect(receiptEmail).not.toHaveBeenCalled();
+      },
+    );
+    it('updates all optional giving category attributes including false and zero', async () => {
+      model('givingCategory').findUnique.mockResolvedValue(mockCategory);
+      model('givingCategory').update.mockResolvedValue({ ...mockCategory, description: null });
+      await service.updateCategory(
+        mockCategoryId,
+        { description: '', displayOrder: 0, isRecurring: false, isActive: false },
+        mockChurchId,
+        mockUserId,
+      );
+      expect(model('givingCategory').update.mock.calls[0][0].data).toEqual({
+        description: '',
+        display_order: 0,
+        is_recurring: false,
+        is_active: false,
+      });
+    });
+  });
+  describe('verified charge callbacks cannot revive reviewed or reversed payments', () => {
+    beforeEach(() => {
+      prisma.$transaction.mockImplementation((fn) => fn(prisma));
+      model('transaction').findFirst.mockResolvedValue(mockTransaction);
+      model('transaction').updateMany.mockResolvedValue({ count: 1 });
+    });
+    it.each([
+      ['reversed', 'clear', 'success'],
+      ['success', 'review', 'success'],
+      ['success', 'revoked', 'success'],
+      ['pending', 'review', 'failed'],
+    ])(
+      'retains the locked status=%s and access=%s on a later provider %s callback',
+      async (status, access, verifiedStatus) => {
+        model('transaction').findFirstOrThrow.mockResolvedValue({
+          ...mockTransaction,
+          status,
+          lifecycle: { access, adjustments: [] },
+        });
+        paystack.verifyTransaction.mockResolvedValue({
+          reference: mockTransaction.payment_reference,
+          status: verifiedStatus,
+          amount: mockTransaction.amount,
+          currency: mockTransaction.currency,
+        });
+        await service.reconcilePayment(mockChurchId, mockTransaction.payment_reference);
+        const data = model('transaction').updateMany.mock.calls[0][0].data;
+        expect(data).not.toHaveProperty('status');
+        expect(data).not.toHaveProperty('amount');
+        expect(data).not.toHaveProperty('receipt_number');
+        if (verifiedStatus === 'success')
+          expect(data.lifecycle).toMatchObject({ access, chargeStatus: 'success' });
+        expect(model('ticket').create).not.toHaveBeenCalled();
+        expect(audit.log).not.toHaveBeenCalled();
+      },
+    );
+    it.each([null, { ...mockTransaction, payment_gateway: 'manual' }])(
+      'does not verify unknown or manually recorded payments (%j)',
+      async (payment) => {
+        model('transaction').findFirst.mockResolvedValue(payment);
+        await service.reconcilePayment(mockChurchId, mockTransaction.payment_reference);
+        expect(paystack.verifyTransaction).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+    it('leaves provider-pending payments unchanged', async () => {
+      paystack.verifyTransaction.mockResolvedValue({
+        reference: mockTransaction.payment_reference,
+        status: 'pending',
+        amount: mockTransaction.amount,
+        currency: mockTransaction.currency,
+      });
+      await service.reconcilePayment(mockChurchId, mockTransaction.payment_reference);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(model('transaction').updateMany).not.toHaveBeenCalled();
+    });
+    it('ignores an old failed callback after a verified successful charge', async () => {
+      model('transaction').findFirstOrThrow.mockResolvedValue(mockTransaction);
+      paystack.verifyTransaction.mockResolvedValue({
+        reference: mockTransaction.payment_reference,
+        status: 'failed',
+        amount: mockTransaction.amount,
+        currency: mockTransaction.currency,
+      });
+      await service.reconcilePayment(mockChurchId, mockTransaction.payment_reference);
+      expect(model('transaction').updateMany).not.toHaveBeenCalled();
+      expect(model('ticket').create).not.toHaveBeenCalled();
+    });
   });
 });

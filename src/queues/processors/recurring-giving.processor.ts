@@ -51,9 +51,9 @@ export class RecurringGivingProcessor extends WorkerHost {
    * @param error - The error that caused the failure
    */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error): void {
+  onFailed(job: Job, _error: Error): void {
     this.logger.error(
-      `Recurring giving job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `Recurring giving job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
   }
 

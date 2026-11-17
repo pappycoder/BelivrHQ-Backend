@@ -13,7 +13,7 @@ import { PrismaService } from '../../../src/prisma/prisma.service';
 import { AuditLoggingService } from '../../../src/common/services/audit-logging.service';
 import { CreateWebhookSubscriptionDto } from '../../../src/webhooks/dto/create-webhook-subscription.dto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { WebhookDispatchService } from '../../../src/webhooks/webhook-dispatch.service';
 
 describe('WebhooksService', () => {
   const mockChurchId = '00000000-0000-0000-0000-000000000001';
@@ -26,7 +26,7 @@ describe('WebhooksService', () => {
     webhookDelivery: Record<string, jest.Mock>;
   };
   let audit: { log: jest.Mock };
-  let webhookQueue: { add: jest.Mock };
+  let dispatcher: { dispatch: jest.Mock };
   let service: WebhooksService;
 
   beforeEach(() => {
@@ -48,12 +48,12 @@ describe('WebhooksService', () => {
       },
     };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
-    webhookQueue = { add: jest.fn().mockResolvedValue(undefined) };
+    dispatcher = { dispatch: jest.fn().mockResolvedValue(true) };
 
     service = new WebhooksService(
       prisma as unknown as PrismaService,
       audit as unknown as AuditLoggingService,
-      webhookQueue as unknown as Queue,
+      dispatcher as unknown as WebhookDispatchService,
     );
   });
 
@@ -231,15 +231,7 @@ describe('WebhooksService', () => {
       const result = await service.testDelivery(mockSubId, mockChurchId);
 
       expect(result).toEqual({ deliveryId: 'dlv-1' });
-      expect(webhookQueue.add).toHaveBeenCalledWith(
-        'deliver',
-        expect.objectContaining({
-          deliveryId: 'dlv-1',
-          subscriptionId: mockSubId,
-          event: 'test.ping',
-        }),
-        expect.objectContaining({ attempts: 3 }),
-      );
+      expect(dispatcher.dispatch).toHaveBeenCalledWith('dlv-1');
     });
 
     it('should throw NotFound for inactive subscriptions', async () => {
@@ -270,11 +262,7 @@ describe('WebhooksService', () => {
           events: { has: 'member.created' },
         },
       });
-      expect(webhookQueue.add).toHaveBeenCalledWith(
-        'deliver',
-        expect.objectContaining({ event: 'member.created' }),
-        expect.objectContaining({ attempts: 3 }),
-      );
+      expect(dispatcher.dispatch).toHaveBeenCalledWith('dlv-1');
     });
 
     it('should continue on per-subscription failures', async () => {
@@ -286,7 +274,7 @@ describe('WebhooksService', () => {
       const result = await service.notifySubscribers(mockChurchId, 'member.created', {});
 
       expect(result).toEqual({ queued: 0 });
-      expect(webhookQueue.add).not.toHaveBeenCalled();
+      expect(dispatcher.dispatch).not.toHaveBeenCalled();
     });
   });
 

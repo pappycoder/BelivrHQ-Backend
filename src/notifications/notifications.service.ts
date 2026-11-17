@@ -332,7 +332,7 @@ export class NotificationsService {
     caption: string,
     churchId: string,
   ): Promise<void> {
-    this.logger.log(`WhatsApp document to ${phone}: ${caption} (church: ${churchId})`);
+    this.logger.log(`WhatsApp document requested (church: ${churchId})`);
 
     const profiles = await this.prisma.profile.findMany({
       where: { church_id: churchId, phone },
@@ -374,7 +374,7 @@ export class NotificationsService {
     churchId: string,
     text?: string,
   ): Promise<void> {
-    this.logger.log(`Email with attachment to ${email}: ${subject} (church: ${churchId})`);
+    this.logger.log(`Email attachment requested (church: ${churchId})`);
 
     const members = await this.prisma.member.findMany({
       where: { church_id: churchId, email },

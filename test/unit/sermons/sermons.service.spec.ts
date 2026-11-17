@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateSermonDto } from '../../../src/sermons/dto/update-sermon.dto';
 import { BranchScopeService } from '../../../src/common/services/branch-scope.service';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
@@ -389,6 +391,118 @@ describe('SermonsService', () => {
 
       await expect(
         service.setAudioUrl(mockSermonId, 'url', mockChurchId, mockUserId),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.sermon.update).not.toHaveBeenCalled();
+    });
+  });
+  describe('filtered archives and partial sermon edits', () => {
+    it.each(['createdAt', 'created_at', 'sermonDate', 'sermon_date', 'title'])(
+      'supports documented sort aliases with scope and content filters (%s)',
+      async (sortBy) => {
+        prisma.sermon.findMany.mockResolvedValue([]);
+        prisma.sermon.count.mockResolvedValue(0);
+        await service.listSermons(
+          {
+            sortBy,
+            archived: true,
+            branchId: 'requested',
+            speaker: 'Ada',
+            series: 'Faith',
+            tag: 'hope',
+            search: 'Walk',
+            startDate: '2026-01-01',
+            endDate: '2026-02-01',
+          },
+          mockChurchId,
+          { church_id: mockChurchId, role: 'church_admin', is_admin_hq: true },
+        );
+        const args = prisma.sermon.findMany.mock.calls[0][0];
+        expect(args.where).toMatchObject({
+          church_id: mockChurchId,
+          archived_at: { not: null },
+          speaker: { contains: 'Ada', mode: 'insensitive' },
+          series_name: { contains: 'Faith', mode: 'insensitive' },
+          tags: { has: 'hope' },
+          sermon_date: { gte: new Date('2026-01-01'), lte: new Date('2026-02-01') },
+          AND: [{ OR: [{ branch_id: 'requested' }, { branch_id: null }] }],
+        });
+        expect(args.where.OR).toHaveLength(4);
+        expect(args.orderBy).toEqual(
+          sortBy === 'title'
+            ? { title: 'asc' }
+            : sortBy.startsWith('created')
+              ? { created_at: 'desc' }
+              : { sermon_date: 'desc' },
+        );
+      },
+    );
+    it.each([null, 'Updated'])(
+      'updates explicitly provided nullable fields and keeps an audit (%j)',
+      async (value) => {
+        prisma.sermon.findFirst.mockResolvedValue(mockSermon);
+        prisma.sermon.update.mockResolvedValue({
+          ...mockSermon,
+          speaker: value,
+          scripture_reference: value,
+          series_name: value,
+          audio_url: value,
+          video_url: value,
+          description: value,
+          tags: [],
+          duration_seconds: null,
+        });
+        const result = await service.updateSermon(
+          mockSermonId,
+          plainToInstance(UpdateSermonDto, {
+            title: 'New',
+            speaker: value,
+            sermonDate: '2026-01-01',
+            scriptureReference: value,
+            seriesName: value,
+            tags: [],
+            audioUrl: value,
+            videoUrl: value,
+            description: value,
+            durationSeconds: null,
+          }),
+          mockChurchId,
+          mockUserId,
+        );
+        expect(prisma.sermon.update.mock.calls[0][0].data).toEqual({
+          title: 'New',
+          speaker: value,
+          sermon_date: new Date('2026-01-01'),
+          scripture_reference: value,
+          series_name: value,
+          tags: [],
+          audio_url: value,
+          video_url: value,
+          description: value,
+          duration_seconds: null,
+        });
+        expect(result).toMatchObject({
+          speaker: value || undefined,
+          scriptureReference: value || undefined,
+          seriesName: value || undefined,
+          audioUrl: value || undefined,
+          videoUrl: value || undefined,
+          description: value || undefined,
+          tags: [],
+          durationSeconds: undefined,
+        });
+        expect(audit.log).toHaveBeenCalledWith(
+          expect.objectContaining({ entityId: mockSermonId, action: 'UPDATE' }),
+        );
+      },
+    );
+    it('does not expose a foreign-branch sermon to a partial update', async () => {
+      prisma.sermon.findFirst.mockResolvedValue({ ...mockSermon, branch_id: 'foreign' });
+      await expect(
+        service.updateSermon(mockSermonId, { title: 'New' }, mockChurchId, mockUserId, {
+          church_id: mockChurchId,
+          role: 'media_team',
+          branch_id: 'own',
+        }),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.sermon.update).not.toHaveBeenCalled();
     });

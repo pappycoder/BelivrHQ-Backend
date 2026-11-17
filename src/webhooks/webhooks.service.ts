@@ -1,4 +1,4 @@
-import { churchEntitlements } from '../billing/entitlements';
+import { churchEntitlements, entitlementsFromSubscription } from '../billing/entitlements';
 import { resolveWebhookUrl } from './safe-webhook-request';
 /**
  * @file webhooks.service.ts
@@ -11,9 +11,15 @@ import { resolveWebhookUrl } from './safe-webhook-request';
  * @since 1.0.0
  */
 
-import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { WebhookDispatchService } from './webhook-dispatch.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLoggingService } from '../common/services/audit-logging.service';
 import { CreateWebhookSubscriptionDto } from './dto/create-webhook-subscription.dto';
@@ -31,8 +37,71 @@ export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLoggingService,
-    @InjectQueue('webhook-delivery') private readonly webhookQueue: Queue,
+    private readonly dispatch: WebhookDispatchService,
   ) {}
+
+  async retryDelivery(id: string, churchId: string, userId: string, reason: string) {
+    if (typeof reason !== 'string' || reason.trim().length < 10 || reason.trim().length > 500)
+      throw new BadRequestException('A review reason of 10 to 500 characters is required');
+    const actor = await this.prisma.profile.findFirst({
+      where: {
+        user_id: userId,
+        church_id: churchId,
+        role: { has: 'super_admin' },
+        status: 'active',
+        archived_at: null,
+      },
+      select: { id: true },
+    });
+    if (!actor)
+      throw new ForbiddenException('Only super administrators may review webhook retries');
+    const generation = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT d.id FROM webhook_deliveries d JOIN webhook_subscriptions s ON s.id = d.subscription_id WHERE d.id = ${id} AND s.church_id = ${churchId} FOR UPDATE OF d, s`;
+      if (!locked.length) throw new NotFoundException('Webhook delivery not found');
+      const delivery = await tx.webhookDelivery.findUniqueOrThrow({ where: { id } });
+      if (delivery.status !== 'failed')
+        throw new ConflictException('Only failed deliveries can be reviewed for retry');
+      const subscription = await tx.webhookSubscription.findUniqueOrThrow({
+        where: { id: delivery.subscription_id },
+      });
+      const entitlement = entitlementsFromSubscription(
+        await tx.platformSubscription.findUnique({ where: { church_id: churchId } }),
+      );
+      if (
+        !subscription.is_active ||
+        subscription.archived_at ||
+        !entitlement.active ||
+        !entitlement.features.includes('webhooks')
+      )
+        throw new ConflictException('Webhook subscription is not currently eligible');
+      const state = await this.dispatch.jobState(id, delivery.dispatch_generation);
+      if (state && !['completed', 'failed', 'unknown'].includes(state))
+        throw new ConflictException('A delivery attempt is still in progress');
+      const updated = await tx.webhookDelivery.update({
+        where: { id },
+        data: { status: 'pending', next_retry_at: null, dispatch_generation: { increment: 1 } },
+      });
+      await tx.auditLog.create({
+        data: {
+          church_id: churchId,
+          user_id: userId,
+          entity: 'webhook_delivery',
+          entity_id: id,
+          action: 'UPDATE',
+          new_values: {
+            decision: 'retry',
+            reason: reason.trim(),
+            generation: updated.dispatch_generation,
+          },
+        },
+      });
+      return updated.dispatch_generation;
+    });
+    const queued = await this.dispatch.dispatch(id);
+    return { deliveryId: id, generation, queued };
+  }
 
   /**
    * Create a webhook subscription.
@@ -63,7 +132,7 @@ export class WebhooksService {
       newValues: { url: dto.url, events: dto.events },
     });
 
-    this.logger.log(`Webhook subscription created: ${subscription.id} for ${dto.url}`);
+    this.logger.log(`Webhook subscription created: ${subscription.id}`);
 
     return this.mapSubscriptionToDto(subscription);
   }
@@ -170,20 +239,9 @@ export class WebhooksService {
       },
     });
 
-    await this.webhookQueue.add(
-      'deliver',
-      {
-        deliveryId: delivery.id,
-        subscriptionId: subscription.id,
-        url: subscription.url,
-        secret: subscription.secret,
-        event: 'test.ping',
-        payload: { test: true, timestamp: new Date().toISOString() },
-      },
-      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-    );
+    await this.dispatch.dispatch(delivery.id);
 
-    this.logger.log(`Test webhook delivery queued: ${delivery.id}`);
+    this.logger.log(`Test webhook delivery persisted: ${delivery.id}`);
 
     return { deliveryId: delivery.id };
   }
@@ -215,22 +273,9 @@ export class WebhooksService {
           },
         });
 
-        await this.webhookQueue.add(
-          'deliver',
-          {
-            deliveryId: delivery.id,
-            subscriptionId: sub.id,
-            url: sub.url,
-            secret: sub.secret,
-            event,
-            payload,
-          },
-          { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-        );
-
-        queued++;
-      } catch (err) {
-        this.logger.error(`Failed to queue webhook for ${sub.id}: ${(err as Error).message}`);
+        if (await this.dispatch.dispatch(delivery.id)) queued++;
+      } catch {
+        this.logger.warn(`Webhook event persistence failed for subscription ${sub.id}`);
       }
     }
 

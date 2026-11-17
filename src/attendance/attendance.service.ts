@@ -902,7 +902,7 @@ export class AttendanceService extends AttendanceSessionsService {
       newValues: { visitorName: dto.visitorName, source: dto.source },
     });
 
-    this.logger.log(`Visitor attendance recorded: ${dto.visitorName} (${attendance.id})`);
+    this.logger.log(`Visitor attendance recorded: ${attendance.id}`);
 
     return this.mapToAttendanceResponse(attendance);
   }

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-appointment-contacts.dto.ts
  * @description DTO for listing appointment participant contacts (the pickers).
@@ -7,7 +8,7 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -52,8 +53,9 @@ export class ListAppointmentContactsDto {
     description: 'When kind is "who", also include existing visitors in the results',
     example: true,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
+  @IsBoolean()
   includeVisitors?: boolean;
 
   @ApiPropertyOptional({

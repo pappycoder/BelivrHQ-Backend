@@ -5,3 +5,24 @@
 node_modules
 coverage
 docs/previews
+
+# Private workstation and recovery artifacts
+.aws
+.agents
+.codex
+.vercel
+*.key
+*.pem
+test/load/results
+
+# Generated output and local tool credentials are not deployment source
+dist
+test-results
+playwright-report
+.cache
+.eslintcache
+.sentryclirc
+.npmrc
+.ssh
+.azure
+.kube

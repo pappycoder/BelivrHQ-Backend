@@ -627,3 +627,144 @@ describe('SyncService', () => {
     });
   });
 });
+
+describe('Scoped offline life events and personal bookmarks', () => {
+  const entityId = '55555555-5555-4555-8555-555555555555';
+  const sermonId = '66666666-6666-4666-8666-666666666666';
+  const scoped = {
+    ...viewer,
+    is_admin_hq: false,
+    member_id: mockMemberId,
+    permissions: [
+      ...viewer.permissions,
+      'pastoral:life-events:create',
+      'pastoral:life-events:update',
+      'pastoral:life-events:delete',
+      'pastoral:life-events:read',
+      'sermons:list:read',
+    ],
+  };
+  beforeEach(() => {
+    model('syncQueue').findFirst.mockResolvedValue(null);
+    model('member').findFirst.mockResolvedValue({ id: mockMemberId });
+    model('sermon').findFirst.mockResolvedValue({ id: sermonId });
+    model('lifeEvent').findUnique.mockResolvedValue(null);
+    model('sermonBookmark').findUnique.mockResolvedValue(null);
+  });
+  it.each(['create', 'update', 'delete'])(
+    'applies %s to a life event with the same tenant and member branch constraints',
+    async (action) => {
+      if (action !== 'create') {
+        model('lifeEvent').findUnique.mockResolvedValue({ id: entityId });
+        model('lifeEvent').findFirst.mockResolvedValue({ id: entityId });
+        model('lifeEvent').updateMany.mockResolvedValue({ count: 1 });
+      }
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'lifeEvent',
+            entityId,
+            action,
+            data: {
+              memberId: mockMemberId,
+              type: 'birthday',
+              date: '2026-01-01',
+              details: { notes: 'Synthetic' },
+            },
+          },
+        ],
+        scoped,
+      );
+      expect(result).toMatchObject({ accepted: 1, rejected: 0 });
+      if (action === 'create')
+        expect(model('lifeEvent').create.mock.calls[0][0].data).toMatchObject({
+          church_id: mockChurchId,
+          member_id: mockMemberId,
+          date: new Date('2026-01-01'),
+        });
+      if (action === 'delete')
+        expect(model('lifeEvent').deleteMany.mock.calls[0][0].where).toMatchObject({
+          id: entityId,
+          church_id: mockChurchId,
+          member: { branch_id: scoped.branch_id },
+        });
+      if (action !== 'delete')
+        expect(model('member').findFirst).toHaveBeenCalledWith({
+          where: { id: mockMemberId, church_id: mockChurchId, branch_id: scoped.branch_id },
+        });
+    },
+  );
+  it('creates only the signed-in member bookmark with a branch-visible sermon', async () => {
+    const result = await service.pushChanges(
+      mockChurchId,
+      mockUserId,
+      [
+        {
+          entity: 'sermonBookmark',
+          entityId,
+          action: 'create',
+          data: { memberId: mockMemberId, sermonId },
+        },
+      ],
+      scoped,
+    );
+    expect(result).toMatchObject({ accepted: 1, rejected: 0 });
+    expect(model('sermonBookmark').create.mock.calls[0][0].data).toMatchObject({
+      church_id: mockChurchId,
+      member_id: mockMemberId,
+      sermon_id: sermonId,
+    });
+  });
+  it.each([
+    'other-member',
+    'extra-field',
+    'missing-member',
+    'invalid-related-id',
+    'foreign-sermon',
+  ])('rejects unauthorized bookmark data before storing an outbox item (%s)', async (scenario) => {
+    const data: Record<string, unknown> = {
+      memberId: scenario === 'other-member' ? entityId : mockMemberId,
+      sermonId: scenario === 'invalid-related-id' ? 'invalid' : sermonId,
+    };
+    if (scenario === 'extra-field') data.role = 'church_admin';
+    if (scenario === 'foreign-sermon') model('sermon').findFirst.mockResolvedValue(null);
+    const result = await service.pushChanges(
+      mockChurchId,
+      mockUserId,
+      [{ entity: 'sermonBookmark', entityId, action: 'create', data }],
+      scenario === 'missing-member' ? { ...scoped, member_id: undefined } : scoped,
+    );
+    expect(result).toMatchObject({ accepted: 0, rejected: 1 });
+    expect(model('sermonBookmark').create).not.toHaveBeenCalled();
+    expect(model('syncQueue').create).not.toHaveBeenCalled();
+  });
+  it.each(['foreign', 'missing', 'changed', 'duplicate'])(
+    'refuses unsafe life-event updates (%s)',
+    async (scenario) => {
+      model('lifeEvent').findUnique.mockResolvedValue(
+        scenario === 'missing' ? null : { id: entityId },
+      );
+      model('lifeEvent').findFirst.mockResolvedValue(
+        scenario === 'foreign' ? null : { id: entityId },
+      );
+      model('lifeEvent').updateMany.mockResolvedValue({ count: 0 });
+      const result = await service.pushChanges(
+        mockChurchId,
+        mockUserId,
+        [
+          {
+            entity: 'lifeEvent',
+            entityId,
+            action: scenario === 'duplicate' ? 'create' : 'update',
+            data: { memberId: mockMemberId, type: 'birthday', date: '2026-01-01' },
+          },
+        ],
+        scoped,
+      );
+      expect(result).toMatchObject({ accepted: 0, rejected: 1 });
+      expect(model('syncQueue').create).not.toHaveBeenCalled();
+    },
+  );
+});

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-cell-groups.dto.ts
  * @description Query DTO for listing / exporting cell groups with filters.
@@ -7,14 +8,13 @@
  */
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 // Query DTO for the cell-group list / export endpoints.
 export class ListCellGroupsDto {
   @ApiPropertyOptional({ description: 'List archived groups only' })
   @IsOptional()
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   archived?: boolean;
 
