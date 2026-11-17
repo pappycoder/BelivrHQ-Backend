@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file DTO for listing sermons with filters and pagination.
  * @module sermons/dto/list-sermons.dto
@@ -86,7 +87,7 @@ export class ListSermonsDto {
     description: 'List archived records only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

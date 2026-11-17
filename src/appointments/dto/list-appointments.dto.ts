@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-appointments.dto.ts
  * @description DTO for listing appointments with pagination and filters.
@@ -58,7 +59,7 @@ export class ListAppointmentsDto {
     description: 'Show archived appointments (true = archived view)',
     example: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   archived?: boolean;

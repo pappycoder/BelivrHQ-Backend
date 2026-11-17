@@ -237,4 +237,97 @@ describe('FamilyService', () => {
       expect(prisma.family.delete).toHaveBeenCalled();
     });
   });
+  describe('family membership and viewer isolation', () => {
+    it.each([true, false])(
+      'limits family search to visible branch or shared records (HQ=%s)',
+      async (hq) => {
+        prisma.family.findMany.mockResolvedValue([]);
+        prisma.family.count.mockResolvedValue(0);
+        await service.listFamilies(
+          churchId,
+          { search: 'Okafor', branchId: 'requested' },
+          { church_id: churchId, role: 'church_admin', branch_id: 'own', is_admin_hq: hq },
+        );
+        const where = prisma.family.findMany.mock.calls[0][0].where;
+        expect(where).toMatchObject({
+          church_id: churchId,
+          OR: [{ branch_id: hq ? 'requested' : 'own' }, { branch_id: null }],
+        });
+        expect(where.name).toEqual({ contains: 'Okafor', mode: 'insensitive' });
+      },
+    );
+    it('updates the family name and head with the tenant-scoped audit', async () => {
+      prisma.family.findFirst.mockResolvedValue(mockFamily);
+      prisma.familyMember.findMany.mockResolvedValue([]);
+      await service.updateFamily(
+        'family-1',
+        { name: 'New family', headId: 'head' },
+        churchId,
+        userId,
+      );
+      expect(prisma.family.update).toHaveBeenCalledWith({
+        where: { id: 'family-1' },
+        data: { name: 'New family', head_id: 'head' },
+      });
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ churchId, entityId: 'family-1', action: 'UPDATE' }),
+      );
+    });
+    it.each(['detail', 'update', 'add', 'remove', 'archive', 'restore'])(
+      'hides a family from a different branch during %s',
+      async (operation) => {
+        prisma.family.findFirst.mockResolvedValue({ ...mockFamily, branch_id: 'foreign' });
+        const viewer = { church_id: churchId, role: 'member', branch_id: 'own' };
+        if (operation === 'detail') prisma.family.findFirst.mockResolvedValue(null);
+        const action =
+          operation === 'detail'
+            ? service.getFamilyById('family-1', churchId, viewer)
+            : operation === 'update'
+              ? service.updateFamily('family-1', { name: 'New' }, churchId, userId, viewer)
+              : operation === 'add'
+                ? service.addMember(
+                    'family-1',
+                    { memberId: 'm', relationship: 'child' },
+                    churchId,
+                    userId,
+                    viewer,
+                  )
+                : operation === 'remove'
+                  ? service.removeMember('family-1', 'm', churchId, userId, viewer)
+                  : operation === 'archive'
+                    ? service.archive('family-1', churchId, userId, viewer)
+                    : service.restore('family-1', churchId, userId, viewer);
+        await expect(action).rejects.toThrow(NotFoundException);
+        expect(prisma.family.update).not.toHaveBeenCalled();
+        expect(prisma.familyMember.create).not.toHaveBeenCalled();
+        expect(prisma.familyMember.delete).not.toHaveBeenCalled();
+      },
+    );
+    it.each(['missing-member', 'duplicate'])(
+      'rejects invalid membership before inserting (%s)',
+      async (scenario) => {
+        prisma.family.findFirst.mockResolvedValue(mockFamily);
+        prisma.member.findFirst.mockResolvedValue(
+          scenario === 'missing-member' ? null : { id: 'm' },
+        );
+        prisma.familyMember.findUnique.mockResolvedValue(
+          scenario === 'duplicate' ? { id: 'link' } : null,
+        );
+        await expect(
+          service.addMember('family-1', { memberId: 'm', relationship: 'child' }, churchId, userId),
+        ).rejects.toThrow(scenario === 'duplicate' ? ConflictException : NotFoundException);
+        expect(prisma.familyMember.create).not.toHaveBeenCalled();
+      },
+    );
+    it('maps a historical family membership after the related member was removed', async () => {
+      prisma.family.findFirst.mockResolvedValue({
+        ...mockFamily,
+        family_members: [
+          { id: 'link', member_id: 'm', relationship: 'child', is_head: false, member: null },
+        ],
+      });
+      const result = await service.getFamilyById('family-1', churchId);
+      expect(result.members[0]).toMatchObject({ memberId: 'm', firstName: '', lastName: '' });
+    });
+  });
 });

@@ -1069,6 +1069,8 @@ export class EventsService {
         // Default to first tier (display_order 0)
         tier = event.ticket_tiers[0];
       }
+      // Persist and check the resolved tier even when the caller omitted its ID.
+      tierId = tier?.id;
     }
 
     // Free event: immediate registration + ticket

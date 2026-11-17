@@ -346,4 +346,72 @@ describe('BranchesService', () => {
       );
     });
   });
+  describe('branch contact edits and restricted listing', () => {
+    it.each(['New value', ''])(
+      'sets or clears every optional contact field (%j)',
+      async (value) => {
+        prisma.branch.findUnique.mockResolvedValue(mockBranch);
+        prisma.branch.update.mockResolvedValue({
+          ...mockBranch,
+          address: value,
+          city: value,
+          state: value,
+          country: value,
+          phone: value,
+          email: value,
+        });
+        await service.update(
+          'branch-1',
+          {
+            address: value,
+            city: value,
+            state: value,
+            country: value,
+            phone: value,
+            email: value,
+            photoUrl: value,
+          },
+          'church-1',
+          'actor',
+        );
+        expect(prisma.branch.update.mock.calls[0][0].data).toEqual({
+          address: value || null,
+          city: value || null,
+          state: value || null,
+          country: value || 'Nigeria',
+          phone: value || null,
+          email: value || null,
+          photo_url: value || null,
+        });
+        expect(auditLog).toHaveBeenCalledWith(
+          expect.objectContaining({ entityId: 'branch-1', action: 'UPDATE' }),
+        );
+      },
+    );
+    it('avoids writes and audit events for a no-op edit', async () => {
+      prisma.branch.findUnique.mockResolvedValue(mockBranch);
+      expect((await service.update('branch-1', {}, 'church-1', 'actor')).name).toBe(
+        mockBranch.name,
+      );
+      expect(prisma.branch.update).not.toHaveBeenCalled();
+      expect(auditLog).not.toHaveBeenCalled();
+    });
+    it.each(['own', undefined])(
+      'does not broaden an assigned or missing staff branch (%s)',
+      async (branch_id) => {
+        prisma.branch.findMany.mockResolvedValue([]);
+        prisma.branch.count.mockResolvedValue(0);
+        await service.findAll(
+          'church-1',
+          { search: 'Campus', sortBy: 'name', sortOrder: 'desc' },
+          { church_id: 'church-1', role: 'branch_pastor', branch_id },
+        );
+        expect(prisma.branch.findMany.mock.calls[0][0]).toMatchObject({
+          where: { id: branch_id ?? '00000000-0000-0000-0000-000000000000', church_id: 'church-1' },
+          orderBy: [{ name: 'desc' }],
+        });
+        expect(prisma.branch.findMany.mock.calls[0][0].where.OR).toHaveLength(3);
+      },
+    );
+  });
 });

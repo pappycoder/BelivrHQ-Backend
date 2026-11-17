@@ -153,6 +153,207 @@ describe('GivingService - Recurring Giving', () => {
     );
   });
 
+  describe('Recurring schedule lifecycle boundaries', () => {
+    beforeEach(() => model('recurringGiving').findUnique.mockResolvedValue(mockRecurring));
+    it.each(['pause', 'resume'] as const)(
+      'hides absent or foreign schedules when attempting %s',
+      async (action) => {
+        for (const row of [null, { ...mockRecurring, church_id: 'foreign' }]) {
+          model('recurringGiving').findUnique.mockResolvedValue(row);
+          const result =
+            action === 'pause'
+              ? service.pauseRecurringGiving(mockRecurringId, mockChurchId, mockUserId)
+              : service.resumeRecurringGiving(mockRecurringId, mockChurchId, mockUserId);
+          await expect(result).rejects.toThrow('Recurring giving not found');
+        }
+        expect(model('recurringGiving').update).not.toHaveBeenCalled();
+      },
+    );
+    it('pauses an active schedule with an auditable timestamp', async () => {
+      await service.pauseRecurringGiving(mockRecurringId, mockChurchId, mockUserId);
+      expect(model('recurringGiving').update).toHaveBeenCalledWith({
+        where: { id: mockRecurringId },
+        data: { is_active: false, paused_at: expect.any(Date) },
+      });
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockUserId,
+          churchId: mockChurchId,
+          entityId: mockRecurringId,
+          newValues: { isActive: false, pausedAt: expect.any(String) },
+        }),
+      );
+    });
+    it('does not pause a cancelled or already paused schedule', async () => {
+      model('recurringGiving').findUnique.mockResolvedValue({ ...mockRecurring, is_active: false });
+      await expect(
+        service.pauseRecurringGiving(mockRecurringId, mockChurchId, mockUserId),
+      ).rejects.toThrow('already paused or cancelled');
+      expect(model('recurringGiving').update).not.toHaveBeenCalled();
+    });
+    it.each([
+      { is_active: true, paused_at: null, message: 'not paused' },
+      { is_active: false, paused_at: null, message: 'fully cancelled' },
+    ])(
+      'refuses to resume a schedule outside its paused state: %j',
+      async ({ message, ...state }) => {
+        model('recurringGiving').findUnique.mockResolvedValue({ ...mockRecurring, ...state });
+        await expect(
+          service.resumeRecurringGiving(mockRecurringId, mockChurchId, mockUserId),
+        ).rejects.toThrow(message);
+        expect(model('recurringGiving').update).not.toHaveBeenCalled();
+      },
+    );
+    it('resumes a paused schedule and clears the pause marker', async () => {
+      model('recurringGiving').findUnique.mockResolvedValue({
+        ...mockRecurring,
+        is_active: false,
+        paused_at: new Date(),
+      });
+      await service.resumeRecurringGiving(mockRecurringId, mockChurchId, mockUserId);
+      expect(model('recurringGiving').update).toHaveBeenCalledWith({
+        where: { id: mockRecurringId },
+        data: { is_active: true, paused_at: null },
+      });
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityId: mockRecurringId,
+          newValues: { isActive: true, pausedAt: null },
+        }),
+      );
+    });
+    it.each(['weekly', 'quarterly'] as const)(
+      'schedules %s gifts from the current time and linked profile member',
+      async (frequency) => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-01-02T12:00:00Z'));
+        try {
+          model('givingCategory').findUnique.mockResolvedValue(mockCategory);
+          model('profile').findUnique.mockResolvedValue({ member_id: mockMemberId });
+          model('member').findFirst.mockResolvedValue({ id: mockMemberId });
+          model('recurringGiving').findFirst.mockResolvedValue(null);
+          model('recurringGiving').create.mockResolvedValue(mockRecurring);
+          await service.createRecurringGiving(
+            { categoryId: mockCategoryId, amount: 5000, frequency, email: 'synthetic@example.org' },
+            mockChurchId,
+            mockUserId,
+          );
+          expect(model('recurringGiving').create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+              member_id: mockMemberId,
+              next_charge_date: new Date(
+                frequency === 'weekly' ? '2026-01-09T12:00:00Z' : '2026-04-02T12:00:00Z',
+              ),
+            }),
+          });
+        } finally {
+          jest.useRealTimers();
+        }
+      },
+    );
+    it.each([null, { member_id: null }])(
+      'requires a member ID when the caller has no linked member: %j',
+      async (profile) => {
+        model('givingCategory').findUnique.mockResolvedValue(mockCategory);
+        model('profile').findUnique.mockResolvedValue(profile);
+        await expect(
+          service.createRecurringGiving(
+            {
+              categoryId: mockCategoryId,
+              amount: 5000,
+              frequency: 'monthly',
+              email: 'synthetic@example.org',
+            },
+            mockChurchId,
+            mockUserId,
+          ),
+        ).rejects.toThrow('link a member');
+        expect(model('recurringGiving').create).not.toHaveBeenCalled();
+      },
+    );
+    it.each([false, true])('keeps recurring lists branch-scoped for HQ=%s', async (hq) => {
+      model('recurringGiving').findMany.mockResolvedValue([
+        { ...mockRecurring, member: { first_name: 'Ada', last_name: 'Obi' } },
+        {
+          ...mockRecurring,
+          id: 'other',
+          category_id: 'missing',
+          member: null,
+          next_charge_date: null,
+          last_charge_date: new Date('2026-01-01'),
+        },
+      ]);
+      model('recurringGiving').count.mockResolvedValue(2);
+      model('givingCategory').findMany.mockResolvedValue([{ id: mockCategoryId, name: 'Tithe' }]);
+      const viewer = {
+        church_id: mockChurchId,
+        role: 'treasurer',
+        branch_id: 'own-branch',
+        is_admin_hq: hq,
+      };
+      const result = await service.listRecurringGiving(
+        mockChurchId,
+        { page: 2, limit: 10, branchId: 'requested', isActive: false },
+        viewer,
+      );
+      expect(model('recurringGiving').findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            church_id: mockChurchId,
+            member: { is: { branch_id: hq ? 'requested' : 'own-branch' } },
+            is_active: false,
+          },
+          skip: 10,
+          take: 10,
+        }),
+      );
+      expect(result.data[0]).toMatchObject({ memberName: 'Ada Obi', categoryName: 'Tithe' });
+      expect(result.data[1]).toMatchObject({
+        memberName: undefined,
+        categoryName: '',
+        nextChargeDate: undefined,
+        lastChargeDate: '2026-01-01T00:00:00.000Z',
+      });
+    });
+    it('maps historical schedules even when the category has been removed', async () => {
+      model('givingCategory').findUnique.mockResolvedValue(null);
+      await expect(
+        service.getRecurringGivingById(mockRecurringId, mockChurchId),
+      ).resolves.toMatchObject({ categoryName: '' });
+    });
+    it('does not charge a saved authorization through a different merchant account', async () => {
+      paymentAccounts.current.mockResolvedValue({
+        provider: paystack,
+        accountId: 'changed-merchant',
+      });
+      await expect(service.processRecurringCharge(mockRecurringId, mockChurchId)).resolves.toBe(
+        false,
+      );
+      expect(paystack.chargeAuthorization).not.toHaveBeenCalled();
+      expect(model('transaction').create).not.toHaveBeenCalled();
+    });
+    it('does not charge when the selected provider account is unavailable', async () => {
+      paymentAccounts.current.mockRejectedValue(new Error('account unavailable'));
+      await expect(service.processRecurringCharge(mockRecurringId, mockChurchId)).resolves.toBe(
+        false,
+      );
+      expect(paystack.chargeAuthorization).not.toHaveBeenCalled();
+    });
+    it.each([undefined, { isConfigured: () => false }, { isConfigured: () => true }])(
+      'requires a configured authorization-charge capability: %j',
+      async (provider) => {
+        paymentAccounts.current.mockResolvedValue({
+          provider,
+          accountId: mockRecurring.integration_account_id,
+        });
+        await expect(service.processRecurringCharge(mockRecurringId, mockChurchId)).resolves.toBe(
+          false,
+        );
+        expect(model('transaction').create).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('createRecurringGiving', () => {
     it('rejects with setup guidance when the church has no payment provider', async () => {
       paymentAccounts.defaultGateway.mockResolvedValue(null);

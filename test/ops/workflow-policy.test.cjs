@@ -8,30 +8,47 @@ const release = workflow.jobs.prepare;
 test('every validation is required and failures, cancellation or skips block deployment', () => {
   const checks = workflow.jobs.checks;
   assert.equal(checks.if, 'always()');
-  const validations = Object.keys(workflow.jobs).filter((name) => !['checks', 'prepare', 'promote'].includes(name));
+  const validations = Object.keys(workflow.jobs).filter(
+    (name) => !['checks', 'prepare', 'promote', 'pull-requests'].includes(name),
+  );
   assert.deepEqual([...checks.needs].sort(), validations.sort());
   assert.equal(release.needs, 'checks');
   require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS' } });
   const config = require('../../jest.config.ts').default;
-  assert.deepEqual(config.coverageThreshold.global, { branches: 80, functions: 80, lines: 80, statements: 80 });
+  assert.deepEqual(config.coverageThreshold.global, {
+    branches: 80,
+    functions: 80,
+    lines: 80,
+    statements: 80,
+  });
   assert.ok(workflow.jobs.test.steps.some((step) => step.run?.includes('npm run test:cov')));
   assert.equal(JSON.parse(fs.readFileSync('test/jest-e2e.json', 'utf8')).maxWorkers, 1);
-  const coverage = workflow.jobs.test.steps.find((step) => step.with?.name === 'backend-unit-coverage');
+  const coverage = workflow.jobs.test.steps.find(
+    (step) => step.with?.name === 'backend-unit-coverage',
+  );
   assert.equal(coverage.if, 'always()');
   assert.equal(coverage.with.path, 'coverage/');
   assert.equal(coverage.with['retention-days'], 7);
 
   const command = checks.steps[0].run;
   const script = command.slice(command.indexOf("'") + 1, command.lastIndexOf("'"));
-  const run = (results) => spawnSync(process.execPath, ['-e', script], { env: { ...process.env, RESULTS: JSON.stringify(results) }, encoding: 'utf8' }).status;
+  const run = (results) =>
+    spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, RESULTS: JSON.stringify(results) },
+      encoding: 'utf8',
+    }).status;
   const passing = Object.fromEntries(validations.map((name) => [name, { result: 'success' }]));
   assert.equal(run(passing), 0);
-  for (const name of validations) for (const result of ['failure', 'cancelled', 'skipped', undefined])
-    assert.notEqual(run({ ...passing, [name]: { result } }), 0);
+  for (const name of validations)
+    for (const result of ['failure', 'cancelled', 'skipped', undefined])
+      assert.notEqual(run({ ...passing, [name]: { result } }), 0);
   for (const name of validations) assert.notEqual(workflow.jobs[name]['continue-on-error'], true);
 });
 test('only checked main/staging pushes deploy and releases cannot cancel active promotions', () => {
-  assert.equal(release.if, "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')");
+  assert.equal(
+    release.if,
+    "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')",
+  );
   assert.equal(workflow.on.pull_request_target, undefined);
   assert.deepEqual(release.strategy.matrix.profile, ['primary']);
   assert.equal(release.strategy['fail-fast'], false);
@@ -60,5 +77,6 @@ test('deployment credentials are limited to the release commands', () => {
   assert.equal(workflow.jobs.promote.env.VERCEL_TOKEN, undefined);
   const preflight = release.steps.find((step) => step.run?.endsWith(' preflight'));
   assert.ok(preflight.env.VERCEL_TOKEN);
-  for (const step of release.steps) if (step.run?.includes('npm ')) assert.equal(step.env?.VERCEL_TOKEN, undefined);
+  for (const step of release.steps)
+    if (step.run?.includes('npm ')) assert.equal(step.env?.VERCEL_TOKEN, undefined);
 });

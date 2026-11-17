@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-templates.dto.ts
  * @description DTO for listing message templates with pagination and filters.
@@ -54,7 +55,7 @@ export class ListTemplatesDto {
     description: 'List archived templates only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

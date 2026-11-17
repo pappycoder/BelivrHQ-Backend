@@ -908,4 +908,101 @@ describe('AuthService', () => {
       await expect(service.refreshSession('token')).rejects.toThrow(UnauthorizedException);
     });
   });
+  describe('authentication provider and session edge contracts', () => {
+    const dto = { email: 'test@example.invalid', password: 'Synthetic-only-password' };
+    it.each([
+      { message: 'rate limit exceeded' },
+      { message: 'too many attempts' },
+      { status: 429 },
+    ])('preserves provider rate limits without issuing sessions (%j)', async (error) => {
+      signInMock.mockResolvedValue({ error, data: null });
+      await expect(service.login(dto)).rejects.toMatchObject({ status: 429 });
+      expect(model(prisma, 'profile').findUnique).not.toHaveBeenCalled();
+    });
+    it('uses the supplied account email and a bounded expiry when optional provider session fields are absent', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1000000000000);
+      signInMock.mockResolvedValue({
+        data: {
+          user: {
+            id: mockUserId,
+            email: '',
+            factors: [
+              { factor_type: 'totp', status: 'unverified' },
+              { factor_type: 'phone', status: 'verified' },
+            ],
+          },
+          session: { access_token: 'access', refresh_token: 'refresh' },
+        },
+        error: null,
+      });
+      model(prisma, 'profile').findUnique.mockResolvedValue(null);
+      expect(await service.login(dto)).toMatchObject({
+        email: dto.email,
+        expiresAt: 1000003600,
+        accessToken: 'access',
+        refreshToken: 'refresh',
+      });
+    });
+    it.each(['authenticator', 'supabase-migration'])(
+      'fails closed when a %s challenge cannot be stored',
+      async (kind) => {
+        signInMock.mockResolvedValue({
+          data: {
+            user: {
+              id: mockUserId,
+              factors:
+                kind === 'supabase-migration'
+                  ? [{ id: 'factor', factor_type: 'totp', status: 'verified' }]
+                  : [],
+            },
+            session: { access_token: 'access', refresh_token: 'refresh' },
+          },
+          error: null,
+        });
+        model(prisma, 'profile').findUnique.mockResolvedValue(
+          kind === 'authenticator'
+            ? {
+                id: mockProfileId,
+                church_id: mockChurchId,
+                branch_id: null,
+                authenticator: { revision: 1 },
+              }
+            : null,
+        );
+        redis.set.mockRejectedValue(new Error('Cache unavailable'));
+        await expect(service.login(dto)).rejects.toThrow(ServiceUnavailableException);
+        expect(audit.log).not.toHaveBeenCalled();
+      },
+    );
+    it.each(['', 'x'.repeat(4097)])(
+      'rejects malformed refresh tokens before provider traffic (%s)',
+      async (token) => {
+        await expect(service.refreshSession(token)).rejects.toThrow(BadRequestException);
+        expect(refreshSessionMock).not.toHaveBeenCalled();
+      },
+    );
+    it.each([{ message: 'unavailable' }, { status: 500 }, { status: 503 }, { status: 401 }])(
+      'maps refresh failures according to provider status (%j)',
+      async (error) => {
+        refreshSessionMock.mockResolvedValue({ data: {}, error });
+        await expect(service.refreshSession('refresh')).rejects.toThrow(
+          'status' in error && error.status === 401
+            ? UnauthorizedException
+            : ServiceUnavailableException,
+        );
+      },
+    );
+    it('uses a bounded expiry when the refresh response omits expires_at', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1000000000000);
+      refreshSessionMock.mockResolvedValue({
+        data: { session: { access_token: 'access', refresh_token: 'new-refresh' } },
+        error: null,
+      });
+      expect(await service.refreshSession('refresh')).toEqual({
+        accessToken: 'access',
+        refreshToken: 'new-refresh',
+        expiresAt: 1000003600,
+      });
+    });
+  });
 });

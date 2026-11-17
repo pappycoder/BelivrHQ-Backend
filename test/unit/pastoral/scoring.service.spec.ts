@@ -293,4 +293,114 @@ describe('ScoringService', () => {
       expect(result.suggestions).toEqual([]);
     });
   });
+  describe('score filters and sparse member data', () => {
+    it.each(['score', 'calculated_at'])(
+      'supports scoped score search and explicit sorting (%s)',
+      async (sortBy) => {
+        const row = {
+          id: 'score',
+          church_id: mockChurchId,
+          score: 50,
+          level: 'high',
+          factors: {},
+          calculated_at: new Date('2026-01-01'),
+          member: {
+            id: mockMemberId,
+            first_name: 'Ada',
+            last_name: 'Guest',
+            email: null,
+            phone: null,
+            status: 'active',
+          },
+        };
+        prisma.riskScore.findMany.mockResolvedValue([row]);
+        prisma.riskScore.count.mockResolvedValue(1);
+        prisma.engagementScore.findMany.mockResolvedValue([row]);
+        prisma.engagementScore.count.mockResolvedValue(1);
+        const risk = await service.listRiskScores(mockChurchId, {
+          level: 'high',
+          search: ' Ada ',
+          sortBy,
+          sortOrder: 'asc',
+          page: 2,
+          limit: 3,
+        });
+        const engagement = await service.listEngagementScores(mockChurchId, {
+          bucket: 'moderately_engaged',
+          search: ' Ada ',
+          sortBy,
+          sortOrder: 'asc',
+          page: 2,
+          limit: 3,
+        });
+        for (const model of [prisma.riskScore, prisma.engagementScore]) {
+          expect(model.findMany.mock.calls[0][0]).toMatchObject({
+            skip: 3,
+            take: 3,
+            orderBy: [{ [sortBy]: 'asc' }],
+            where: {
+              church_id: mockChurchId,
+              member: {
+                OR: [
+                  { first_name: { contains: 'Ada', mode: 'insensitive' } },
+                  { last_name: { contains: 'Ada', mode: 'insensitive' } },
+                ],
+              },
+            },
+          });
+          expect(model.count).toHaveBeenCalledWith({
+            where: model.findMany.mock.calls[0][0].where,
+          });
+        }
+        expect(risk.data[0]).toMatchObject({ memberEmail: undefined, memberPhone: undefined });
+        expect(engagement.data[0].memberEmail).toBeUndefined();
+      },
+    );
+    it.each(['foreign', 'missing'])(
+      'ignores scores from another church or missing historical scores (%s)',
+      async (scenario) => {
+        prisma.member.findFirst.mockResolvedValue({ id: mockMemberId });
+        prisma.riskScore.findUnique.mockResolvedValue(
+          scenario === 'foreign' ? { church_id: 'foreign' } : null,
+        );
+        prisma.engagementScore.findUnique.mockResolvedValue(
+          scenario === 'foreign' ? { church_id: 'foreign' } : null,
+        );
+        expect(await service.getMemberScoring(mockMemberId, mockChurchId)).toEqual({
+          risk: null,
+          engagement: null,
+          suggestions: [],
+        });
+      },
+    );
+    it('refuses score lookup for a missing member before reading scores', async () => {
+      prisma.member.findFirst.mockResolvedValue(null);
+      await expect(service.getMemberScoring(mockMemberId, mockChurchId)).rejects.toThrow(
+        'Member not found',
+      );
+      expect(prisma.riskScore.findUnique).not.toHaveBeenCalled();
+    });
+    it.each(['active', 'inactive'])(
+      'calculates maximum inactivity risk without attendance history (%s)',
+      async (status) => {
+        prisma.member.findMany.mockResolvedValue([{ id: mockMemberId, status }]);
+        prisma.attendance.count.mockResolvedValue(0);
+        prisma.transaction.count.mockResolvedValue(0);
+        prisma.message.count.mockResolvedValue(0);
+        prisma.attendance.findFirst.mockResolvedValue(null);
+        prisma.riskScore.upsert.mockResolvedValue({ id: 'risk' });
+        prisma.riskScore.findMany.mockResolvedValue([]);
+        expect(await service.calculateRiskScores(mockChurchId)).toBe(1);
+        expect(prisma.riskScore.upsert.mock.calls[0][0].create).toMatchObject({
+          level: 'critical',
+          factors: {
+            noGiving: 1,
+            noCommunication: 1,
+            inactiveStatus: status === 'active' ? 0 : 1,
+            recentInactivity: 1,
+          },
+        });
+      },
+    );
+  });
 });

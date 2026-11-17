@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file DTO for listing giving categories.
  * @module giving/dto/list-categories.dto
@@ -42,7 +43,7 @@ export class ListCategoriesDto {
     description: 'List archived records only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

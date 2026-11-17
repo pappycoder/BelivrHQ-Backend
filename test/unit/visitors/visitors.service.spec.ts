@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateVisitorDto } from '../../../src/visitors/dto/update-visitor.dto';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { VisitorsService } from '../../../src/visitors/visitors.service';
@@ -756,6 +758,61 @@ describe('VisitorsService', () => {
       });
       const where = (prismaMock.visitor.count as jest.Mock).mock.calls[0][0].where;
       expect(where.AND).toBeUndefined();
+    });
+  });
+  describe('nullable visitor edits and contact history', () => {
+    it.each(['set', 'clear'])(
+      'explicitly sets or clears contact, assignment and custom fields (%s)',
+      async (mode) => {
+        const clear = mode === 'clear';
+        prismaMock.visitor.update.mockResolvedValue({
+          ...mockVisitor,
+          last_name: clear ? null : 'Guest',
+          gender: clear ? null : 'female',
+          phone: clear ? null : '+2348012345678',
+          email: clear ? null : 'ada@example.invalid',
+          custom_fields: clear ? null : {},
+          assigned_to: clear ? null : { first_name: 'David', last_name: 'Adeyemi' },
+        });
+        const result = await service.update(
+          mockVisitor.id,
+          plainToInstance(UpdateVisitorDto, {
+            firstName: 'Ada',
+            lastName: clear ? null : 'Guest',
+            gender: clear ? null : 'female',
+            phone: clear ? null : '+2348012345678',
+            whatsappNumber: clear ? null : '+2348012345678',
+            email: clear ? null : 'ada@example.invalid',
+            firstVisitDate: '2026-01-01',
+            notes: clear ? null : 'Care requested',
+            customFields: {},
+            assignedToId: clear ? null : assigneeId,
+            branchId: null,
+          }),
+          churchId,
+          userId,
+        );
+        expect(prismaMock.visitor.update.mock.calls[0][0].data).toMatchObject({
+          first_name: 'Ada',
+          last_name: clear ? null : 'Guest',
+          first_visit_date: new Date('2026-01-01'),
+          custom_fields: {},
+          branch: { disconnect: true },
+          assigned_to: clear ? { disconnect: true } : { connect: { id: assigneeId } },
+        });
+        expect(result).toMatchObject({
+          lastName: clear ? undefined : 'Guest',
+          gender: clear ? undefined : 'female',
+          email: clear ? undefined : 'ada@example.invalid',
+          customFields: clear ? undefined : {},
+        });
+      },
+    );
+    it('uses descending date order when the client omits a direction for an explicit sort', async () => {
+      await service.findAll(churchId, { sortBy: 'firstVisitDate' });
+      expect(prismaMock.visitor.findMany.mock.calls[0][0].orderBy).toEqual([
+        { first_visit_date: 'desc' },
+      ]);
     });
   });
 });

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file DTO for listing profiles with filters.
  * @module profile/dto/list-profiles.dto
@@ -95,7 +96,7 @@ export class ListProfilesDto {
     description: 'List archived profiles only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsOptional()
   @IsBoolean()
   archived?: boolean;

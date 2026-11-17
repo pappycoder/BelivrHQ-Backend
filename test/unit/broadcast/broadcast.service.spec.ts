@@ -345,4 +345,99 @@ describe('BroadcastService', () => {
       expect(queues.whatsapp.add).not.toHaveBeenCalled();
     });
   });
+  describe('queued delivery interpolation and cancellation races', () => {
+    const content = '{first_name}|{{last_name}}|{{phone}}|{{unknown}}|{{name}}';
+    function setup(channel: string, linked = true) {
+      prisma.broadcast.findFirst.mockResolvedValue({
+        ...mockBroadcast,
+        channel,
+        template: {
+          ...mockTemplate,
+          content,
+          variables: ['first_name', 'last_name', 'phone', 'unknown', 'name'],
+        },
+      });
+      prisma.broadcastRecipient.findMany.mockResolvedValue([
+        { id: 'recipient', member_id: linked ? mockMemberId : null, phone: 'destination' },
+      ]);
+      prisma.member.findUnique.mockResolvedValue(linked ? mockMember : null);
+    }
+    it.each(['whatsapp', 'sms', 'email'])(
+      'queues interpolated %s content with a stable recipient job ID',
+      async (channel) => {
+        setup(channel);
+        await service.processBroadcast(mockBroadcastId, mockChurchId);
+        expect(queues[channel].add).toHaveBeenCalledWith(
+          'send',
+          expect.objectContaining({
+            to: 'destination',
+            churchId: mockChurchId,
+            ...(channel === 'email'
+              ? { html: 'Ade|Bayo|+2348012345678||Ade Bayo' }
+              : { message: 'Ade|Bayo|+2348012345678||Ade Bayo' }),
+          }),
+          { jobId: `broadcast-${mockBroadcastId}-recipient` },
+        );
+      },
+    );
+    it.each([null, { ...mockMember, first_name: '', last_name: '', phone: null }])(
+      'safely interpolates missing historical recipient fields (%j)',
+      async (member) => {
+        setup('sms', !!member);
+        prisma.member.findUnique.mockResolvedValue(member);
+        await service.processBroadcast(mockBroadcastId, mockChurchId);
+        expect(queues.sms.add).toHaveBeenCalledWith(
+          'send',
+          expect.objectContaining({ message: member ? '|||| ' : '||||' }),
+          expect.any(Object),
+        );
+      },
+    );
+    it.each(['unclaimed', 'cancelled', 'already-claimed', 'lost-completion'])(
+      'does not send through campaign ownership races (%s)',
+      async (scenario) => {
+        setup('sms');
+        if (scenario === 'unclaimed') prisma.broadcast.updateMany.mockResolvedValue({ count: 0 });
+        if (scenario === 'cancelled')
+          prisma.broadcast.findFirst
+            .mockResolvedValueOnce({ ...mockBroadcast, channel: 'sms', template: mockTemplate })
+            .mockResolvedValue(null);
+        if (scenario === 'already-claimed')
+          prisma.broadcastRecipient.findFirst.mockResolvedValue(null);
+        if (scenario === 'lost-completion')
+          prisma.broadcast.updateMany
+            .mockResolvedValueOnce({ count: 1 })
+            .mockResolvedValue({ count: 0 });
+        await service.processBroadcast(mockBroadcastId, mockChurchId);
+        expect(queues.sms.add).toHaveBeenCalledTimes(scenario === 'lost-completion' ? 1 : 0);
+        if (scenario === 'cancelled') expect(prisma.broadcast.updateMany).toHaveBeenCalledTimes(1);
+      },
+    );
+    it.each([new Error('Queue unavailable'), 'queue-error'])(
+      'records enqueue failure and leaves processing retryable (%j)',
+      async (error) => {
+        setup('sms');
+        queues.sms.add.mockRejectedValue(error);
+        await service.processBroadcast(mockBroadcastId, mockChurchId);
+        expect(prisma.broadcastRecipient.update).toHaveBeenCalledWith({
+          where: { id: 'recipient' },
+          data: { status: 'failed', error: error instanceof Error ? error.message : error },
+        });
+      },
+    );
+    it('treats a missing template variable declaration as empty instead of interpolating arbitrary data', async () => {
+      setup('sms');
+      prisma.broadcast.findFirst.mockResolvedValue({
+        ...mockBroadcast,
+        channel: 'sms',
+        template: { ...mockTemplate, variables: null },
+      });
+      await service.processBroadcast(mockBroadcastId, mockChurchId);
+      expect(queues.sms.add).toHaveBeenCalledWith(
+        'send',
+        expect.objectContaining({ message: 'Hello , join us tomorrow!' }),
+        expect.any(Object),
+      );
+    });
+  });
 });

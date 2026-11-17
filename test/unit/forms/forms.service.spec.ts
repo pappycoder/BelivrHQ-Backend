@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { UpdateFormDto } from '../../../src/forms/dto/update-form.dto';
 import { BranchScopeService } from '../../../src/common/services/branch-scope.service';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 /**
@@ -984,6 +986,107 @@ describe('FormsService', () => {
           mockUserId,
         ),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+  describe('filtered form archives and public-link updates', () => {
+    it.each(['title', 'createdAt', 'submissionCount', 'updatedAt'] as const)(
+      'keeps branch-or-shared isolation with all list filters (%s)',
+      async (sortBy) => {
+        prisma.form.findMany.mockResolvedValue([mockForm]);
+        prisma.form.count.mockResolvedValue(1);
+        const result = await service.listForms(
+          mockChurchId,
+          {
+            page: 2,
+            limit: 5,
+            archived: true,
+            status: FormStatus.published,
+            isTemplate: false,
+            branchId: 'requested',
+            search: 'Test',
+            sortBy,
+          },
+          { church_id: mockChurchId, role: 'church_admin', is_admin_hq: true },
+        );
+        const args = prisma.form.findMany.mock.calls[0][0];
+        expect(args).toMatchObject({
+          skip: 5,
+          take: 5,
+          where: {
+            church_id: mockChurchId,
+            archived_at: { not: null },
+            status: 'published',
+            is_template: false,
+            AND: [{ OR: [{ branch_id: 'requested' }, { branch_id: null }] }],
+          },
+        });
+        expect(args.where.OR).toHaveLength(2);
+        expect(args.orderBy).toEqual(
+          sortBy === 'title'
+            ? { title: 'asc' }
+            : sortBy === 'createdAt'
+              ? { created_at: 'desc' }
+              : sortBy === 'submissionCount'
+                ? { submissions: { _count: 'desc' } }
+                : { updated_at: 'desc' },
+        );
+        expect(result).toMatchObject({ total: 1, page: 2, limit: 5 });
+      },
+    );
+    it.each([true, false])(
+      'creates or preserves a public token when updating public visibility (%s)',
+      async (isPublic) => {
+        prisma.form.findFirst.mockResolvedValue({
+          ...mockForm,
+          is_public: true,
+          public_token: null,
+        });
+        prisma.form.update.mockImplementation(async ({ data }) => ({ ...mockForm, ...data }));
+        await service.updateForm(
+          mockChurchId,
+          mockFormId,
+          plainToInstance(UpdateFormDto, {
+            title: 'Updated',
+            isPublic,
+            uniqueField: null,
+            submissionLimit: 0,
+          }),
+          mockUserId,
+        );
+        const data = prisma.form.update.mock.calls[0][0].data;
+        expect(data).toMatchObject({
+          title: 'Updated',
+          is_public: isPublic,
+          unique_field: null,
+          submission_limit: 0,
+          fields: mockFields,
+        });
+        expect(isPublic ? typeof data.public_token : data.public_token).toBe(
+          isPublic ? 'string' : null,
+        );
+        expect(audit.log).toHaveBeenCalledWith(
+          expect.objectContaining({ entityId: mockFormId, action: 'UPDATE' }),
+        );
+      },
+    );
+    it('does not rotate a public URL during an unrelated edit', async () => {
+      prisma.form.findFirst.mockResolvedValue({
+        ...mockForm,
+        is_public: true,
+        public_token: 'stable-token',
+      });
+      prisma.form.update.mockResolvedValue(mockForm);
+      await service.updateForm(
+        mockChurchId,
+        mockFormId,
+        { description: 'New description' },
+        mockUserId,
+      );
+      expect(prisma.form.update.mock.calls[0][0].data).toMatchObject({
+        public_token: 'stable-token',
+        unique_field: undefined,
+        submission_limit: undefined,
+      });
     });
   });
 });

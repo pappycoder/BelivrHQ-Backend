@@ -1,3 +1,5 @@
+import { plainToInstance } from 'class-transformer';
+import { CreateDepartmentDto } from '../../../src/admin/dto/create-department.dto';
 import { RequestContextService } from '../../../src/common/services/request-context.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from '../../../src/admin/admin.service';
@@ -70,6 +72,369 @@ describe('AdminService', () => {
     }).compile();
 
     service = module.get<AdminService>(AdminService);
+  });
+
+  describe('Scoped department details and attendance aggregates', () => {
+    beforeEach(() => {
+      prisma.department.findFirst.mockResolvedValue({
+        ...mockDepartment,
+        head_member_id: mockMemberId,
+        branch_id: 'branch-1',
+        branch: { id: 'branch-1', name: 'Main' },
+        department_members: [
+          {
+            id: 'membership-a',
+            member_id: mockMemberId,
+            role: 'member',
+            joined_at: new Date('2026-01-01'),
+            member: { first_name: 'Ada', last_name: 'Obi' },
+          },
+          {
+            id: 'membership-b',
+            member_id: 'removed',
+            role: 'member',
+            joined_at: new Date('2026-01-01'),
+            member: null,
+          },
+        ],
+      });
+      prisma.member.findMany.mockResolvedValue([
+        { id: mockMemberId, first_name: 'Head', last_name: 'Name' },
+      ]);
+      prisma.cellGroup.findFirst.mockResolvedValue(mockCellGroup);
+      prisma.cellGroupMember.count.mockResolvedValue(12);
+    });
+    it.each([
+      { hq: true, own: false, memberId: undefined, branchId: 'branch-1', expected: {} },
+      {
+        hq: false,
+        own: false,
+        memberId: undefined,
+        branchId: 'branch-1',
+        expected: { OR: [{ branch_id: 'branch-1' }, { branch_id: null }] },
+      },
+      {
+        hq: false,
+        own: true,
+        memberId: mockMemberId,
+        branchId: 'branch-1',
+        expected: {
+          head_member_id: mockMemberId,
+          OR: [{ branch_id: 'branch-1' }, { branch_id: null }],
+        },
+      },
+      {
+        hq: false,
+        own: true,
+        memberId: undefined,
+        branchId: undefined,
+        expected: { head_member_id: '', branch_id: '' },
+      },
+    ])(
+      'pins department detail scope for HQ=$hq own=$own member=$memberId',
+      async ({ hq, own, memberId, branchId, expected }) => {
+        const viewer = {
+          church_id: mockChurchId,
+          role: 'department_head',
+          is_admin_hq: hq,
+          branch_id: branchId,
+          member_id: memberId,
+          permissions: own ? ['departments:own:read'] : ['departments:read'],
+        };
+        const result = await service.getDepartmentById(mockDepartmentId, mockChurchId, viewer);
+        expect(prisma.department.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: mockDepartmentId, church_id: mockChurchId, ...expected },
+          }),
+        );
+        expect(result).toMatchObject({
+          headFirstName: 'Head',
+          headLastName: 'Name',
+          branchName: 'Main',
+          memberCount: 2,
+          members: [
+            expect.objectContaining({ firstName: 'Ada', lastName: 'Obi' }),
+            expect.objectContaining({ firstName: '', lastName: '' }),
+          ],
+        });
+        expect(prisma.member.findMany).toHaveBeenCalledWith({
+          where: { church_id: mockChurchId, id: { in: [mockMemberId] } },
+          select: { id: true, first_name: true, last_name: true },
+        });
+      },
+    );
+    it('uses the same ownership scope for department lists and permits HQ branch selection', async () => {
+      prisma.department.findMany.mockResolvedValue([{ ...mockDepartment, head_member_id: null }]);
+      await service.listDepartments(
+        mockChurchId,
+        true,
+        { church_id: mockChurchId, role: 'church_admin', is_admin_hq: true },
+        'selected',
+      );
+      expect(prisma.department.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            church_id: mockChurchId,
+            archived_at: { not: null },
+            OR: [{ branch_id: 'selected' }, { branch_id: null }],
+          },
+        }),
+      );
+      await service.listDepartments(mockChurchId, false, {
+        church_id: mockChurchId,
+        role: 'department_head',
+        member_id: mockMemberId,
+        branch_id: 'branch-1',
+        permissions: ['departments:own:read'],
+      });
+      expect(prisma.department.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: {
+            church_id: mockChurchId,
+            archived_at: null,
+            head_member_id: mockMemberId,
+            OR: [{ branch_id: 'branch-1' }, { branch_id: null }],
+          },
+        }),
+      );
+    });
+    it('maps named and walk-in department attendance without inventing member identities', async () => {
+      prisma.departmentAttendance.findMany.mockResolvedValue([
+        {
+          id: 'a',
+          member_id: mockMemberId,
+          member: { first_name: 'Ada', last_name: 'Obi' },
+          visitor_name: null,
+          meeting_date: new Date('2026-01-01'),
+          status: 'present',
+          notes: null,
+        },
+        {
+          id: 'b',
+          member_id: null,
+          member: null,
+          visitor_name: 'Visitor',
+          meeting_date: new Date('2026-01-01'),
+          status: 'late',
+          notes: 'Synthetic note',
+        },
+      ]);
+      const result = await service.listDepartmentAttendance(
+        mockDepartmentId,
+        mockChurchId,
+        '2026-01-01',
+      );
+      expect(result).toEqual([
+        {
+          id: 'a',
+          memberId: mockMemberId,
+          firstName: 'Ada',
+          lastName: 'Obi',
+          visitorName: undefined,
+          meetingDate: '2026-01-01',
+          status: 'present',
+          notes: null,
+        },
+        {
+          id: 'b',
+          memberId: undefined,
+          firstName: '',
+          lastName: '',
+          visitorName: 'Visitor',
+          meetingDate: '2026-01-01',
+          status: 'late',
+          notes: 'Synthetic note',
+        },
+      ]);
+      expect(prisma.departmentAttendance.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { department_id: mockDepartmentId, meeting_date: new Date('2026-01-01') },
+        }),
+      );
+    });
+    it('maps cell-group memberships with missing historical person details', async () => {
+      prisma.cellGroupMember.findMany.mockResolvedValue([
+        {
+          id: 'a',
+          member_id: mockMemberId,
+          member: { first_name: 'Ada', last_name: 'Obi' },
+          role: 'member',
+          joined_at: new Date('2026-01-01'),
+        },
+        {
+          id: 'b',
+          member_id: 'removed',
+          member: null,
+          role: 'member',
+          joined_at: new Date('2026-01-01'),
+        },
+      ]);
+      const result = await service.listCellGroupMembers(mockGroupId, mockChurchId);
+      expect(result.map((item) => [item.firstName, item.lastName])).toEqual([
+        ['Ada', 'Obi'],
+        ['', ''],
+      ]);
+      expect(prisma.cellGroupMember.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { cell_group_id: mockGroupId } }),
+      );
+    });
+    it('replaces named counts with reported totals per date instead of double-counting attendance', async () => {
+      prisma.attendanceSession.findMany.mockResolvedValue([
+        { attendance_date: new Date('2026-01-01'), total: 20 },
+        { attendance_date: new Date('2026-01-01'), total: 5 },
+      ]);
+      prisma.cellGroupAttendance.groupBy.mockResolvedValue([
+        { meeting_date: new Date('2026-01-01'), status: 'present', _count: 10 },
+        { meeting_date: new Date('2026-01-02'), status: 'present', _count: 3 },
+        { meeting_date: new Date('2026-01-02'), status: 'late', _count: 2 },
+        { meeting_date: new Date('2026-01-02'), status: 'absent', _count: 8 },
+      ]);
+      await expect(
+        service.getCellGroupAttendanceSummary(mockGroupId, mockChurchId),
+      ).resolves.toEqual({ totalMeetings: 2, averageAttendance: 15, memberCount: 12 });
+    });
+    it.each([0, 2])(
+      'handles %s legacy meeting dates without reported sessions',
+      async (meetings) => {
+        prisma.attendanceSession.findMany.mockResolvedValue([]);
+        prisma.cellGroupAttendance.findMany.mockResolvedValue(
+          Array.from({ length: meetings }, (_, day) => ({
+            meeting_date: new Date(`2026-01-0${day + 1}`),
+          })),
+        );
+        prisma.cellGroupAttendance.count.mockResolvedValue(9);
+        await expect(
+          service.getCellGroupAttendanceSummary(mockGroupId, mockChurchId),
+        ).resolves.toEqual({
+          totalMeetings: meetings,
+          averageAttendance: meetings ? 5 : 0,
+          memberCount: 12,
+        });
+      },
+    );
+    it.each([
+      {
+        name: 'read department',
+        run: () => service.getDepartmentById(mockDepartmentId, mockChurchId),
+      },
+      {
+        name: 'update department',
+        run: () => service.updateDepartment(mockDepartmentId, {}, mockChurchId, mockUserId),
+      },
+      {
+        name: 'delete department',
+        run: () => service.deleteDepartment(mockDepartmentId, mockChurchId, mockUserId),
+      },
+      {
+        name: 'add department member',
+        run: () =>
+          service.addDepartmentMember(
+            mockDepartmentId,
+            { memberId: mockMemberId },
+            mockChurchId,
+            mockUserId,
+          ),
+      },
+      {
+        name: 'remove department member',
+        run: () =>
+          service.removeDepartmentMember(mockDepartmentId, mockMemberId, mockChurchId, mockUserId),
+      },
+      {
+        name: 'update cell group',
+        run: () => service.updateCellGroup(mockGroupId, {}, mockChurchId, mockUserId),
+      },
+      {
+        name: 'delete cell group',
+        run: () => service.deleteCellGroup(mockGroupId, mockChurchId, mockUserId),
+      },
+      {
+        name: 'add cell member',
+        run: () =>
+          service.addCellGroupMember(mockGroupId, mockMemberId, 'member', mockChurchId, mockUserId),
+      },
+      {
+        name: 'remove cell member',
+        run: () =>
+          service.removeCellGroupMember(mockGroupId, mockMemberId, mockChurchId, mockUserId),
+      },
+      {
+        name: 'list cell members',
+        run: () => service.listCellGroupMembers(mockGroupId, mockChurchId),
+      },
+    ])('returns not-found before $name can use a missing tenant resource', async ({ run }) => {
+      prisma.department.findFirst.mockResolvedValue(null);
+      prisma.cellGroup.findFirst.mockResolvedValue(null);
+      await expect(run()).rejects.toThrow(NotFoundException);
+      expect(prisma.department.update).not.toHaveBeenCalled();
+      expect(prisma.cellGroup.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Platform church aggregates', () => {
+    it('returns zero totals for an empty platform', async () => {
+      prisma.church.findMany.mockResolvedValue([]);
+      await expect(service.getCrossChurchAnalytics()).resolves.toEqual({
+        totalChurches: 0,
+        totalMembers: 0,
+        totalActiveMembers: 0,
+        totalBranches: 0,
+        totalMonthlyGiving: 0,
+        averageMembersPerChurch: 0,
+        averageGivingPerChurch: 0,
+        churches: [],
+      });
+    });
+    it('keeps each church query scoped while aggregating counts and successful monthly giving', async () => {
+      prisma.church.findMany.mockResolvedValue([
+        {
+          id: 'church-a',
+          name: 'A',
+          denomination: null,
+          city: 'Lagos',
+          state: null,
+          created_at: new Date('2026-01-01'),
+          _count: { members: 4, branches: 2 },
+        },
+        {
+          id: 'church-b',
+          name: 'B',
+          denomination: 'Independent',
+          city: null,
+          state: null,
+          created_at: new Date('2026-01-01'),
+          _count: { members: 6, branches: 1 },
+        },
+      ]);
+      prisma.member.count.mockResolvedValueOnce(3).mockResolvedValueOnce(2);
+      prisma.transaction.aggregate
+        .mockResolvedValueOnce({ _sum: { amount: 1000 } })
+        .mockResolvedValueOnce({ _sum: { amount: null } });
+      prisma.profile.findFirst
+        .mockResolvedValueOnce({ first_name: 'Ada', last_name: 'Obi' })
+        .mockResolvedValueOnce(null);
+      const result = await service.getCrossChurchAnalytics();
+      expect(result).toMatchObject({
+        totalChurches: 2,
+        totalMembers: 10,
+        totalActiveMembers: 5,
+        totalBranches: 3,
+        totalMonthlyGiving: 1000,
+        averageMembersPerChurch: 5,
+        averageGivingPerChurch: 500,
+      });
+      expect(result.churches.map((item) => item.adminName)).toEqual(['Ada Obi', 'N/A']);
+      expect(prisma.member.count).toHaveBeenNthCalledWith(1, {
+        where: { church_id: 'church-a', status: 'active' },
+      });
+      expect(prisma.member.count).toHaveBeenNthCalledWith(2, {
+        where: { church_id: 'church-b', status: 'active' },
+      });
+      expect(prisma.transaction.aggregate).toHaveBeenCalledWith({
+        where: { church_id: 'church-a', status: 'success', giving_date: { gte: expect.any(Date) } },
+        _sum: { amount: true },
+      });
+    });
   });
 
   describe('createDepartment', () => {
@@ -2483,6 +2848,79 @@ describe('AdminService', () => {
       await expect(
         service.addCellGroupMember(mockGroupId, mockMemberId, 'member', mockChurchId, mockUserId),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+  describe('cell group data updates and scoped export contracts', () => {
+    it('persists all supplied meeting fields, including zero coordinates and cleared text', async () => {
+      prisma.cellGroup.findFirst.mockResolvedValue(mockCellGroup);
+      prisma.cellGroup.update.mockResolvedValue(mockCellGroup);
+      await service.updateCellGroup(
+        mockGroupId,
+        { name: 'Care', address: '', latitude: 0, longitude: 0, meetingDay: '', meetingTime: '' },
+        mockChurchId,
+        mockUserId,
+      );
+      expect(prisma.cellGroup.update.mock.calls[0][0].data).toEqual({
+        name: 'Care',
+        address: '',
+        latitude: 0,
+        longitude: 0,
+        meeting_day: '',
+        meeting_time: '',
+      });
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ entityId: mockGroupId, action: 'UPDATE' }),
+      );
+    });
+    it('updates the department parent and name without assigning an unrelated head', async () => {
+      prisma.department.findFirst.mockResolvedValue(mockDepartment);
+      prisma.department.update.mockResolvedValue(mockDepartment);
+      await service.updateDepartment(
+        mockDepartmentId,
+        plainToInstance(CreateDepartmentDto, { name: 'Care', parentId: null }),
+        mockChurchId,
+        mockUserId,
+      );
+      expect(prisma.department.update.mock.calls[0][0].data).toEqual({
+        name: 'Care',
+        parent_id: null,
+      });
+    });
+    it('exports quoted meeting details while preserving the same viewer and query scope', async () => {
+      const rows = [
+        {
+          id: 'group',
+          name: 'Care, "Together"',
+          leaderFirstName: 'Ada',
+          leaderLastName: 'Guest',
+          branchName: 'Main',
+          address: 'Line 1\nLine 2',
+          meetingDay: 'Sunday',
+          meetingTime: '18:00',
+          latitude: 6.5,
+          longitude: 3.4,
+          createdAt: '2026-01-01',
+        },
+        { id: 'legacy', name: 'Legacy', createdAt: '2026-01-01' },
+      ];
+      const list = jest
+        .spyOn(service, 'listCellGroups')
+        .mockResolvedValue(
+          rows.map((row) => ({ ...row, churchId: mockChurchId, updatedAt: '2026-01-01' })),
+        );
+      const viewer = {
+        church_id: mockChurchId,
+        role: 'cell_leader',
+        member_id: mockMemberId,
+        branch_id: 'own',
+        permissions: ['cell_groups:own:read'],
+      };
+      const csv = await service.exportCellGroupsCsv(mockChurchId, { search: 'Care' }, viewer);
+      expect(list).toHaveBeenCalledWith(mockChurchId, { search: 'Care' }, viewer);
+      expect(csv).toContain('"Care, ""Together"""');
+      expect(csv).toContain('"Line 1\nLine 2"');
+      expect(csv).toContain('Sunday,18:00,6.5,3.4');
+      expect(csv).toContain('legacy,Legacy');
     });
   });
 });

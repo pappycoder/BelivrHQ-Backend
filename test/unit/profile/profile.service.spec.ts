@@ -1566,4 +1566,123 @@ describe('ProfileService', () => {
       expect(result.profileId).toBe(mockProfileId);
     });
   });
+  describe('effective grant provenance and optional profile data', () => {
+    const read = { name: 'members:read', resource: 'members', action: 'read' };
+    const update = { name: 'members:update', resource: 'members', action: 'update' };
+    const attendance = { name: 'attendance:read', resource: 'attendance', action: 'read' };
+    it.each([['custom-a', 'custom-b', 'custom-a'], ['super_admin'], ['church_admin']])(
+      'merges and sorts permission provenance while honoring the effective permission filter (%j)',
+      async (...roles) => {
+        model(prisma, 'profile').findUnique.mockResolvedValue({
+          ...mockProfileWithRelations,
+          role: roles,
+        });
+        model(prisma, 'role').findMany.mockResolvedValue(
+          roles.map((name) => ({ name, label: name, church_id: null, description: null })),
+        );
+        permissionsService.getRolePermissions.mockResolvedValue({
+          permissions: [update, read, read],
+        });
+        permissionsService.getAllPermissions.mockResolvedValue([attendance, read]);
+        permissionsService.getUserPermissions.mockResolvedValue([
+          attendance.name,
+          read.name,
+          update.name,
+        ]);
+        const result = await service.getProfileById(mockProfileId, mockChurchId);
+        expect(result.effectivePermissions?.map((p) => p.name)).toEqual(
+          roles.includes('custom-a')
+            ? [read.name, update.name]
+            : [attendance.name, read.name, update.name],
+        );
+        expect(result.effectivePermissions?.find((p) => p.name === read.name)?.grantedBy).toEqual(
+          roles.includes('custom-a')
+            ? ['custom-a', 'custom-b']
+            : roles.includes('super_admin')
+              ? ['super_admin']
+              : ['church_admin', 'super_admin'],
+        );
+        expect(result.roles?.map((role) => role.label)).toEqual(roles);
+      },
+    );
+    it('does not report grants that were revoked from the effective role union', async () => {
+      model(prisma, 'profile').findUnique.mockResolvedValue({
+        ...mockProfileWithRelations,
+        role: ['custom'],
+      });
+      model(prisma, 'role').findMany.mockResolvedValue([]);
+      permissionsService.getRolePermissions.mockResolvedValue({ permissions: [read, update] });
+      permissionsService.getUserPermissions.mockResolvedValue([read.name]);
+      expect(
+        (await service.getProfileById(mockProfileId, mockChurchId)).effectivePermissions?.map(
+          (p) => p.name,
+        ),
+      ).toEqual([read.name]);
+    });
+    it.each([null, { error: { message: 'Unavailable' }, data: null }])(
+      'keeps detail readable without optional roles/sign-in data (%j)',
+      async (auth) => {
+        model(prisma, 'profile').findUnique.mockResolvedValue({
+          ...mockProfileWithRelations,
+          role: null,
+          church: { ...mockProfileWithRelations.church, denomination: null },
+          member: {
+            id: 'm',
+            first_name: 'Ada',
+            last_name: 'Guest',
+            email: null,
+            phone: null,
+            photo_url: null,
+            date_of_birth: null,
+            gender: null,
+            address: null,
+            status: 'active',
+          },
+        });
+        model(prisma, 'role').findMany.mockResolvedValue([]);
+        permissionsService.getUserPermissions.mockResolvedValue([]);
+        if (auth) supabase.client.auth.admin.getUserById.mockResolvedValue(auth);
+        else supabase.client.auth.admin.getUserById.mockRejectedValue(new Error('Unavailable'));
+        const result = await service.getProfileById(mockProfileId, mockChurchId);
+        expect(result.role).toEqual([]);
+        expect(result.lastSignInAt).toBeUndefined();
+        expect(result.member).toMatchObject({
+          email: undefined,
+          phone: undefined,
+          photoUrl: undefined,
+          gender: undefined,
+          address: undefined,
+        });
+      },
+    );
+    it('pins a filtered inactive profile list to the verified branch', async () => {
+      model(prisma, 'profile').findMany.mockResolvedValue([]);
+      model(prisma, 'profile').count.mockResolvedValue(0);
+      await service.listProfiles(
+        mockChurchId,
+        {
+          status: 'inactive',
+          role: 'secretary',
+          branchId: 'foreign',
+          sortBy: 'first_name',
+          sortOrder: 'desc',
+          search: 'Ada',
+          page: 2,
+          limit: 4,
+        },
+        { church_id: mockChurchId, role: 'branch_pastor', branch_id: 'own' },
+      );
+      expect(model(prisma, 'profile').findMany.mock.calls[0][0]).toMatchObject({
+        where: {
+          church_id: mockChurchId,
+          branch_id: 'own',
+          status: 'inactive',
+          role: { has: 'secretary' },
+        },
+        skip: 4,
+        take: 4,
+        orderBy: [{ first_name: 'desc' }],
+      });
+    });
+  });
 });

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-visitors.dto.ts
  * @description DTO for listing and filtering visitors.
@@ -49,7 +50,7 @@ export class ListVisitorsDto {
     description: 'List archived visitors only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   archived?: boolean;

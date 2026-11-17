@@ -881,6 +881,8 @@ export class WhatsAppService {
     }
 
     const today = new Date();
+    // Compare calendar days so today's birthday stays today after midnight.
+    today.setHours(0, 0, 0, 0);
     const dob = new Date(member.date_of_birth);
     const thisYear = today.getFullYear();
     const birthday = new Date(thisYear, dob.getMonth(), dob.getDate());

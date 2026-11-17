@@ -576,3 +576,62 @@ describe('AppointmentsService', () => {
     });
   });
 });
+
+describe('Appointment branch read grants and optional edits', () => {
+  it.each([
+    { is_admin_hq: true, branch_id: BRANCH_A, permissions: ['appointments:branch:read'] },
+    { is_admin_hq: false, branch_id: BRANCH_A, permissions: ['appointments:branch:read'] },
+    { is_admin_hq: false, branch_id: null, permissions: ['appointments:branch:read'] },
+  ])('pins list rows and status counts to the same authorized branch %j', async (viewer) => {
+    model('appointment').findMany.mockResolvedValue([]);
+    model('appointment').count.mockResolvedValue(0);
+    model('appointment').groupBy.mockResolvedValue([]);
+    const result = await service.list(
+      CHURCH,
+      SEC,
+      { branchId: BRANCH_B, search: ' Budget ', startDate: '2026-01-01', archived: true },
+      viewer,
+    );
+    const where = model('appointment').findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      church_id: CHURCH,
+      branch_id: viewer.is_admin_hq ? BRANCH_B : (viewer.branch_id ?? ''),
+      archived_at: { not: null },
+      scheduled_at: { gte: new Date('2026-01-01T00:00:00Z') },
+    });
+    expect(where.scheduled_at).not.toHaveProperty('lte');
+    expect(where.AND).toHaveLength(1);
+    for (const [args] of model('appointment').count.mock.calls)
+      expect(args.where.branch_id).toBe(where.branch_id);
+    expect(result.total).toBe(0);
+  });
+  it('allows a church-wide branch reader to omit branch and use an end-only range', async () => {
+    model('appointment').findMany.mockResolvedValue([]);
+    model('appointment').count.mockResolvedValue(0);
+    model('appointment').groupBy.mockResolvedValue([]);
+    await service.list(
+      CHURCH,
+      SEC,
+      { endDate: '2026-01-01' },
+      { is_admin_hq: true, permissions: ['appointments:branch:read'] },
+    );
+    expect(model('appointment').findMany.mock.calls[0][0].where).toEqual({
+      church_id: CHURCH,
+      archived_at: null,
+      scheduled_at: { lte: new Date('2026-01-01T23:59:59.999Z') },
+    });
+  });
+  it('handles a missing viewer branch and historical contact without role or branch', async () => {
+    model('profile').findFirst.mockResolvedValue(null);
+    model('profile').findMany.mockResolvedValue([
+      { ...personRow(), role: [], branch_id: null, branch: null },
+    ]);
+    const result = await service.listContacts(CHURCH, SEC, { search: '  ', role: 'secretary' });
+    expect(model('profile').findMany.mock.calls[0][0].where).toMatchObject({
+      church_id: CHURCH,
+      branch_id: '',
+      role: { has: 'secretary' },
+    });
+    expect(result.data[0]).toMatchObject({ role: '', branchId: undefined });
+  });
+});
