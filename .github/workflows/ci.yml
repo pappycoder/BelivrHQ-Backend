@@ -91,6 +91,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Start Docker for mandatory context and runtime checks
+        run: sudo systemctl start docker
       - run: npm run ops:test:docker-context
         env:
           REQUIRE_DOCKER_TESTS: '1'
