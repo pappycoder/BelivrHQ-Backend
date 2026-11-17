@@ -98,6 +98,11 @@ const envSchema = z
         },
       ),
     UPSTASH_REDIS_TOKEN: z.string().optional(),
+    WORKER_HEALTH_PORT: optionalSetting(z.coerce.number().int().min(0).max(65535)),
+    REQUIRE_QUEUE_WORKERS: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.enum(['true', 'false']).default('false'),
+    ),
     QUEUE_REDIS_URL: optionalSetting(
       z.string().refine(
         (value) => {

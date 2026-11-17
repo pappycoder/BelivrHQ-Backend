@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 import { RequestContextService } from '../common/services/request-context.service';
 import { nextEventOccurrence } from '../attendance/schedule-occurrence';
 /**
@@ -100,9 +101,7 @@ export class WhatsAppService {
       if (!this.alertService) return;
       await this.alertService.notify(churchId, 'termii', title, message);
     } catch (err) {
-      this.logger.warn(
-        `WhatsApp failure alert skipped: ${err instanceof Error ? err.message : err}`,
-      );
+      this.logger.warn(`WhatsApp failure alert skipped: ${errorDiagnostic(err)}`);
     }
   }
 
@@ -338,7 +337,7 @@ export class WhatsAppService {
         },
       });
 
-      this.logger.log(`WhatsApp sent: ${to} (${content.substring(0, 50)}...)`);
+      this.logger.log(`WhatsApp message accepted`);
 
       return this.mapMessageToDto(message);
     } catch (err) {
@@ -404,7 +403,7 @@ export class WhatsAppService {
         },
       });
 
-      this.logger.log(`WhatsApp template sent: ${to} (${templateName})`);
+      this.logger.log(`WhatsApp template accepted`);
 
       return this.mapMessageToDto(message);
     } catch (err) {
@@ -533,7 +532,7 @@ export class WhatsAppService {
           await this.sendMessage(msg.phone, reply, msg.churchId, msg.memberId ?? undefined);
         }
       } catch (err) {
-        this.logger.error(`Command ${command} failed for ${msg.phone}: ${(err as Error).message}`);
+        this.logger.error(`WhatsApp command processing failed: ${errorDiagnostic(err)}`);
         await this.sendMessage(
           msg.phone,
           'Sorry, something went wrong. Please try again later.',
@@ -621,7 +620,7 @@ export class WhatsAppService {
       newValues: { source: 'whatsapp', phone: msg.phone },
     });
 
-    this.logger.log(`Check-in via WhatsApp: ${msg.phone} → ${service.name || 'service'}`);
+    this.logger.log('WhatsApp check-in recorded');
 
     return `✅ You're checked in for ${service.name || "today's service"}! God bless you.`;
   }
@@ -882,6 +881,8 @@ export class WhatsAppService {
     }
 
     const today = new Date();
+    // Compare calendar days so today's birthday stays today after midnight.
+    today.setHours(0, 0, 0, 0);
     const dob = new Date(member.date_of_birth);
     const thisYear = today.getFullYear();
     const birthday = new Date(thisYear, dob.getMonth(), dob.getDate());

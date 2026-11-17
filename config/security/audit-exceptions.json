@@ -1,0 +1,10 @@
+[
+  {
+    "package": "@hono/node-server",
+    "advisory": "https://github.com/advisories/GHSA-rmxm-3fg6-px4f",
+    "version": "1.19.19",
+    "expires": "2026-12-16",
+    "reason": "Publisher backport is patched; npm range overmatches 1.x. No other advisory or version is accepted.",
+    "source": "https://github.com/honojs/node-server/security/advisories/GHSA-rmxm-3fg6-px4f"
+  }
+]

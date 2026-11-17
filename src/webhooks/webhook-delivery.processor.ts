@@ -19,11 +19,8 @@ import { createHmac } from 'crypto';
 
 interface WebhookDeliveryJob {
   deliveryId: string;
-  subscriptionId: string;
-  url: string;
-  secret: string;
-  event: string;
-  payload: Record<string, unknown>;
+  subscriptionId?: string;
+  generation?: number;
 }
 
 @Processor('webhook-delivery', { concurrency: 2 })
@@ -35,10 +32,16 @@ export class WebhookDeliveryProcessor extends WorkerHost {
   }
 
   async process(job: Job<WebhookDeliveryJob>): Promise<void> {
-    const { deliveryId, url, secret, event, payload } = job.data;
+    const { deliveryId } = job.data;
+    const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
+    if (!delivery || delivery.status !== 'pending') return;
+    const generation = delivery.dispatch_generation ?? 0;
+    if ((job.data.generation ?? 0) !== generation) return;
+    if (job.data.subscriptionId && delivery.subscription_id !== job.data.subscriptionId) return;
+    const { event, payload } = delivery;
 
     const subscription = await this.prisma.webhookSubscription.findUnique({
-      where: { id: job.data.subscriptionId },
+      where: { id: delivery.subscription_id },
     });
     const entitlement = subscription
       ? await churchEntitlements(this.prisma, subscription.church_id)
@@ -50,8 +53,8 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       !entitlement?.active ||
       !entitlement.features.includes('webhooks')
     ) {
-      await this.prisma.webhookDelivery.update({
-        where: { id: deliveryId },
+      await this.prisma.webhookDelivery.updateMany({
+        where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
         data: {
           status: 'failed',
           response_body: 'Webhook subscription is unavailable on the current plan.',
@@ -59,26 +62,29 @@ export class WebhookDeliveryProcessor extends WorkerHost {
       });
       return;
     }
-    await this.prisma.webhookDelivery.update({
-      where: { id: deliveryId },
+    const claim = await this.prisma.webhookDelivery.updateMany({
+      where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
       data: { attempts: { increment: 1 } },
     });
+    if (!claim.count) return;
 
     const body = JSON.stringify({ event, payload, timestamp: new Date().toISOString() });
-    const signature = createHmac('sha256', secret).update(body).digest('hex');
+    const signature = createHmac('sha256', subscription.secret).update(body).digest('hex');
 
-    const response = await sendWebhook(url, body, {
+    const response = await sendWebhook(subscription.url, body, {
       'Content-Type': 'application/json',
       'X-Webhook-Signature': `sha256=${signature}`,
       'X-Webhook-Event': event,
+      'X-Webhook-Delivery-Id': deliveryId,
     });
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Webhook delivery failed: HTTP ${response.status}`);
     }
-    await this.prisma.webhookDelivery.update({
-      where: { id: deliveryId },
+    await this.prisma.webhookDelivery.updateMany({
+      where: { id: deliveryId, status: 'pending', dispatch_generation: generation },
       data: {
         status: 'success',
+        next_retry_at: null,
         response_status: response.status,
         response_body: response.body,
       },
@@ -86,22 +92,29 @@ export class WebhookDeliveryProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('failed')
-  async onFailed(job: Job<WebhookDeliveryJob>, error: Error): Promise<void> {
-    this.logger.error(`Webhook delivery failed: ${job.data.deliveryId}: ${error.message}`);
-
+  async onFailed(job: Job<WebhookDeliveryJob>, _error: Error): Promise<void> {
+    const exhausted = job.attemptsMade >= (job.opts.attempts ?? 1);
+    this.logger.warn(`Webhook delivery attempt failed: ${job.data.deliveryId}`);
     await this.prisma.webhookDelivery
-      .update({
-        where: { id: job.data.deliveryId },
+      .updateMany({
+        where: {
+          id: job.data.deliveryId,
+          status: 'pending',
+          dispatch_generation: job.data.generation ?? 0,
+        },
         data: {
-          status: 'failed',
-          response_body: error.message.slice(0, 2000),
+          status: exhausted ? 'failed' : 'pending',
+          response_body: exhausted
+            ? 'Delivery attempts exhausted; operator review required.'
+            : 'Delivery failed; retry scheduled.',
+          ...(exhausted ? { next_retry_at: null } : {}),
         },
       })
-      .catch((err) => this.logger.error(`Failed to update delivery status: ${err.message}`));
+      .catch(() => this.logger.warn('Webhook delivery status update unavailable'));
   }
 
   @OnWorkerEvent('completed')
   async onCompleted(job: Job<WebhookDeliveryJob>): Promise<void> {
-    this.logger.log(`Webhook delivered: ${job.data.event} → ${job.data.url}`);
+    this.logger.log(`Webhook job completed: ${job.data.deliveryId}`);
   }
 }

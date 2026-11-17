@@ -391,3 +391,81 @@ describe('EmailService', () => {
     });
   });
 });
+
+describe('Email copy ownership and trash edge cases', () => {
+  it.each(['restore', 'deleteForever'] as const)(
+    'hides missing and unrelated email during %s',
+    async (operation) => {
+      model('emailMessage').findFirst.mockResolvedValue(null);
+      await expect(service[operation](mockMessageId, mockChurchId, mockSenderId)).rejects.toThrow(
+        'Email not found',
+      );
+      model('emailMessage').findFirst.mockResolvedValue(messageRow({ sender_id: 'other' }));
+      model('emailRecipient').findFirst.mockResolvedValue(null);
+      await expect(service[operation](mockMessageId, mockChurchId, mockSenderId)).rejects.toThrow(
+        'Email not found',
+      );
+      expect(model('emailMessage').update).not.toHaveBeenCalled();
+      expect(model('emailMessage').delete).not.toHaveBeenCalled();
+    },
+  );
+  it('restores the sender copy without modifying recipient copies', async () => {
+    model('emailMessage').findFirst.mockResolvedValue(messageRow({ deleted_at: new Date() }));
+    model('emailRecipient').findFirst.mockResolvedValue(null);
+    expect(await service.restore(mockMessageId, mockChurchId, mockSenderId)).toEqual({
+      success: true,
+    });
+    expect(model('emailMessage').update).toHaveBeenCalledWith({
+      where: { id: mockMessageId },
+      data: { deleted_at: null },
+    });
+    expect(model('emailRecipient').update).not.toHaveBeenCalled();
+  });
+  it.each([true, false])(
+    'requires a trashed sender copy for permanent deletion (trashed=%s)',
+    async (trashed) => {
+      model('emailMessage').findFirst.mockResolvedValue(
+        messageRow({ deleted_at: trashed ? new Date() : null }),
+      );
+      model('emailRecipient').findFirst.mockResolvedValue(null);
+      if (trashed) {
+        expect(await service.deleteForever(mockMessageId, mockChurchId, mockSenderId)).toEqual({
+          success: true,
+        });
+        expect(model('emailMessage').delete).toHaveBeenCalledWith({ where: { id: mockMessageId } });
+      } else {
+        await expect(
+          service.deleteForever(mockMessageId, mockChurchId, mockSenderId),
+        ).rejects.toThrow('must be trashed');
+        expect(model('emailMessage').delete).not.toHaveBeenCalled();
+      }
+      expect(model('emailRecipient').delete).not.toHaveBeenCalled();
+    },
+  );
+  it('returns an empty default inbox without unnecessary sender lookups', async () => {
+    model('emailRecipient').findMany.mockResolvedValue([]);
+    model('emailRecipient').count.mockResolvedValue(0);
+    const result = await service.list(mockChurchId, mockSenderId);
+    expect(result).toMatchObject({ data: [], total: 0 });
+    expect(model('profile').findMany).not.toHaveBeenCalled();
+  });
+  it('maps a trashed historical sent message with no recipients or saved sender name', async () => {
+    model('emailMessage').findMany.mockResolvedValue([
+      messageRow({ sender_name: null, deleted_at: new Date('2026-01-01'), body: 'x'.repeat(200) }),
+    ]);
+    model('emailMessage').count.mockResolvedValue(1);
+    model('emailRecipient').findMany.mockResolvedValue([]);
+    model('profile').findMany.mockResolvedValue([]);
+    const result = await service.list(mockChurchId, mockSenderId, 1, 30, EmailBox.Sent, true);
+    expect(result.data[0]).toMatchObject({
+      senderName: undefined,
+      recipientId: '',
+      deletedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(model('emailMessage').findMany.mock.calls[0][0].where).toMatchObject({
+      church_id: mockChurchId,
+      sender_id: mockSenderId,
+      deleted_at: { not: null },
+    });
+  });
+});

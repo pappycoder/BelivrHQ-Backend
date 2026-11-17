@@ -350,7 +350,7 @@ export class MediaService {
       });
 
     if (error) {
-      this.logger.error(`Supabase upload failed: ${error.message}`);
+      this.logger.error('Supabase upload failed');
       throw new InternalServerErrorException('Failed to upload image');
     }
 
@@ -452,7 +452,7 @@ export class MediaService {
       });
 
     if (error) {
-      this.logger.error(`Supabase upload failed: ${error.message}`);
+      this.logger.error('Supabase upload failed');
       throw new InternalServerErrorException('Failed to upload file');
     }
 

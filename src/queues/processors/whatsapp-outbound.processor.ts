@@ -82,7 +82,7 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
    */
   private async handleSend(job: WhatsAppSendJob): Promise<void> {
     const { to, message, churchId, memberId } = job.data;
-    this.logger.log(`Processing WhatsApp message to ${to} (job ${job.id})`);
+    this.logger.log(`Processing WhatsApp message (job ${job.id})`);
 
     const result = await this.whatsappService.sendMessage(to, message, churchId, memberId);
 
@@ -91,7 +91,7 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
       await job.updateData({ ...job.data, messageId: result.messageId });
     }
 
-    this.logger.log(`WhatsApp message sent to ${to} (job ${job.id})`);
+    this.logger.log(`WhatsApp message sent (job ${job.id})`);
   }
 
   /**
@@ -102,7 +102,7 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
    */
   private async handleSendTemplate(job: WhatsAppTemplateJob): Promise<void> {
     const { to, templateName, language, variables, churchId, memberId } = job.data;
-    this.logger.log(`Processing WhatsApp template message to ${to} (job ${job.id})`);
+    this.logger.log(`Processing WhatsApp template message (job ${job.id})`);
 
     const result = await this.whatsappService.sendTemplateMessage(
       to,
@@ -117,7 +117,7 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
       await job.updateData({ ...job.data, messageId: result.messageId });
     }
 
-    this.logger.log(`WhatsApp template message sent to ${to} (job ${job.id})`);
+    this.logger.log(`WhatsApp template message sent (job ${job.id})`);
   }
 
   /**
@@ -127,13 +127,13 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
    */
   @OnWorkerEvent('completed')
   onCompleted(job: Job): void {
-    this.logger.log(`WhatsApp job ${job.id} completed → ${job.data.to}`);
+    this.logger.log(`WhatsApp job ${job.id} completed`);
   }
 
   /**
    * Handles job failure with attempt tracking and optional SMS fallback.
    *
-   * Logs the failure reason and current attempt number. After 3 failed attempts,
+   * Logs failure identifiers and the current attempt number without provider error contents. After 3 failed attempts,
    * if ENABLE_SMS_FALLBACK is enabled, the message is retried via Termii SMS.
    *
    * @param job - The failed BullMQ job
@@ -148,10 +148,10 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
       memberId?: string;
       messageId?: string;
     }>,
-    error: Error,
+    _error: Error,
   ): Promise<void> {
     this.logger.error(
-      `WhatsApp job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `WhatsApp job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
 
     const maxAttempts = job.opts.attempts ?? 1;
@@ -166,20 +166,18 @@ export class WhatsAppOutboundProcessor extends WorkerHost {
       // composed from them — log and skip to avoid sending "undefined".
       if (!message) {
         this.logger.warn(
-          `SMS fallback skipped for template WhatsApp job ${job.id} → ${to} (no plain-text body)`,
+          `SMS fallback skipped for template WhatsApp job ${job.id} (no plain-text body)`,
         );
         return;
       }
 
-      this.logger.log(`Falling back to SMS for WhatsApp job ${job.id} → ${to}`);
+      this.logger.log(`Falling back to SMS for WhatsApp job ${job.id}`);
 
       try {
         await this.termiiService.sendSms(to, message, churchId, messageId);
-        this.logger.log(`SMS fallback sent for WhatsApp job ${job.id} → ${to}`);
-      } catch (smsError) {
-        this.logger.error(
-          `SMS fallback failed for WhatsApp job ${job.id}: ${smsError instanceof Error ? smsError.message : String(smsError)}`,
-        );
+        this.logger.log(`SMS fallback sent for WhatsApp job ${job.id}`);
+      } catch {
+        this.logger.error(`SMS fallback failed for WhatsApp job ${job.id}`);
       }
     }
   }

@@ -52,9 +52,9 @@ export class BroadcastProcessor extends WorkerHost {
    * Handles job failure with logging.
    */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error): void {
+  onFailed(job: Job, _error: Error): void {
     this.logger.error(
-      `Broadcast job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `Broadcast job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
   }
 }

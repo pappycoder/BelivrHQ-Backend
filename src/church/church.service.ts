@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 import { assertAssignableRoles } from '../billing/role-policy';
 import { StaffInvitationService } from '../company-email/staff-invitation.service';
 import { reserveStaffSeat, releaseStaffSeat } from '../billing/entitlements';
@@ -464,7 +465,7 @@ export class ChurchService {
         },
       });
 
-      this.logger.log(`Staff invited: ${normalizedEmail} → ${normalizedRole} (${churchId})`);
+      this.logger.log(`Staff invitation created for church ${churchId}`);
 
       return {
         profileId: profile.id,
@@ -708,9 +709,7 @@ export class ChurchService {
         }
       }
     } catch (error) {
-      this.logger.warn(
-        `Failed to fetch emails from Supabase: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.logger.warn(`Failed to fetch emails from Supabase: ${errorDiagnostic(error)}`);
     }
 
     return emailMap;

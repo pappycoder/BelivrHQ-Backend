@@ -168,4 +168,123 @@ describe('direct media authorization and completion', () => {
     await expect(service.prepareDirectUpload(value, churchId, 'user-a', viewer)).rejects.toThrow();
     expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
   });
+  it.each([
+    { contentType: 'application/x-executable' },
+    { size: 0 },
+    { size: -1 },
+    { size: 1.5 },
+    { size: 52428801 },
+    { filename: '   ' },
+  ])('refuses an invalid presign request before storage authorization %j', async (override) => {
+    await expect(
+      service.prepareDirectUpload({ ...input, ...override }, churchId, 'user-a', viewer),
+    ).rejects.toThrow();
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
+  });
+  it.each(['other', undefined])(
+    'refuses cross-branch or unassigned staff uploads (%s)',
+    async (branch_id) => {
+      await expect(
+        service.prepareDirectUpload(
+          { ...input, branchId: branch_id ? 'branch-a' : undefined },
+          churchId,
+          'user-a',
+          { ...viewer, is_admin_hq: false, branch_id },
+        ),
+      ).rejects.toThrow();
+      expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
+    },
+  );
+  it('uses the staff branch when its ID is omitted and validates that it remains active at completion', async () => {
+    const scoped = { ...viewer, is_admin_hq: false };
+    const grant = await service.prepareDirectUpload(
+      { ...input, branchId: undefined },
+      churchId,
+      'user-a',
+      scoped,
+    );
+    prisma.branch.findFirst.mockResolvedValue(null);
+    await expect(
+      service.completeDirectUpload(grant.ticket, churchId, 'user-a', scoped),
+    ).rejects.toThrow('Invalid branch');
+    expect(prisma.mediaAsset.upsert).not.toHaveBeenCalled();
+    expect(storage.info).not.toHaveBeenCalled();
+  });
+  it('refuses presigning for a missing tenant-owned branch', async () => {
+    prisma.branch.findFirst.mockResolvedValue(null);
+    await expect(service.prepareDirectUpload(input, churchId, 'user-a', viewer)).rejects.toThrow(
+      'Invalid branch',
+    );
+    expect(storage.createSignedUploadUrl).not.toHaveBeenCalled();
+  });
+  it.each([
+    { data: null, error: null },
+    { data: {}, error: null },
+    { data: null, error: { message: 'private provider error' } },
+  ])('refuses unusable storage authorization responses %j', async (response) => {
+    storage.createSignedUploadUrl.mockResolvedValue(response);
+    await expect(service.prepareDirectUpload(input, churchId, 'user-a', viewer)).rejects.toThrow(
+      'Unable to authorize storage upload',
+    );
+    expect(prisma.mediaAsset.upsert).not.toHaveBeenCalled();
+  });
+  it.each([
+    { size: input.size + 1, contentType: input.contentType },
+    { size: input.size, contentType: 'application/pdf' },
+    {},
+  ])('refuses mismatched stored metadata before publishing an asset %j', async (data) => {
+    const grant = await service.prepareDirectUpload(input, churchId, 'user-a', viewer);
+    storage.info.mockResolvedValue({ data, error: null });
+    await expect(
+      service.completeDirectUpload(grant.ticket, churchId, 'user-a', viewer),
+    ).rejects.toThrow('does not match');
+    expect(prisma.mediaAsset.upsert).not.toHaveBeenCalled();
+  });
+  it('accepts the provider nested metadata response and an HQ upload without branch', async () => {
+    const grant = await service.prepareDirectUpload(
+      { ...input, branchId: undefined },
+      churchId,
+      'user-a',
+      viewer,
+    );
+    storage.info.mockResolvedValue({
+      data: { metadata: { size: input.size, mimetype: input.contentType } },
+      error: null,
+    });
+    await service.completeDirectUpload(grant.ticket, churchId, 'user-a', viewer);
+    expect(prisma.mediaAsset.upsert.mock.calls[0][0].create.branch_id).toBeNull();
+  });
+  it.each(['filename', 'size_bytes'])(
+    'filters library access by branch and private-media permission with %s sort',
+    async (sortBy) => {
+      prisma.mediaAsset.findMany.mockResolvedValue([]);
+      prisma.mediaAsset.count.mockResolvedValue(0);
+      await service.listLibrary(
+        {
+          branchId: 'branch-a',
+          folder: 'sermons',
+          mimeType: 'video',
+          search: 'Sunday',
+          permissions: 'members',
+          sortBy,
+        },
+        churchId,
+        viewer,
+      );
+      const args = prisma.mediaAsset.findMany.mock.calls[0][0];
+      expect(args.where).toMatchObject({
+        church_id: churchId,
+        folder: { contains: 'sermons', mode: 'insensitive' },
+        mime_type: { contains: 'video', mode: 'insensitive' },
+        filename: { contains: 'Sunday', mode: 'insensitive' },
+        AND: [
+          { OR: [{ branch_id: 'branch-a' }, { branch_id: null }] },
+          { permissions: { not: 'leadership' } },
+        ],
+      });
+      expect(args.orderBy).toEqual(
+        sortBy === 'filename' ? { filename: 'asc' } : { size_bytes: 'desc' },
+      );
+    },
+  );
 });

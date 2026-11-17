@@ -65,8 +65,15 @@ describe('Request-scoped subscription reuse', () => {
     expect(prisma.profile.findUnique).toHaveBeenCalledTimes(1);
     expect(prisma.platformSubscription.findUnique).not.toHaveBeenCalled();
   });
-  it('applies downgrade policy even when role grants are already cached', async () => {
-    const prisma = { platformSubscription: { findUnique: jest.fn() } };
+  it('applies downgrade policy to freshly resolved grants without a redundant subscription read', async () => {
+    const prisma = {
+      platformSubscription: { findUnique: jest.fn() },
+      role: { findMany: async () => [{ id: 'role', church_id: 'church', name: 'media_team' }] },
+      rolePermission: {
+        findMany: async () =>
+          ['members:read', 'events:read'].map((name) => ({ permission: { name } })),
+      },
+    };
     const service = new PermissionsService(
       prisma as never,
       { get: async () => ['members:read', 'events:read'] } as never,

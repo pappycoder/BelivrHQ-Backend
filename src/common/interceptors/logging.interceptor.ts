@@ -27,6 +27,7 @@ import { tap } from 'rxjs/operators';
 import { Request, Response } from 'express';
 import { queryMetrics, serverTiming } from '../../prisma/query-metrics';
 import { randomUUID } from 'crypto';
+import { requestLogPath, errorDiagnostic } from '../privacy';
 
 /**
  * Interceptor that logs all HTTP requests with timing and metadata.
@@ -47,7 +48,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<Response>();
 
     const { method } = request;
-    const url = request.originalUrl.split('?')[0];
+    const url = requestLogPath(request);
     const suppliedId = request.headers['x-request-id'];
     const requestId =
       typeof suppliedId === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(suppliedId)
@@ -89,7 +90,7 @@ export class LoggingInterceptor implements NestInterceptor {
 
           this.logger.error(
             `${method} ${url} ${statusCode} ${duration}ms queries=${metrics?.queries ?? 0} dbMs=${Math.round(metrics?.milliseconds ?? 0)} stages=${JSON.stringify(metrics?.stages ?? {})} pool=${JSON.stringify(metrics?.pool ?? {})} requestId=${requestId}`,
-            error instanceof Error ? error.stack : String(error),
+            errorDiagnostic(error),
           );
         },
       }),

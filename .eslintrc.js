@@ -52,7 +52,7 @@ module.exports = {
 
   // Operations helpers are standalone Node scripts, outside the TS project.
   overrides: [{
-    files: ['scripts/ops/**/*.cjs', 'test/ops/**/*.cjs', 'test/load/**/*.cjs', 'test/load/**/*.mjs', 'test/load/**/*.js'],
+    files: ['scripts/*.cjs', 'scripts/lib/*.cjs', 'scripts/ops/**/*.cjs', 'test/ops/**/*.cjs', 'test/load/**/*.cjs', 'test/load/**/*.mjs', 'test/load/**/*.js'],
     parserOptions: { project: null, ecmaVersion: 2022 },
     rules: {
       '@typescript-eslint/no-var-requires': 'off',

@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file list-families.dto.ts
  * @description DTO for listing families with pagination and search filters.
@@ -8,7 +9,6 @@
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class ListFamiliesDto {
   @ApiPropertyOptional({ default: 1 })
@@ -38,7 +38,7 @@ export class ListFamiliesDto {
     description: 'List archived families only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   archived?: boolean;

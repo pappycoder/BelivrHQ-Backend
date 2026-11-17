@@ -44,12 +44,24 @@ describe('WebhookDeliveryProcessor', () => {
           .mockResolvedValue({ plan: 'network', paid_until: new Date(Date.now() + 86400000) }),
       },
       webhookSubscription: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ church_id: 'church', is_active: true, archived_at: null }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sub-1',
+          church_id: 'church',
+          is_active: true,
+          archived_at: null,
+          url: baseJob.data.url,
+          secret,
+        }),
       },
       webhookDelivery: {
-        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: deliveryId,
+          status: 'pending',
+          subscription_id: 'sub-1',
+          event: baseJob.data.event,
+          payload: baseJob.data.payload,
+        }),
       },
     };
     processor = new WebhookDeliveryProcessor(prisma as unknown as PrismaService);
@@ -66,6 +78,23 @@ describe('WebhookDeliveryProcessor', () => {
   });
 
   describe('process', () => {
+    it.each(['missing', 'success', 'failed', 'mismatch'])(
+      'does not contact destinations for %s queue data',
+      async (state) => {
+        prisma.webhookDelivery.findUnique.mockResolvedValue(
+          state === 'missing'
+            ? null
+            : { status: state === 'mismatch' ? 'pending' : state, subscription_id: 'different' },
+        );
+        await processor.process(baseJob as never);
+        expect(sendWebhook).not.toHaveBeenCalled();
+      },
+    );
+    it('does not send after another actor changes the pending delivery', async () => {
+      prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 0 });
+      await processor.process(baseJob as never);
+      expect(sendWebhook).not.toHaveBeenCalled();
+    });
     it('does not contact the destination after a downgrade', async () => {
       prisma.platformSubscription.findUnique.mockResolvedValue({
         plan: 'essentials',
@@ -73,7 +102,7 @@ describe('WebhookDeliveryProcessor', () => {
       });
       await processor.process(baseJob as never);
       expect(sendWebhook).not.toHaveBeenCalled();
-      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith(
+      expect(prisma.webhookDelivery.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) }),
       );
     });
@@ -92,12 +121,12 @@ describe('WebhookDeliveryProcessor', () => {
         };
       });
 
-      prisma.webhookDelivery.update.mockResolvedValue({});
+      prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
 
       await processor.process(baseJob as never);
 
-      expect(prisma.webhookDelivery.update).toHaveBeenNthCalledWith(1, {
-        where: { id: deliveryId },
+      expect(prisma.webhookDelivery.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: { attempts: { increment: 1 } },
       });
 
@@ -105,13 +134,15 @@ describe('WebhookDeliveryProcessor', () => {
       const expectedSig = createHmac('sha256', secret).update(captured!.body).digest('hex');
       expect(captured!.headers['X-Webhook-Signature']).toBe(`sha256=${expectedSig}`);
       expect(captured!.headers['X-Webhook-Event']).toBe('member.created');
+      expect(captured!.headers['X-Webhook-Delivery-Id']).toBe(deliveryId);
       expect(captured!.body).toContain('"event":"member.created"');
       expect(captured!.body).toContain('"payload":{"memberId":"m-1"}');
 
-      expect(prisma.webhookDelivery.update).toHaveBeenNthCalledWith(2, {
-        where: { id: deliveryId },
+      expect(prisma.webhookDelivery.updateMany).toHaveBeenNthCalledWith(2, {
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: {
           status: 'success',
+          next_retry_at: null,
           response_status: 200,
           response_body: '{"ok":true}',
         },
@@ -130,16 +161,28 @@ describe('WebhookDeliveryProcessor', () => {
   });
 
   describe('onFailed', () => {
-    it('should mark the delivery as failed with the error message', async () => {
-      prisma.webhookDelivery.update.mockResolvedValue({});
+    it('keeps intermediate failures pending for native retry', async () => {
+      await processor.onFailed({ ...baseJob, attemptsMade: 1 } as never, new Error('private'));
+      expect(prisma.webhookDelivery.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: 'pending', response_body: 'Delivery failed; retry scheduled.' },
+        }),
+      );
+    });
+    it('marks exhausted deliveries failed without storing provider error contents', async () => {
+      prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
 
-      await processor.onFailed({ ...baseJob, id: 'job-1' } as never, new Error('connection reset'));
+      await processor.onFailed(
+        { ...baseJob, id: 'job-1', attemptsMade: 3 } as never,
+        new Error('connection reset'),
+      );
 
-      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
-        where: { id: deliveryId },
+      expect(prisma.webhookDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: deliveryId, status: 'pending', dispatch_generation: 0 },
         data: {
           status: 'failed',
-          response_body: 'connection reset',
+          response_body: 'Delivery attempts exhausted; operator review required.',
+          next_retry_at: null,
         },
       });
     });

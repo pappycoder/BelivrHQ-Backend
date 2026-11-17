@@ -23,12 +23,20 @@ export class RedisService implements OnModuleDestroy {
     if (url.startsWith('https://')) {
       this._driver = 'upstash';
       const token = this.config.get<string>('UPSTASH_REDIS_TOKEN');
-      this._client = new UpstashRedis({ url, token });
+      this._client = new UpstashRedis({
+        url,
+        token,
+        retry: { retries: 0 },
+        signal: () => AbortSignal.timeout(3000),
+      });
       this.logger.log('Upstash Redis client initialized');
     } else {
       this._driver = 'ioredis';
       this._client = new IORedis(url, {
         maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        commandTimeout: 3000,
+        enableOfflineQueue: false,
         retryStrategy(times) {
           const delay = Math.min(times * 200, 2000);
           return delay;

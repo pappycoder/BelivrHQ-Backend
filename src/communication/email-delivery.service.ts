@@ -1,3 +1,4 @@
+import { errorDiagnostic } from '../common/privacy';
 /**
  * @file email-delivery.service.ts
  * @description Church email delivery through provider accounts; organization email through Resend.
@@ -64,7 +65,7 @@ export class EmailDeliveryService {
         `${subject}. ${message}`,
       );
     } catch (err) {
-      this.logger.warn(`Resend failure alert skipped: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(`Resend failure alert skipped: ${errorDiagnostic(err)}`);
     }
   }
 

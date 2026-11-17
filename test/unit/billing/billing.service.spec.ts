@@ -1,3 +1,4 @@
+import type { PaymentAdjustment } from '../../../src/giving/services/payment-lifecycle';
 import { PaymentVerificationPendingException } from '../../../src/giving/services/payment-verification-pending.exception';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { CompanyEmailService } from '../../../src/company-email/company-email.service';
@@ -112,6 +113,554 @@ describe('Platform subscriptions', () => {
     const quote = await service.quote(churchId, dto);
     return service.checkout(churchId, email, { ...dto, quoteId: quote.quoteId });
   }
+
+  describe('provider adjustment reconciliation and historical access recovery', () => {
+    const date = new Date('2026-01-01T00:00:00Z');
+    const grant = {
+      reference,
+      plan: 'essentials',
+      cycle: 'monthly',
+      start: date.toISOString(),
+      end: '2026-02-01T00:00:00.000Z',
+      state: 'clear',
+    };
+    let current: Record<string, unknown>;
+    beforeEach(() => {
+      current = {
+        ...payment,
+        gateway: 'paystack',
+        status: 'success',
+        application_status: 'applied',
+        intent: 'renewal',
+        provider_transaction_id: 'provider-id',
+        provider_reference: 'provider-ref',
+        created_at: date,
+        verified_at: date,
+        lifecycle: { adjustments: [], access: 'clear' },
+      };
+      prisma.subscriptionPayment.findFirst.mockImplementation(async () => current);
+      prisma.subscriptionPayment.updateMany.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(current, data);
+          return { count: 1 };
+        },
+      );
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: new Date('2026-02-01'),
+        access_grants: { grants: [{ ...grant }] },
+      });
+      gateway.listAdjustments = jest.fn().mockResolvedValue([]);
+      jest.spyOn(service, 'reconcilePayment').mockResolvedValue(undefined);
+    });
+    it.each([
+      [
+        { id: 'a', kind: 'refund', state: 'completed', amount: 100, currency: 'NGN' },
+        'review',
+        'success',
+      ],
+      [
+        { id: 'a', kind: 'refund', state: 'completed', amount: 10000, currency: 'NGN' },
+        'revoked',
+        'reversed',
+      ],
+      [{ id: 'a', kind: 'dispute', state: 'open' }, 'review', 'success'],
+      [{ id: 'a', kind: 'dispute', state: 'lost' }, 'revoked', 'reversed'],
+      [{ id: 'a', kind: 'dispute', state: 'won' }, 'clear', 'success'],
+      [{ id: 'a', kind: 'reversal', state: 'completed' }, 'revoked', 'reversed'],
+    ] as [PaymentAdjustment, string, string][])(
+      'updates only the referenced paid interval for %j',
+      async (adjustment, access, status) => {
+        gateway.listAdjustments.mockResolvedValue([adjustment]);
+        await service.reconcileAdjustments('church-a', reference);
+        expect(gateway.listAdjustments).toHaveBeenCalledWith({
+          reference,
+          providerTransactionId: 'provider-id',
+          providerReference: 'provider-ref',
+          currency: 'NGN',
+          createdAt: date,
+        });
+        expect(prisma.subscriptionPayment.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { church_id: 'church-a', reference },
+            data: expect.objectContaining({
+              status,
+              application_status: access === 'clear' ? 'applied' : access,
+              checkout_url: null,
+              lifecycle: expect.objectContaining({ access }),
+            }),
+          }),
+        );
+        expect(
+          prisma.platformSubscription.update.mock.calls[0][0].data.access_grants.grants,
+        ).toEqual([{ ...grant, state: access }]);
+        expect(service.reconcilePayment).not.toHaveBeenCalled();
+      },
+    );
+    it.each([null, { ...payment, provider_transaction_id: null }])(
+      'does not contact providers without a known transaction %j',
+      async (row) => {
+        prisma.subscriptionPayment.findFirst.mockResolvedValue(row);
+        await service.reconcileAdjustments('church-a', reference);
+        expect(gateway.listAdjustments).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+    it('tolerates a gateway with no adjustment lookup and no adjustments', async () => {
+      delete gateway.listAdjustments;
+      await service.reconcileAdjustments('church-a', reference);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+    it('reconstructs verified legacy renewal and upgrade intervals before applying the hold', async () => {
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: null,
+        access_grants: null,
+      });
+      prisma.subscriptionPayment.findMany.mockResolvedValue([
+        { ...current, base_plan: null, base_paid_until: new Date('2026-01-10') },
+        {
+          ...current,
+          reference: 'upgrade',
+          intent: 'upgrade',
+          verified_at: null,
+          created_at: date,
+          target_paid_until: new Date('2026-02-10'),
+          base_plan: 'essentials',
+          base_paid_until: null,
+        },
+        { ...current, reference: 'incomplete-upgrade', intent: 'upgrade', target_paid_until: null },
+      ]);
+      gateway.listAdjustments.mockResolvedValue([{ id: 'hold', kind: 'dispute', state: 'open' }]);
+      await service.reconcileAdjustments('church-a', reference);
+      const grants = prisma.platformSubscription.update.mock.calls[0][0].data.access_grants.grants;
+      expect(grants.find((g: { reference: string }) => g.reference === reference)).toMatchObject({
+        state: 'review',
+        start: '2026-01-10T00:00:00.000Z',
+        end: '2026-02-10T00:00:00.000Z',
+      });
+      expect(grants.find((g: { reference: string }) => g.reference === 'upgrade')).toMatchObject({
+        upgrade: true,
+        start: date.toISOString(),
+        end: '2026-02-10T00:00:00.000Z',
+      });
+      expect(grants.some((g: { reference: string }) => g.reference === 'incomplete-upgrade')).toBe(
+        false,
+      );
+    });
+    it('puts an unitemized historical paid balance into review instead of granting uncertain access', async () => {
+      current.verified_at = null;
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: new Date('2026-02-01'),
+        access_grants: null,
+      });
+      gateway.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+      await service.reconcileAdjustments('church-a', reference);
+      const grants = prisma.platformSubscription.update.mock.calls[0][0].data.access_grants.grants;
+      expect(grants.find((g: { reference: string }) => g.reference === reference)).toMatchObject({
+        state: 'review',
+      });
+      expect(current.status).toBe('success');
+    });
+    it.each([true, false])(
+      'never invents an interval for an unapplied payment (verified=%s)',
+      async (verified) => {
+        Object.assign(current, {
+          application_status: 'pending',
+          verified_at: verified ? date : null,
+        });
+        prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+          plan: 'essentials',
+          cycle: 'monthly',
+          paid_until: null,
+          access_grants: null,
+        });
+        gateway.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+        await service.reconcileAdjustments('church-a', reference);
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+        expect(current.application_status).toBe('pending');
+        expect(service.reconcilePayment).toHaveBeenCalledTimes(1);
+      },
+    );
+    it('preserves an operator revocation when a later provider adjustment clears', async () => {
+      Object.assign(current, {
+        application_status: 'revoked',
+        lifecycle: { adjustments: [], applicationReview: { decision: 'revoke' } },
+      });
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: null,
+        access_grants: null,
+      });
+      gateway.listAdjustments.mockResolvedValue([{ id: 'a', kind: 'dispute', state: 'won' }]);
+      await service.reconcileAdjustments('church-a', reference);
+      expect(current.application_status).toBe('revoked');
+      expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      expect(service.reconcilePayment).not.toHaveBeenCalled();
+    });
+    it('rejects a currency-mismatched provider adjustment before altering payment or entitlement', async () => {
+      gateway.listAdjustments.mockResolvedValue([
+        { id: 'a', kind: 'refund', state: 'completed', amount: 10, currency: 'USD' },
+      ]);
+      await expect(service.reconcileAdjustments('church-a', reference)).rejects.toThrow(
+        'Invalid payment adjustment',
+      );
+      expect(prisma.subscriptionPayment.updateMany).not.toHaveBeenCalled();
+      expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+    });
+  });
+  describe('Audited payment hold and unapplied-money reviews', () => {
+    const reviewer = { id: 'verified-reviewer', roles: ['super_admin'] };
+    const reason = '  Verified against the provider statement  ';
+    const now = new Date('2026-01-02T12:00:00Z');
+    const grant = {
+      reference,
+      plan: 'essentials',
+      cycle: 'monthly',
+      start: '2026-01-01T00:00:00Z',
+      end: '2026-02-01T00:00:00Z',
+      state: 'review',
+    };
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(now);
+      prisma.auditLog = { create: jest.fn() };
+      prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+        ...payment,
+        status: 'success',
+        verified_at: now,
+        application_status: 'review',
+        intent: 'renewal',
+        created_at: now,
+        lifecycle: { access: 'clear', adjustments: [] },
+      });
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        church_id: 'church-a',
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: null,
+        access_grants: { grants: [] },
+      });
+      jest.spyOn(service, 'status').mockResolvedValue({ reviewed: true } as never);
+      jest.spyOn(service, 'reconcilePayment').mockResolvedValue(undefined);
+      jest.spyOn(service, 'reconcileAdjustments').mockResolvedValue(undefined);
+    });
+    afterEach(() => jest.useRealTimers());
+    it.each(['release', 'revoke'] as const)(
+      'requires a privileged reviewer and an adequate reason for hold %s',
+      async (decision) => {
+        await expect(
+          service.reviewPayment(
+            'church-a',
+            { id: 'staff', roles: ['church_admin'] },
+            reference,
+            decision,
+            reason,
+          ),
+        ).rejects.toThrow('BelivrHQ review');
+        for (const invalid of ['', 'short', ' '.repeat(15), 'x'.repeat(501)])
+          await expect(
+            service.reviewPayment('church-a', reviewer, reference, decision, invalid),
+          ).rejects.toThrow('between 10 and 500');
+        expect(prisma.subscriptionPayment.updateMany).not.toHaveBeenCalled();
+      },
+    );
+    it.each(['release', 'revoke'] as const)(
+      'updates only the reviewed hold grant and writes the reviewer audit for %s',
+      async (decision) => {
+        const other = { ...grant, reference: 'other-payment', state: 'clear' };
+        prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+          ...payment,
+          lifecycle: {
+            access: 'review',
+            adjustments: [{ id: 'refund-1', kind: 'refund', state: 'completed', amount: 100 }],
+          },
+        });
+        prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+          access_grants: { grants: [{ ...grant }, other] },
+        });
+        await expect(
+          service.reviewPayment('church-a', reviewer, reference, decision, reason),
+        ).resolves.toEqual({ reviewed: true });
+        expect(prisma.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+          where: { church_id: 'church-a', reference },
+          data: {
+            application_status: decision === 'release' ? 'applied' : 'revoked',
+            lifecycle: expect.objectContaining({
+              access: decision === 'release' ? 'clear' : 'revoked',
+              review: expect.objectContaining({
+                decision,
+                reason: reason.trim(),
+                reviewedBy: reviewer.id,
+                reviewedAt: now.toISOString(),
+              }),
+            }),
+          },
+        });
+        const saved = prisma.platformSubscription.update.mock.calls[0][0].data.access_grants.grants;
+        expect(saved).toEqual([
+          { ...grant, state: decision === 'release' ? 'clear' : 'revoked' },
+          other,
+        ]);
+        expect(prisma.auditLog.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            user_id: reviewer.id,
+            church_id: 'church-a',
+            entity: 'subscription_payment_review',
+            entity_id: reference,
+            new_values: { decision, reason: reason.trim() },
+          }),
+        });
+      },
+    );
+    it.each(['no-grant', 'not-held', 'missing-adjustments'])(
+      'refuses a stale hold-review request: %s',
+      async (condition) => {
+        prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+          ...payment,
+          lifecycle: {
+            access: condition === 'not-held' ? 'clear' : 'review',
+            ...(condition === 'missing-adjustments' ? {} : { adjustments: [] }),
+          },
+        });
+        prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+          access_grants: { grants: condition === 'no-grant' ? [] : [{ ...grant }] },
+        });
+        await expect(
+          service.reviewPayment('church-a', reviewer, reference, 'release', reason),
+        ).rejects.toThrow('does not have an access hold');
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      },
+    );
+    it('requires platform review rights before reconciling or applying unapplied money', async () => {
+      await expect(
+        service.resolveUnappliedPayment(
+          'church-a',
+          { id: 'staff', roles: ['church_admin'] },
+          reference,
+          'apply',
+          reason,
+        ),
+      ).rejects.toThrow('BelivrHQ review');
+      expect(service.reconcilePayment).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+    it.each([
+      { decision: 'invalid', reason },
+      { decision: 'apply', reason: 'short' },
+      { decision: 'revoke', reason: 'x'.repeat(501) },
+    ])('refuses invalid application review input: $decision', async (input) => {
+      await expect(
+        service.resolveUnappliedPayment(
+          'church-a',
+          reviewer,
+          reference,
+          input.decision as 'apply',
+          input.reason,
+        ),
+      ).rejects.toThrow('Choose a resolution');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+    it.each(['apply', 'revoke'] as const)(
+      'is idempotent when unapplied-money %s was already committed',
+      async (decision) => {
+        prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+          ...payment,
+          application_status: decision === 'apply' ? 'applied' : 'revoked',
+          lifecycle: { applicationReview: { decision } },
+        });
+        await service.resolveUnappliedPayment('church-a', reviewer, reference, decision, reason);
+        expect(prisma.subscriptionPayment.updateMany).not.toHaveBeenCalled();
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+        expect(companyEmails.enqueueSubscription).not.toHaveBeenCalled();
+      },
+    );
+    it.each([{ status: 'pending' }, { verified_at: null }, { application_status: 'pending' }])(
+      'refuses money without the verified unapplied-review state: %j',
+      async (change) => {
+        prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+          ...payment,
+          status: 'success',
+          verified_at: now,
+          application_status: 'review',
+          lifecycle: {},
+          ...change,
+        });
+        await expect(
+          service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+        ).rejects.toThrow('Only a verified unapplied payment');
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      },
+    );
+    it('does not reapply a payment that already has an access grant', async () => {
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        access_grants: { grants: [{ ...grant, state: 'clear' }] },
+      });
+      await expect(
+        service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+      ).rejects.toThrow('Only a verified unapplied payment');
+    });
+    it.each(['review', 'revoked'])(
+      'requires provider holds to be resolved before application: %s',
+      async (access) => {
+        prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+          ...payment,
+          status: 'success',
+          verified_at: now,
+          application_status: 'review',
+          lifecycle: { access },
+        });
+        await expect(
+          service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+        ).rejects.toThrow('Resolve the provider refund or dispute');
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      },
+    );
+    it('applies a verified renewal once with scoped claims, reviewer audit and a delivery intent', async () => {
+      await service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason);
+      expect(service.reconcilePayment).toHaveBeenCalledWith('church-a', reference);
+      expect(service.reconcileAdjustments).toHaveBeenCalledWith('church-a', reference);
+      const saved = prisma.platformSubscription.update.mock.calls[0][0];
+      expect(saved).toMatchObject({
+        where: { church_id: 'church-a' },
+        data: {
+          plan: 'essentials',
+          cycle: 'monthly',
+          period_started_at: now,
+          paid_until: new Date('2026-02-02T12:00:00Z'),
+        },
+      });
+      expect(saved.data.access_grants.grants).toEqual([
+        {
+          reference,
+          plan: 'essentials',
+          cycle: 'monthly',
+          start: now.toISOString(),
+          end: '2026-02-02T12:00:00.000Z',
+          state: 'clear',
+        },
+      ]);
+      expect(prisma.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+        where: {
+          church_id: 'church-a',
+          reference,
+          status: 'success',
+          application_status: 'review',
+        },
+        data: {
+          application_status: 'applied',
+          checkout_url: null,
+          lifecycle: expect.objectContaining({
+            applicationReview: {
+              decision: 'apply',
+              reason: reason.trim(),
+              reviewedBy: reviewer.id,
+              reviewedAt: now.toISOString(),
+            },
+          }),
+        },
+      });
+      expect(companyEmails.enqueueSubscription).toHaveBeenCalledTimes(1);
+      expect(companyEmails.dispatch).toHaveBeenCalledWith('subscription/event');
+    });
+    it('starts a reviewed renewal after already-purchased future periods instead of overwriting them', async () => {
+      const current = { ...grant, reference: 'current', state: 'clear' };
+      const renewal = {
+        ...grant,
+        reference: 'future',
+        start: '2026-02-01T00:00:00Z',
+        end: '2026-03-01T00:00:00Z',
+        state: 'clear',
+      };
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        plan: 'essentials',
+        cycle: 'monthly',
+        paid_until: new Date(current.end),
+        access_grants: {
+          grants: [current, renewal, { ...current, reference: 'upgrade', upgrade: true }],
+        },
+      });
+      await service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason);
+      expect(prisma.platformSubscription.update.mock.calls[0][0].data).toMatchObject({
+        period_started_at: new Date('2026-03-01'),
+        paid_until: new Date('2026-04-01'),
+      });
+      expect(companyEmails.enqueueSubscription.mock.calls[0][2]).toBe(false);
+    });
+    it('blocks application of stale prorated upgrades and unresolved active holds', async () => {
+      prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+        ...payment,
+        status: 'success',
+        verified_at: now,
+        application_status: 'review',
+        intent: 'upgrade',
+        lifecycle: {},
+      });
+      await expect(
+        service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+      ).rejects.toThrow('stale prorated upgrade');
+      prisma.subscriptionPayment.findFirstOrThrow.mockResolvedValue({
+        ...payment,
+        status: 'success',
+        verified_at: now,
+        application_status: 'review',
+        intent: 'renewal',
+        lifecycle: {},
+      });
+      prisma.platformSubscription.findUniqueOrThrow.mockResolvedValue({
+        access_grants: { grants: [{ ...grant, reference: 'another-hold' }] },
+      });
+      await expect(
+        service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+      ).rejects.toThrow('existing subscription payment holds');
+      expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+    });
+    it('can revoke an unapplied review without granting time or sending a paid-access email', async () => {
+      await service.resolveUnappliedPayment('church-a', reviewer, reference, 'revoke', reason);
+      expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      expect(prisma.subscriptionPayment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ application_status: 'revoked', checkout_url: null }),
+        }),
+      );
+      expect(companyEmails.enqueueSubscription).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          entity: 'subscription_payment_application_review',
+          user_id: reviewer.id,
+          new_values: { decision: 'revoke', reason: reason.trim() },
+        }),
+      });
+    });
+    it('rejects a lost concurrent review claim before auditing or enqueueing delivery', async () => {
+      prisma.subscriptionPayment.updateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.resolveUnappliedPayment('church-a', reviewer, reference, 'apply', reason),
+      ).rejects.toThrow('Payment review changed');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+      expect(companyEmails.enqueueSubscription).not.toHaveBeenCalled();
+    });
+    it.each([0, 1])(
+      'only closes pending checkouts that still match its conditional claim: %s',
+      async (count) => {
+        prisma.subscriptionPayment.updateMany.mockResolvedValue({ count });
+        const result = service.closeCheckout('church-a', reference);
+        if (!count) await expect(result).rejects.toThrow('no longer pending');
+        else await expect(result).resolves.toEqual({ reviewed: true });
+        expect(prisma.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+          where: { church_id: 'church-a', reference, status: 'pending', checkout_closed_at: null },
+          data: { checkout_closed_at: now, checkout_close_reason: 'cancelled', checkout_url: null },
+        });
+        expect(prisma.platformSubscription.update).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   it('calculates exact server-owned monthly/yearly prices', async () => {
     for (const [plan, prices] of Object.entries(SUBSCRIPTION_PLANS))
       for (const cycle of ['monthly', 'annual'] as const) {

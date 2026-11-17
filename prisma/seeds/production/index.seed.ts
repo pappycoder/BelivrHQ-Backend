@@ -31,9 +31,7 @@ export async function runProductionSeed(prisma: PrismaClient): Promise<Productio
 
   console.log('\n🎉 Production seed completed successfully!\n');
   console.log('Summary:');
-  console.log(
-    `  • Missing global roles initialized; existing roles and grants preserved`,
-  );
+  console.log(`  • Missing global roles initialized; existing roles and grants preserved`);
   console.log(
     '  • Note: church, branches, and church-scoped data are NOT seeded — ' +
       'the admin creates them via registration after login.',

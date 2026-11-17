@@ -1,0 +1,26 @@
+{
+  "primary": {
+    "projectId": "prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU",
+    "orgId": "team_5uEgLPJcDkJpzYS3oMbAgc4Y",
+    "main": {
+      "environment": "production",
+      "domain": "api.belivrhq.com"
+    },
+    "staging": {
+      "environment": "preview",
+      "domain": "staging-api.belivrhq.com"
+    }
+  },
+  "legacy": {
+    "projectId": "prj_DBujHySky7Y00HCzQ3C0THhDqNwf",
+    "orgId": "team_imhjLSoiFNBfDv6KzFECQ2kh",
+    "main": {
+      "environment": "production",
+      "domain": "church-os-backend-gamma.vercel.app"
+    },
+    "staging": {
+      "environment": "preview",
+      "domain": "church-os-backend-git-staging-pappycoders-projects.vercel.app"
+    }
+  }
+}

@@ -39,11 +39,11 @@ export class EmailOutboundProcessor extends WorkerHost {
     job: Job<{ to: string; subject: string; html: string; churchId: string }>,
   ): Promise<void> {
     const { to, subject, html, churchId } = job.data;
-    this.logger.log(`Processing email to ${to} (job ${job.id})`);
+    this.logger.log(`Processing email (job ${job.id})`);
 
     await this.resendService.sendEmail(to, subject, html, churchId);
 
-    this.logger.log(`Email sent to ${to} (job ${job.id})`);
+    this.logger.log(`Email sent (job ${job.id})`);
   }
 
   /**
@@ -53,7 +53,7 @@ export class EmailOutboundProcessor extends WorkerHost {
    */
   @OnWorkerEvent('completed')
   onCompleted(job: Job): void {
-    this.logger.log(`Email job ${job.id} completed → ${job.data.to}`);
+    this.logger.log(`Email job ${job.id} completed`);
   }
 
   /**
@@ -63,9 +63,9 @@ export class EmailOutboundProcessor extends WorkerHost {
    * @param error - The error that caused the failure
    */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error): void {
+  onFailed(job: Job, _error: Error): void {
     this.logger.error(
-      `Email job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `Email job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
   }
 }

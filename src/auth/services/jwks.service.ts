@@ -49,7 +49,7 @@ export class JwksService implements OnModuleInit {
 
     this.remoteJWKS = createRemoteJWKSet(jwksUrl);
 
-    this.logger.log(`JWKS endpoint initialized: ${jwksUrl.href}`);
+    this.logger.log('JWKS endpoint initialized');
   }
 
   /**
@@ -71,9 +71,7 @@ export class JwksService implements OnModuleInit {
         protectedHeader: result.protectedHeader as Record<string, unknown>,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      this.logger.warn(`JWT verification failed: ${message}`);
+      this.logger.warn('JWT verification failed');
 
       throw error;
     }

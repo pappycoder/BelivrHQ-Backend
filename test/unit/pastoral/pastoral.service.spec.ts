@@ -591,4 +591,172 @@ describe('PastoralService', () => {
       );
     });
   });
+  describe('pastoral visibility and historical data contracts', () => {
+    it.each([
+      ['pastoral_confidential:read'],
+      ['pastoral_restricted:read'],
+      ['pastoral_confidential:read', 'pastoral_restricted:read'],
+    ])(
+      'applies explicit confidentiality grants to filtered note pages (%j)',
+      async (...permissions) => {
+        prisma.pastoralNote.findMany.mockResolvedValue([
+          {
+            ...mockNote,
+            content: service.encrypt('Private note'),
+            member: null,
+            author: null,
+            tags: null,
+          },
+        ]);
+        prisma.pastoralNote.count.mockResolvedValue(1);
+        const result = await service.listNotes(
+          {
+            page: 2,
+            limit: 5,
+            archived: true,
+            memberId: mockMemberId,
+            authorId: 'author',
+            confidentiality: 'restricted',
+            tags: ['care'],
+            sortBy: 'updated_at',
+            sortOrder: 'asc',
+          },
+          mockChurchId,
+          permissions,
+          mockUserId,
+        );
+        const args = prisma.pastoralNote.findMany.mock.calls[0][0];
+        expect(args).toMatchObject({
+          skip: 5,
+          take: 5,
+          orderBy: { updated_at: 'asc' },
+          where: {
+            church_id: mockChurchId,
+            archived_at: { not: null },
+            member_id: mockMemberId,
+            author_id: 'author',
+            confidentiality: 'restricted',
+            tags: { hasSome: ['care'] },
+          },
+        });
+        expect(args.where.AND.OR).toContainEqual({ confidentiality: 'standard' });
+        if (permissions.includes('pastoral_restricted:read'))
+          expect(args.where.AND.OR).toContainEqual({ confidentiality: 'restricted' });
+        expect(result.data[0]).toMatchObject({
+          content: 'Private note',
+          memberFirstName: '',
+          memberLastName: '',
+          authorFirstName: '',
+          authorLastName: '',
+          tags: [],
+        });
+      },
+    );
+    it('updates confidentiality and clears tags without corrupting stored encrypted content', async () => {
+      const content = service.encrypt('Original');
+      prisma.pastoralNote.findFirst.mockResolvedValue({ ...mockNote, content });
+      prisma.pastoralNote.update.mockResolvedValue({
+        ...mockNote,
+        content,
+        confidentiality: 'confidential',
+        tags: [],
+      });
+      const result = await service.updateNote(
+        'note-1',
+        { confidentiality: 'confidential', tags: [] },
+        mockChurchId,
+        mockUserId,
+        [],
+      );
+      expect(prisma.pastoralNote.update.mock.calls[0][0].data).toEqual({
+        confidentiality: 'confidential',
+        tags: [],
+      });
+      expect(result.content).toBe('Original');
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ newValues: { updatedFields: ['confidentiality', 'tags'] } }),
+      );
+    });
+    it('permits a confidential note detail only with its explicit grant', async () => {
+      prisma.pastoralNote.findFirst.mockResolvedValue({
+        ...mockNote,
+        confidentiality: 'confidential',
+        author_id: 'different-author',
+        content: service.encrypt('Sensitive'),
+      });
+      expect(
+        (
+          await service.getNoteById(
+            'note-1',
+            mockChurchId,
+            ['pastoral_confidential:read'],
+            mockUserId,
+          )
+        ).content,
+      ).toBe('Sensitive');
+      await expect(service.getNoteById('note-1', mockChurchId, [], mockUserId)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+    it.each(['update', 'delete'])('hides a missing note before %s mutations', async (operation) => {
+      prisma.pastoralNote.findFirst.mockResolvedValue(null);
+      await expect(
+        operation === 'update'
+          ? service.updateNote('missing', { tags: [] }, mockChurchId, mockUserId, [])
+          : service.deleteNote('missing', mockChurchId, mockUserId, []),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.pastoralNote.update).not.toHaveBeenCalled();
+      expect(prisma.pastoralNote.delete).not.toHaveBeenCalled();
+    });
+    it.each([
+      {},
+      {
+        page: 2,
+        limit: 5,
+        memberId: mockMemberId,
+        type: 'birthday',
+        upcoming: 'true',
+        archived: true,
+        sortBy: 'created_at',
+        sortOrder: 'desc' as const,
+      },
+    ])('keeps nullable historical life events readable with filters (%j)', async (query) => {
+      prisma.lifeEvent.findMany.mockResolvedValue([
+        {
+          id: 'life',
+          church_id: mockChurchId,
+          member_id: mockMemberId,
+          type: 'birthday',
+          date: new Date('2026-01-01'),
+          details: null,
+          member: null,
+          created_at: new Date('2026-01-01'),
+        },
+      ]);
+      prisma.lifeEvent.count.mockResolvedValue(1);
+      const result = await service.listLifeEvents(query, mockChurchId);
+      expect(result.data[0]).toMatchObject({
+        memberFirstName: '',
+        memberLastName: '',
+        details: {},
+      });
+      const args = prisma.lifeEvent.findMany.mock.calls[0][0];
+      expect(args.where.church_id).toBe(mockChurchId);
+      expect(args.where.archived_at).toEqual(query.archived ? { not: null } : null);
+      if (query.upcoming) expect(args.where.date.gte).toBeInstanceOf(Date);
+      expect(result.meta.page).toBe(query.page ?? 1);
+      expect(result.meta.limit).toBe(query.limit ?? 20);
+    });
+    it('rejects life events for missing or foreign members', async () => {
+      prisma.member.findFirst.mockResolvedValue(null);
+      await expect(
+        service.createLifeEvent(
+          { memberId: 'foreign', type: 'birthday', date: '2026-01-01' },
+          mockChurchId,
+          mockUserId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.lifeEvent.create).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -132,7 +132,7 @@ export class MembersService {
       },
     });
 
-    this.logger.log(`Member created: ${member.firstName} ${member.lastName} (${member.memberId})`);
+    this.logger.log(`Member created: ${member.memberId}`);
 
     const adminProfiles = await this.prisma.profile.findMany({
       where: { church_id: churchId, role: { hasSome: ['church_admin', 'secretary'] } },

@@ -37,11 +37,11 @@ export class SmsOutboundProcessor extends WorkerHost {
    */
   async process(job: Job<{ to: string; message: string; churchId: string }>): Promise<void> {
     const { to, message, churchId } = job.data;
-    this.logger.log(`Processing SMS to ${to} (job ${job.id})`);
+    this.logger.log(`Processing SMS (job ${job.id})`);
 
     await this.termiiService.sendSms(to, message, churchId);
 
-    this.logger.log(`SMS sent to ${to} (job ${job.id})`);
+    this.logger.log(`SMS sent (job ${job.id})`);
   }
 
   /**
@@ -51,7 +51,7 @@ export class SmsOutboundProcessor extends WorkerHost {
    */
   @OnWorkerEvent('completed')
   onCompleted(job: Job): void {
-    this.logger.log(`SMS job ${job.id} completed → ${job.data.to}`);
+    this.logger.log(`SMS job ${job.id} completed`);
   }
 
   /**
@@ -61,9 +61,9 @@ export class SmsOutboundProcessor extends WorkerHost {
    * @param error - The error that caused the failure
    */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error): void {
+  onFailed(job: Job, _error: Error): void {
     this.logger.error(
-      `SMS job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}): ${error.message}`,
+      `SMS job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts})`,
     );
   }
 }

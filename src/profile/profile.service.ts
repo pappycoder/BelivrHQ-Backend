@@ -1144,7 +1144,7 @@ export class ProfileService {
         newValues: { email: dto.email, role: dto.role, branchId },
       });
 
-      this.logger.log(`User invited: ${dto.email} as ${dto.role} for church ${churchId}`);
+      this.logger.log(`User invitation created for church ${churchId}`);
 
       return this.mapToResponseDto({
         ...profile,

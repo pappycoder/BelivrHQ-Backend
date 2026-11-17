@@ -15,6 +15,7 @@ import { catchError } from 'rxjs/operators';
 import * as Sentry from '@sentry/nestjs';
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../decorators/current-user.decorator';
+import { requestLogPath } from '../privacy';
 
 /**
  * Interceptor that captures exceptions and reports them to Sentry.
@@ -46,7 +47,7 @@ export class SentryInterceptor implements NestInterceptor {
       catchError((error) => {
         Sentry.withScope((scope) => {
           scope.setTag('method', request.method);
-          scope.setTag('url', request.url.split('?')[0]);
+          scope.setTag('url', requestLogPath(request));
           scope.setTag('status_code', context.switchToHttp().getResponse<Response>().statusCode);
 
           if (request.user) {
@@ -57,8 +58,12 @@ export class SentryInterceptor implements NestInterceptor {
 
           scope.setContext('request', {
             method: request.method,
-            path: request.originalUrl.split('?')[0],
-            requestId: request.headers['x-request-id'],
+            path: requestLogPath(request),
+            requestId:
+              typeof request.headers['x-request-id'] === 'string' &&
+              /^[a-zA-Z0-9_-]{1,80}$/.test(request.headers['x-request-id'])
+                ? request.headers['x-request-id']
+                : undefined,
           });
 
           Sentry.captureException(error);

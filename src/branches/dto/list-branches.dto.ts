@@ -1,3 +1,4 @@
+import { QueryBoolean } from '../../common/decorators/query-boolean.decorator';
 /**
  * @file DTO for listing branches with pagination and filtering.
  * @module ListBranchesDto
@@ -56,7 +57,7 @@ export class ListBranchesDto {
     description: 'List archived branches only (default: active only)',
     default: false,
   })
-  @Type(() => Boolean)
+  @QueryBoolean()
   @IsBoolean()
   @IsOptional()
   archived?: boolean;
