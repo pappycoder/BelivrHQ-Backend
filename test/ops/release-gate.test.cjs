@@ -44,8 +44,8 @@ const body = () => ({
 function fake(options = {}) {
   const calls = [];
   let heads = 0;
-  const run = (command, args) => {
-    calls.push([command, args]);
+  const run = (command, args, spawnOptions) => {
+    calls.push([command, args, spawnOptions]);
     let output = '';
     if (command === 'git' && args[0] === 'ls-remote')
       output = `${options.stale && ++heads > 1 ? 'b'.repeat(40) : sha}\trefs/heads/main`;
@@ -112,6 +112,13 @@ function fake(options = {}) {
       output = JSON.stringify(
         options.unhealthy ? { success: true, data: { status: 'healthy' } } : body(),
       );
+    if (args[0] === 'curl') {
+      // Reproduce the pinned CLI: --token is forwarded to curl and rejected.
+      if (args.includes('--token') || options.curlFailure)
+        return { status: 2, stdout: '', stderr: 'synthetic-token private-probe-error' };
+      if (options.invalidJson) output = 'synthetic-token malformed-response';
+      output += `\n__RELEASE_HTTP_STATUS__:${options.httpStatus || 200}`;
+    }
     const unsupportedPreviewFlag =
       args[0] === 'deploy' &&
       args[args.indexOf('--environment') + 1] === 'preview' &&
@@ -359,16 +366,47 @@ test('failed build diagnostics identify the deployment and state without raw log
   assert.equal(promotions(calls).length, 0);
 });
 
-test('Vercel credentials stay before the curl passthrough delimiter', async () => {
+test('Vercel credentials use only the child environment and never curl argv', async () => {
   const { run, calls } = fake();
   await publish(env, run, async () => {});
+  for (const [program, args, options] of calls) {
+    if (program !== 'vercel') continue;
+    assert.equal(options.env.VERCEL_TOKEN, env.VERCEL_TOKEN);
+    assert.equal(args.includes(env.VERCEL_TOKEN), false);
+    assert.equal(args.includes('--token'), false);
+  }
   const probes = calls.filter(([, args]) => args[0] === 'curl');
   assert.ok(probes.length > 0);
   for (const [, args] of probes) {
     const delimiter = args.indexOf('--');
     assert.ok(delimiter > args.indexOf('--scope'));
-    assert.ok(delimiter > args.indexOf('--token'));
+    assert.equal(args.includes('--token'), false);
     assert.ok(!args.slice(delimiter + 1).includes(env.VERCEL_TOKEN));
-    assert.ok(args.slice(delimiter + 1).includes('--fail'));
+    assert.ok(args.slice(delimiter + 1).includes('--write-out'));
   }
 });
+
+for (const [label, options, expected] of [
+  ['authentication', { httpStatus: 401 }, /HTTP 401/],
+  ['redirect', { httpStatus: 302 }, /HTTP 302/],
+  ['unavailable app', { httpStatus: 503 }, /HTTP 503/],
+  ['malformed JSON', { invalidJson: true }, /invalid JSON or probe response/],
+  ['CLI failure', { curlFailure: true }, /CLI curl exit 2/],
+]) {
+  test(`readiness reports sanitized ${label} diagnostics and blocks promotion`, async () => {
+    const { run, calls } = fake(options);
+    await assert.rejects(
+      publish(env, run, async () => {}),
+      (error) => {
+        assert.match(error.message, expected);
+        assert.match(error.message, /dpl_candidate/);
+        assert.doesNotMatch(
+          error.message,
+          /synthetic-token|private-probe-error|malformed-response/,
+        );
+        return true;
+      },
+    );
+    assert.equal(promotions(calls).length, 0);
+  });
+}

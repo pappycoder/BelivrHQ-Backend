@@ -42,9 +42,12 @@ function execute(command, args, runner = spawnSync) {
         ? ` ${args[0]}`
         : '';
     const status = Number.isInteger(result.status) ? `exit ${result.status}` : 'process error';
-    throw new ReleaseError(
+    const error = new ReleaseError(
       `Release operation failed (${command}${operation}; ${status}); output suppressed to protect credentials.`,
     );
+    error.operation = command === 'vercel' ? args[0] : command;
+    error.exitStatus = Number.isInteger(result.status) ? result.status : null;
+    throw error;
   }
   return result.stdout || '';
 }
@@ -100,21 +103,20 @@ function healthy(body) {
 }
 
 function command(env, runner) {
+  // CLI 65.9 forwards --token to curl even before its passthrough delimiter.
+  // Authenticate in the child environment; never put credentials in argv.
+  const authenticated = (program, args, options) =>
+    runner(program, args, {
+      ...options,
+      env: { ...process.env, VERCEL_TOKEN: env.VERCEL_TOKEN },
+    });
   return (args) => {
-    // Everything after -- belongs to curl, including flags that look global.
     const delimiter = args.indexOf('--');
     const split = delimiter < 0 ? args.length : delimiter;
     return execute(
       'vercel',
-      [
-        ...args.slice(0, split),
-        '--scope',
-        env.VERCEL_ORG_ID,
-        '--token',
-        env.VERCEL_TOKEN,
-        ...args.slice(split),
-      ],
-      runner,
+      [...args.slice(0, split), '--scope', env.VERCEL_ORG_ID, ...args.slice(split)],
+      authenticated,
     );
   };
 }
@@ -185,29 +187,45 @@ function inspectCandidate(env, candidate, vc) {
     throw new ReleaseError('Candidate identity, target or checked commit could not be verified.');
 }
 async function checkReadiness(env, deployment, vc, wait) {
+  let reason = 'invalid response';
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const body = JSON.parse(
-        vc([
-          'curl',
-          '/api/v1/health/ready',
-          '--deployment',
-          deployment,
-          '--',
-          '--fail',
-          '--silent',
-          '--show-error',
-          '--max-time',
-          '10',
-        ]),
-      );
-      if (healthy(body, settings(env))) return;
-    } catch {
-      /* Bounded retries; never expose CLI output or credentials. */
+      const output = vc([
+        'curl',
+        '/api/v1/health/ready',
+        '--deployment',
+        deployment,
+        '--',
+        '--silent',
+        '--show-error',
+        '--max-time',
+        '20',
+        '--max-filesize',
+        '65536',
+        '--write-out',
+        '\n__RELEASE_HTTP_STATUS__:%{http_code}',
+      ]);
+      const status = /\n__RELEASE_HTTP_STATUS__:(\d{3})\s*$/.exec(output);
+      if (!status) reason = 'missing HTTP status';
+      else if (status[1] !== '200') reason = `HTTP ${status[1]}`;
+      else {
+        const body = JSON.parse(output.slice(0, status.index));
+        if (healthy(body, settings(env))) return;
+        reason =
+          body?.data?.status === 'unhealthy' ? 'application unhealthy' : 'health contract mismatch';
+      }
+    } catch (error) {
+      reason =
+        error instanceof ReleaseError && error.operation === 'curl'
+          ? `CLI curl ${error.exitStatus === null ? 'process error' : `exit ${error.exitStatus}`}`
+          : 'invalid JSON or probe response';
     }
     if (attempt < 2) await wait(2000);
   }
-  throw new ReleaseError('Candidate readiness did not pass; promotion refused.');
+  const target = /^dpl_[a-zA-Z0-9]+$/.test(deployment) ? deployment : 'canonical domain';
+  throw new ReleaseError(
+    `Candidate readiness did not pass (${reason}; ${target}); promotion refused.`,
+  );
 }
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function prepare(env, runner = spawnSync, wait = delay) {

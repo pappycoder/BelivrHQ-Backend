@@ -71,6 +71,11 @@ Staging web readiness requires server-to-server access to `https://staging-api.b
 
 Verified the approved domain exception on 2026-11-17: staging API health and the existing staging web candidate return healthy JSON, unauthenticated `/api/v1/profiles/me` returns 401, and the generated backend deployment URL still redirects to Vercel login.
 
-The Vercel wrapper inserts `--scope` and `--token` before any `--` passthrough delimiter. Everything after that delimiter is passed to curl; forwarding Vercel options there makes curl reject the probe before HTTP health can be checked. A retry of the old workflow still uses the old wrapper, so merge the corrected source before retrying releases.
+The Vercel wrapper inserts `--scope` before any `--` passthrough delimiter and authenticates through the VERCEL_TOKEN child environment. Everything after that delimiter is passed to curl; forwarding Vercel options there makes curl reject the probe before HTTP health can be checked. A retry of the old workflow still uses the old wrapper, so merge the corrected source before retrying releases.
 
 Build-time installation explicitly includes devDependencies even under production/omit-dev settings, because Next/PostCSS and Nest compilation require them. Vercel also uses the explicit `npm run build` command. CI exercises the same install command with `NODE_ENV=production` and `NPM_CONFIG_OMIT=dev`; runtime remains production.
+
+
+Vercel CLI 65.9.0 forwards an explicit `--token` flag to curl even when placed before the passthrough delimiter. All release CLI calls now use the VERCEL_TOKEN child environment instead; credentials never appear in argv. Readiness uses a 20-second HTTP deadline, a 64 KiB response limit and at most three attempts. It requires HTTP 200 and the existing full health/origin/dependency contract, and reports only safe HTTP status, CLI exit or response-contract categories. Raw response bodies, CLI stderr and credentials remain suppressed.
+
+Verified the exact environment-auth command with CI-style variables against both current staging candidates: HTTP 200 and healthy responses. An explicit-token control probe reproduced curl exit 2 before any health request.
