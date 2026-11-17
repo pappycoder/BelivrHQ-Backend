@@ -3,5 +3,6 @@
   "git": {
     "deploymentEnabled": false
   },
-  "installCommand": "npm ci"
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build"
 }

@@ -100,3 +100,13 @@ test('release preparation checks out the immutable commit for detached Preview c
   );
   assert.equal(checkout.with.ref, '${{ github.sha }}');
 });
+
+test('build installation includes development tools despite production defaults', () => {
+  const config = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+  const steps = workflow.jobs['lint'].steps;
+  const install = steps.find((step) => step.run === config.installCommand);
+  assert.ok(install, 'CI must exercise the exact Vercel install command');
+  assert.equal(install.env.NODE_ENV, 'production');
+  assert.equal(install.env.NPM_CONFIG_OMIT, 'dev');
+  assert.ok(steps.findIndex((step) => step.run === config.buildCommand) > steps.indexOf(install));
+});
