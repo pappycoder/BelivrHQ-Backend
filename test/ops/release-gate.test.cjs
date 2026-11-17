@@ -51,8 +51,13 @@ function fake(options = {}) {
       output = `${options.stale && ++heads > 1 ? 'b'.repeat(40) : sha}\trefs/heads/main`;
     else if (command === 'git' && args[0] === 'rev-parse') output = sha;
     else if (command === 'git' && args[0] === 'ls-files') output = options.untracked ? 'src/unreviewed.ts' : '';
+    else if (command === 'git' && args[0] === 'branch') output = options.namedCheckout ? 'staging' : '';
     else if (args[0] === 'deploy')
       output = JSON.stringify(options.rawOutput ? { id: 'dpl_candidate', readyState: 'BUILDING' } : options.errorOutput ? { status: 'error', deployment: { id: 'dpl_candidate' } } : { status: 'ok', deployment: { id: 'dpl_candidate' } });
+    else if (args[0] === 'api' && args[1].includes('/domains?'))
+      output = JSON.stringify(options.malformedDomains ? {} : { domains: [{ name: 'staging-api.belivrhq.com', gitBranch: options.unboundDomain ? null : 'staging' }, ...(options.headDomain ? [{ name: 'unsafe.example', gitBranch: 'HEAD' }] : [])], pagination: options.moreDomains ? { next: 1 } : {} });
+    else if (args[0] === 'api' && args[1].endsWith('/env'))
+      output = JSON.stringify(options.malformedEnvs ? {} : { envs: options.branchVariables ? [{ key: 'SYNTHETIC_SECRET', target: ['preview'], gitBranch: 'staging', value: 'must-never-leak' }] : [] });
     else if (args[0] === 'api' && args[1].startsWith('/v9/projects/'))
       output = JSON.stringify({ id: 'prj_YRk2tzdbC5c5K9cUpjNMvHzN58YU', accountId: 'team_5uEgLPJcDkJpzYS3oMbAgc4Y', gitProviderOptions: { createDeployments: options.gitEnabled ? 'enabled' : 'disabled' } });
     else if (args[0] === 'api')
@@ -67,7 +72,8 @@ function fake(options = {}) {
       output = JSON.stringify(
         options.unhealthy ? { success: true, data: { status: 'healthy' } } : body(),
       );
-    return { status: options.buildFailure && args[0] === 'inspect' ? 1 : 0, stdout: output };
+    const unsupportedPreviewFlag = args[0] === 'deploy' && args[args.indexOf('--environment') + 1] === 'preview' && args.includes('--skip-domain');
+    return { status: unsupportedPreviewFlag || (options.buildFailure && args[0] === 'inspect') ? 1 : 0, stdout: output };
   };
   return { run, calls };
 }
@@ -210,4 +216,53 @@ test('rejects a CLI error envelope even when it includes a deployment identifier
   const { run, calls } = fake({ errorOutput: true });
   await assert.rejects(publish(env, run, async () => {}));
   assert.equal(promotions(calls).length, 0);
+});
+
+for (const [label, options] of Object.entries({
+  'named checkout': { namedCheckout: true },
+  'detached HEAD domain binding': { headDomain: true },
+  'missing staging branch binding': { unboundDomain: true },
+  'unreadable domain metadata': { malformedDomains: true },
+  'incomplete domain metadata': { moreDomains: true },
+  'branch-specific Preview variables': { branchVariables: true },
+  'unreadable environment metadata': { malformedEnvs: true },
+})) {
+  test(`Preview isolation refuses ${label} before uploading or switching domains`, async () => {
+    const { run, calls } = fake({ preview: true, ...options });
+    await assert.rejects(prepare({ ...env, GITHUB_REF_NAME: 'staging' }, run, async () => {}));
+    assert.equal(calls.filter(([, args]) => args[0] === 'deploy').length, 0);
+    assert.equal(promotions(calls).length, 0);
+  });
+}
+test('Preview uses a detached snapshot and supported flags before explicit promotion', async () => {
+  const { run, calls } = fake({ preview: true });
+  const manifest = await prepare({ ...env, GITHUB_REF_NAME: 'staging' }, run, async () => {});
+  const deploy = calls.find(([, args]) => args[0] === 'deploy')[1];
+  assert.equal(deploy.includes('--skip-domain'), false);
+  assert.equal(deploy[deploy.indexOf('--environment') + 1], 'preview');
+  assert.ok(calls.some(([cmd, args]) => cmd === 'git' && args[0] === 'branch' && args[1] === '--show-current'));
+  assert.equal(promotions(calls).length, 0);
+  await promote({ ...env, GITHUB_REF_NAME: 'staging' }, manifest, run, async () => {});
+  assert.equal(promotions(calls).length, 1);
+});
+test('branch metadata overrides cannot bypass detached Preview isolation', () => {
+  for (const key of ['githubCommitRef', 'gitlabCommitRef', 'bitbucketCommitRef'])
+    assert.throws(() => assertReleaseMode({ git: { deploymentEnabled: false }, meta: { [key]: 'staging' } }));
+});
+test('command failures identify only a safe operation and status while withholding credentials', async () => {
+  const { run } = fake();
+  const failed = (cmd, args, opts) => args[0] === 'deploy'
+    ? { status: 1, stdout: 'synthetic-private-token', stderr: 'DATABASE_URL=private' }
+    : run(cmd, args, opts);
+  await assert.rejects(prepare(env, failed, async () => {}), (error) => {
+    assert.match(error.message, /vercel deploy; exit 1/);
+    assert.equal(error.message.includes('synthetic-private-token'), false);
+    assert.equal(error.message.includes('DATABASE_URL'), false);
+    return true;
+  });
+});
+
+test('explicit deployment aliases cannot bypass the checked promotion phase', () => {
+  for (const alias of ['staging.example.org', ['staging.example.org'], []])
+    assert.throws(() => assertReleaseMode({ git: { deploymentEnabled: false }, alias }));
 });

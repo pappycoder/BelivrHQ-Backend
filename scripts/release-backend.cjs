@@ -5,6 +5,7 @@ const {
   assertCurrentHead,
   assertReleaseMode,
   assertHostedReleaseMode,
+  assertPreviewIsolation,
   prepare,
   promote,
   ReleaseError,
@@ -16,6 +17,7 @@ async function main() {
   if (process.argv[2] === 'preflight') {
     assertCurrentHead(process.env);
     assertHostedReleaseMode(process.env);
+    if (settings(process.env).environment === 'preview') assertPreviewIsolation(process.env);
     console.log('Release configuration and checked branch head verified.');
     return;
   }

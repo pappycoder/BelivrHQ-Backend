@@ -80,3 +80,9 @@ test('deployment credentials are limited to the release commands', () => {
   for (const step of release.steps)
     if (step.run?.includes('npm ')) assert.equal(step.env?.VERCEL_TOKEN, undefined);
 });
+
+test('release preparation checks out the immutable commit for detached Preview candidates', () => {
+  const workflow = yaml.load(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+  const checkout = workflow.jobs.prepare.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with.ref, '${{ github.sha }}');
+});

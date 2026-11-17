@@ -35,10 +35,13 @@ function settings(env) {
 
 function execute(command, args, runner = spawnSync) {
   const result = runner(command, args, { encoding: 'utf8', timeout: 660000 });
-  if (result.status !== 0 || result.error)
+  if (result.status !== 0 || result.error) {
+    const operation = command === 'vercel' && ['api', 'deploy', 'inspect', 'curl', 'promote', 'alias'].includes(args[0]) ? ` ${args[0]}` : '';
+    const status = Number.isInteger(result.status) ? `exit ${result.status}` : 'process error';
     throw new ReleaseError(
-      `Release operation failed (${command}); output suppressed to protect credentials.`,
+      `Release operation failed (${command}${operation}; ${status}); output suppressed to protect credentials.`,
     );
+  }
   return result.stdout || '';
 }
 
@@ -62,6 +65,10 @@ function assertCurrentHead(env, runner = spawnSync) {
 }
 
 function assertReleaseMode(config) {
+  if (config?.alias !== undefined)
+    throw new ReleaseError('Release candidates cannot declare aliases in vercel.json.');
+  if (['githubCommitRef', 'gitlabCommitRef', 'bitbucketCommitRef'].some((key) => config?.meta?.[key] !== undefined))
+    throw new ReleaseError('Release candidates cannot override Git branch metadata in vercel.json.');
   if (config?.git?.deploymentEnabled !== false)
     throw new ReleaseError(
       'Gated promotion requires Git auto-deployments to be explicitly disabled first.',
@@ -89,6 +96,22 @@ function assertHostedReleaseMode(env, runner = spawnSync) {
   if (project.id !== env.VERCEL_PROJECT_ID || project.accountId !== env.VERCEL_ORG_ID || project.gitProviderOptions?.createDeployments !== 'disabled')
     throw new ReleaseError('Verify project/team access and disable hosted Git auto-deployments before releasing.');
 }
+function assertPreviewIsolation(env, runner = spawnSync, vc = command(env, runner)) {
+  const target = settings(env);
+  // CLI 65.9 only supports --skip-domain for Production. A detached snapshot
+  // reports commitRef=HEAD, so Preview cannot claim the staging branch domain.
+  if (execute('git', ['branch', '--show-current'], runner).trim())
+    throw new ReleaseError('Preview preparation requires a detached checkout of the checked commit.');
+  const domains = JSON.parse(vc(['api', `/v9/projects/${env.VERCEL_PROJECT_ID}/domains?limit=100`]));
+  if (!Array.isArray(domains.domains) || domains.pagination?.next ||
+      !domains.domains.some((domain) => domain.name === target.domain && domain.gitBranch === env.GITHUB_REF_NAME && !domain.customEnvironmentId) ||
+      domains.domains.some((domain) => domain.gitBranch === 'HEAD'))
+    throw new ReleaseError('Cannot verify detached Preview domain isolation.');
+  const variables = JSON.parse(vc(['api', `/v10/projects/${env.VERCEL_PROJECT_ID}/env`]));
+  if (!Array.isArray(variables.envs) || variables.pagination?.next ||
+      variables.envs.some((variable) => Array.isArray(variable.target) && variable.target.includes('preview') && variable.gitBranch))
+    throw new ReleaseError('Checked Preview candidates require standard Preview variables without branch overrides.');
+}
 function inspectCandidate(env, candidate, vc) {
   if (!/^dpl_[a-zA-Z0-9]+$/.test(candidate || '')) throw new ReleaseError('Invalid candidate identity.');
   const target = settings(env);
@@ -114,7 +137,8 @@ async function prepare(env, runner = spawnSync, wait = delay) {
   assertCurrentHead(env, runner);
   assertHostedReleaseMode(env, runner);
   const vc = command(env, runner);
-  const deployed = JSON.parse(vc(['deploy', '--project', env.VERCEL_PROJECT_ID, '--environment', target.environment, '--skip-domain', '--no-wait', '--yes', '--json', '--meta', `readinessReleaseSha=${env.GITHUB_SHA}`]));
+  if (target.environment === 'preview') assertPreviewIsolation(env, runner, vc);
+  const deployed = JSON.parse(vc(['deploy', '--project', env.VERCEL_PROJECT_ID, '--environment', target.environment, ...(target.environment === 'production' ? ['--skip-domain'] : []), '--no-wait', '--yes', '--json', '--meta', `readinessReleaseSha=${env.GITHUB_SHA}`]));
   // CLI 65.9 emits raw JSON normally and an envelope in agent mode.
   const wrapped = Object.hasOwn(deployed, 'deployment');
   const candidate = wrapped ? deployed.deployment : deployed;
@@ -153,6 +177,7 @@ module.exports = {
   assertCurrentHead,
   assertReleaseMode,
   assertHostedReleaseMode,
+  assertPreviewIsolation,
   healthy,
   publish,
   prepare,
