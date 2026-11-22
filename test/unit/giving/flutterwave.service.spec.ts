@@ -301,6 +301,54 @@ describe('FlutterwaveService', () => {
       );
     });
 
+    it('accepts the documented v3 verif-hash using the separate configured webhook hash', () => {
+      const gateway = new FlutterwaveService(
+        new ConfigService({
+          FLUTTERWAVE_SECRET_KEY: mockSecretKey,
+          FLUTTERWAVE_WEBHOOK_SECRET: 'audit-webhook-hash',
+        }),
+      );
+      expect(
+        gateway.validateWebhookSignature(
+          '{"event":"charge.completed","data":{}}',
+          'audit-webhook-hash',
+        ),
+      ).toBe(true);
+      expect(gateway.validateWebhookSignature('{}', 'other-merchant-hash')).toBe(false);
+    });
+
+    it('accepts a configured SHA256 signature only for the exact raw payload', () => {
+      const hash = 'audit-webhook-hash';
+      const gateway = new FlutterwaveService(
+        new ConfigService({
+          FLUTTERWAVE_SECRET_KEY: mockSecretKey,
+          FLUTTERWAVE_WEBHOOK_SECRET: hash,
+        }),
+      );
+      const raw = '{ "event": "charge.completed", "data": {} }';
+      const signature = createHmac('sha256', hash).update(raw).digest('base64');
+      expect(gateway.validateWebhookSignature(raw, signature)).toBe(true);
+      expect(gateway.validateWebhookSignature(JSON.stringify(JSON.parse(raw)), signature)).toBe(
+        false,
+      );
+    });
+
+    it('does not substitute an API-key HMAC when a separate webhook hash is configured', () => {
+      const gateway = new FlutterwaveService(
+        new ConfigService({
+          FLUTTERWAVE_SECRET_KEY: mockSecretKey,
+          FLUTTERWAVE_WEBHOOK_SECRET: 'audit-webhook-hash',
+        }),
+      );
+      const raw = '{"event":"charge.completed","data":{}}';
+      expect(
+        gateway.validateWebhookSignature(
+          raw,
+          createHmac('sha512', mockSecretKey).update(raw).digest('hex'),
+        ),
+      ).toBe(false);
+    });
+
     it('should validate a correct signature', () => {
       const payload = '{"event":"charge.completed","data":{}}';
       const signature = createHmac('sha512', mockSecretKey).update(payload).digest('hex');
