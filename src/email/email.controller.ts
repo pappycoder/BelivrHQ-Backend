@@ -131,9 +131,22 @@ export class EmailController {
     return this.emailService.send(dto, profile.church_id, profile.id, userId);
   }
 
-  /**
-   * Get a single email (marks it read when fetched from the inbox).
-   */
+  /** Read a participant-scoped conversation without changing read state. */
+  @Get(':messageId/thread')
+  @RequirePermissions('emails:read')
+  @ApiGetEndpoint(
+    'Get email conversation',
+    'Returns only messages the caller participates in, without changing read state.',
+  )
+  async getThread(
+    @Param('messageId') messageId: string,
+    @Request() req: Record<string, unknown>,
+  ): Promise<{ data: EmailDetailDto[]; truncated: boolean }> {
+    const profile = this.getProfile(req);
+    return this.emailService.getThread(messageId, profile.church_id, profile.id);
+  }
+
+  /** Get a single email, marking the caller's inbox copy read. */
   @Get(':messageId')
   @RequirePermissions('emails:read')
   @ApiGetEndpoint('Get email', 'Returns a single email, marking it read when from the inbox.')
