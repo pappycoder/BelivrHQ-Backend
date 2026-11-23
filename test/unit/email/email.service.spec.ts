@@ -469,3 +469,131 @@ describe('Email copy ownership and trash edge cases', () => {
     });
   });
 });
+
+describe('conversation access', () => {
+  it('rejects inaccessible roots without reading or updating any copies', async () => {
+    model('emailMessage').findFirst.mockResolvedValue(null);
+    await expect(service.getThread(mockMessageId, mockChurchId, mockRecipientId)).rejects.toThrow(
+      'Email not found',
+    );
+    expect(model('emailMessage').findFirst).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          {
+            church_id: mockChurchId,
+            OR: [
+              { sender_id: mockRecipientId },
+              { recipients: { some: { profile_id: mockRecipientId } } },
+            ],
+          },
+          { id: mockMessageId },
+        ],
+      },
+    });
+    expect(model('emailRecipient').update).not.toHaveBeenCalled();
+  });
+  it('stops at inaccessible ancestors, scopes every descendant query and orders messages chronologically', async () => {
+    const root = messageRow({ reply_to_id: 'private-parent' }),
+      child = messageRow({
+        id: 'child',
+        reply_to_id: mockMessageId,
+        created_at: new Date('2026-08-31T08:00:00Z'),
+      });
+    model('emailMessage').findFirst.mockResolvedValueOnce(root).mockResolvedValueOnce(null);
+    model('emailMessage').findMany.mockResolvedValueOnce([child]).mockResolvedValueOnce([]);
+    model('emailRecipient').findMany.mockResolvedValue([
+      { profile_id: mockRecipientId, read_at: null, deleted_at: null },
+    ]);
+    model('profile').findMany.mockResolvedValue([recipientRow()]);
+    model('profile').findFirst.mockResolvedValue(null);
+    const result = await service.getThread(mockMessageId, mockChurchId, mockRecipientId);
+    expect(result.data.map((item) => item.id)).toEqual([mockMessageId, 'child']);
+    expect(result.truncated).toBe(false);
+    for (const [query] of model('emailMessage').findMany.mock.calls) {
+      expect(query.where.AND[0]).toEqual({
+        church_id: mockChurchId,
+        OR: [
+          { sender_id: mockRecipientId },
+          { recipients: { some: { profile_id: mockRecipientId } } },
+        ],
+      });
+    }
+    expect(model('emailRecipient').update).not.toHaveBeenCalled();
+    expect(model('emailRecipient').updateMany).not.toHaveBeenCalled();
+  });
+  it('refuses replies to messages outside the sender’s participation scope', async () => {
+    model('emailMessage').findFirst.mockResolvedValue(null);
+    await expect(
+      service.send(
+        {
+          recipientIds: [mockRecipientId],
+          subject: 'Re: Private',
+          body: 'Hello',
+          replyToId: mockMessageId,
+        },
+        mockChurchId,
+        mockSenderId,
+        'user',
+      ),
+    ).rejects.toThrow('Reply message not found');
+    expect(model('emailMessage').create).not.toHaveBeenCalled();
+  });
+});
+
+it('shows actual recipient IDs to the sender without marking recipients as read', async () => {
+  model('emailMessage').findFirst.mockResolvedValue(messageRow());
+  model('emailRecipient')
+    .findMany.mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ profile_id: mockRecipientId }]);
+  model('profile').findMany.mockResolvedValue([recipientRow()]);
+  model('profile').findFirst.mockResolvedValue(null);
+  const result = await service.getOne(mockMessageId, mockChurchId, mockSenderId);
+  expect(result.recipientIds).toEqual([mockRecipientId]);
+  expect(model('emailRecipient').update).not.toHaveBeenCalled();
+});
+
+it('batches thread projection and never exposes other recipients of received messages', async () => {
+  const root = messageRow(),
+    child = messageRow({
+      id: 'reply',
+      sender_id: mockRecipientId,
+      reply_to_id: mockMessageId,
+      created_at: new Date('2026-08-31T08:00:00Z'),
+    });
+  model('emailMessage').findFirst.mockResolvedValueOnce(root);
+  model('emailMessage').findMany.mockResolvedValueOnce([child]).mockResolvedValueOnce([]);
+  model('emailRecipient').findMany.mockResolvedValue([
+    { message_id: mockMessageId, profile_id: mockRecipientId },
+    { message_id: mockMessageId, profile_id: 'other-recipient' },
+    { message_id: 'reply', profile_id: mockSenderId },
+    { message_id: 'reply', profile_id: 'other-recipient' },
+  ]);
+  model('profile').findMany.mockResolvedValue([recipientRow()]);
+  const result = await service.getThread(mockMessageId, mockChurchId, mockRecipientId);
+  expect(result.data[0].recipientIds).toEqual([mockRecipientId]);
+  expect(result.data[1].recipientIds).toEqual([mockSenderId, 'other-recipient']);
+  expect(model('emailRecipient').findMany).toHaveBeenCalledTimes(1);
+  expect(model('profile').findMany).toHaveBeenCalledTimes(1);
+  expect(model('profile').findFirst).not.toHaveBeenCalled();
+  expect(model('emailRecipient').findMany.mock.calls[0][0].where).toMatchObject({
+    message: { church_id: mockChurchId },
+    OR: [{ profile_id: mockRecipientId }, { message: { sender_id: mockRecipientId } }],
+  });
+});
+
+it('keeps the selected message visible when a wide conversation reaches its result limit', async () => {
+  const selected = messageRow({ id: 'selected', reply_to_id: 'root' }),
+    root = messageRow({ id: 'root' });
+  model('emailMessage').findFirst.mockResolvedValueOnce(selected).mockResolvedValueOnce(root);
+  model('emailMessage').findMany.mockResolvedValueOnce(
+    Array.from({ length: 200 }, (_, index) =>
+      messageRow({ id: `sibling-${index}`, reply_to_id: 'root' }),
+    ),
+  );
+  model('emailRecipient').findMany.mockResolvedValue([]);
+  model('profile').findMany.mockResolvedValue([]);
+  const result = await service.getThread('selected', mockChurchId, mockRecipientId);
+  expect(result.data).toHaveLength(200);
+  expect(result.data.some((item) => item.id === 'selected')).toBe(true);
+  expect(result.truncated).toBe(true);
+});
