@@ -83,6 +83,16 @@ export class EmailService {
     senderId: string,
     userId: string,
   ): Promise<EmailDetailDto> {
+    if (dto.replyToId) {
+      const parent = await this.prisma.emailMessage.findFirst({
+        where: {
+          id: dto.replyToId,
+          church_id: churchId,
+          OR: [{ sender_id: senderId }, { recipients: { some: { profile_id: senderId } } }],
+        },
+      });
+      if (!parent) throw new NotFoundException('Reply message not found');
+    }
     const recipientIds = [...new Set(dto.recipientIds)];
     if (recipientIds.includes(senderId)) {
       throw new BadRequestException('You cannot send an email to yourself');
@@ -219,10 +229,113 @@ export class EmailService {
     return { data, total, unreadCount };
   }
 
-  /**
-   * Get a single email for the current user (inbox or sent), marking it read
-   * when unread and fetched from the inbox.
-   */
+  /** Read-only, participant-scoped thread traversal. Inaccessible parents stop traversal. */
+  async getThread(
+    messageId: string,
+    churchId: string,
+    profileId: string,
+  ): Promise<{ data: EmailDetailDto[]; truncated: boolean }> {
+    const access: Prisma.EmailMessageWhereInput = {
+      church_id: churchId,
+      OR: [{ sender_id: profileId }, { recipients: { some: { profile_id: profileId } } }],
+    };
+    const first = await this.prisma.emailMessage.findFirst({
+      where: { AND: [access, { id: messageId }] },
+    });
+    if (!first) throw new NotFoundException('Email not found');
+    let root: MessageLike = first;
+    const ancestors = new Set<string>([root.id]);
+    let truncated = false;
+    while (root.reply_to_id && ancestors.size < 50) {
+      if (ancestors.has(root.reply_to_id)) {
+        truncated = true;
+        break;
+      }
+      const parent = await this.prisma.emailMessage.findFirst({
+        where: { AND: [access, { id: root.reply_to_id }] },
+      });
+      if (!parent) break;
+      ancestors.add(parent.id);
+      root = parent;
+    }
+    if (ancestors.size === 50 && root.reply_to_id) truncated = true;
+    const messages = new Map<string, MessageLike>([[root.id, root]]);
+    let frontier = [root.id];
+    while (frontier.length && messages.size < 200) {
+      const children = await this.prisma.emailMessage.findMany({
+        where: {
+          AND: [access, { reply_to_id: { in: frontier }, id: { notIn: [...messages.keys()] } }],
+        },
+        orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+        take: 201 - messages.size,
+      });
+      frontier = [];
+      for (const child of children) {
+        if (messages.size === 200) {
+          truncated = true;
+          break;
+        }
+        messages.set(child.id, child);
+        frontier.push(child.id);
+      }
+    }
+    if (frontier.length && messages.size === 200) truncated = true;
+    // A wide branch must not push the message the caller opened out of a bounded result.
+    if (!messages.has(first.id)) {
+      if (messages.size >= 200) messages.delete([...messages.keys()][messages.size - 1]);
+      messages.set(first.id, first);
+      truncated = true;
+    }
+    const ordered = [...messages.values()].sort(
+      (a, b) => a.created_at.getTime() - b.created_at.getTime() || a.id.localeCompare(b.id),
+    );
+    const copies = await this.prisma.emailRecipient.findMany({
+      where: {
+        message_id: { in: ordered.map((message) => message.id) },
+        message: { church_id: churchId },
+        OR: [{ profile_id: profileId }, { message: { sender_id: profileId } }],
+      },
+    });
+    const senders = await this.prisma.profile.findMany({
+      where: {
+        church_id: churchId,
+        id: { in: [...new Set(ordered.map((message) => message.sender_id))] },
+      },
+      select: { id: true, first_name: true, last_name: true, avatar_url: true },
+    });
+    const senderMap = new Map(senders.map((sender) => [sender.id, sender]));
+    const data: EmailDetailDto[] = ordered.map((message) => {
+      const visibleCopies = copies.filter(
+        (copy) =>
+          copy.message_id === message.id &&
+          (message.sender_id === profileId || copy.profile_id === profileId),
+      );
+      const ownCopy = visibleCopies.find((copy) => copy.profile_id === profileId);
+      const sender = senderMap.get(message.sender_id);
+      return {
+        id: message.id,
+        subject: message.subject,
+        body: message.body,
+        senderId: message.sender_id,
+        senderName:
+          message.sender_name ??
+          (sender
+            ? [sender.first_name, sender.last_name].filter(Boolean).join(' ').trim()
+            : undefined),
+        senderAvatarUrl: sender?.avatar_url ?? undefined,
+        recipientIds: visibleCopies.map((copy) => copy.profile_id),
+        readAt: ownCopy?.read_at?.toISOString(),
+        deletedAt: (
+          ownCopy?.deleted_at ?? (message.sender_id === profileId ? message.deleted_at : undefined)
+        )?.toISOString(),
+        replyToId: message.reply_to_id ?? undefined,
+        createdAt: message.created_at.toISOString(),
+      };
+    });
+    return { data, truncated };
+  }
+
+  /** Get a single email, marking only the caller's unread inbox copy read. */
   async getOne(messageId: string, churchId: string, profileId: string): Promise<EmailDetailDto> {
     const message = await this.prisma.emailMessage.findFirst({
       where: { id: messageId, church_id: churchId },
@@ -258,9 +371,12 @@ export class EmailService {
       deletedAt = message.deleted_at ?? undefined;
     }
 
+    const visibleCopies = isSender
+      ? ((await this.prisma.emailRecipient.findMany({ where: { message_id: messageId } })) ?? [])
+      : copies;
     const recipients = await this.fetchRecipients(
       churchId,
-      copies.map((c) => c.profile_id),
+      visibleCopies.map((c) => c.profile_id),
     );
     return this.buildDetail(message, recipients, churchId, readAt, deletedAt);
   }
